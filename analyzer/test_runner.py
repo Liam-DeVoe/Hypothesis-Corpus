@@ -2,14 +2,13 @@
 Test runner module for executing tests in isolated Docker containers.
 """
 
-import os
 import json
-import tempfile
-import shutil
-import subprocess
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 import logging
+import shutil
+import tempfile
+from pathlib import Path
+from typing import Dict, List, Optional
+
 import docker
 from git import Repo
 
@@ -18,99 +17,98 @@ logger = logging.getLogger(__name__)
 
 class TestRunner:
     """Run tests in isolated Docker containers."""
-    
+
     def __init__(self, docker_image: str = "pbt-analyzer:latest", timeout: int = 300):
         """Initialize test runner with Docker client."""
         self.docker_client = docker.from_env()
         self.docker_image = docker_image
         self.timeout = timeout
-    
+
     def clone_repository(self, repo_url: str, target_dir: Path) -> bool:
         """Clone a repository to the target directory."""
         try:
             # Construct GitHub URL if just owner/repo is provided
-            if not repo_url.startswith(('http://', 'https://', 'git@')):
+            if not repo_url.startswith(("http://", "https://", "git@")):
                 repo_url = f"https://github.com/{repo_url}.git"
-            
+
             logger.info(f"Cloning repository: {repo_url}")
             Repo.clone_from(repo_url, target_dir, depth=1)
             return True
         except Exception as e:
             logger.error(f"Failed to clone repository {repo_url}: {e}")
             return False
-    
+
     def setup_environment(self, work_dir: Path, requirements: str) -> bool:
         """Set up Python environment with requirements."""
         try:
             # Write requirements to file
             req_file = work_dir / "requirements.txt"
             req_file.write_text(requirements)
-            
+
             # Create setup script
             setup_script = work_dir / "setup.sh"
-            setup_script.write_text("""#!/bin/bash
+            setup_script.write_text(
+                """#!/bin/bash
 set -e
 python -m venv /tmp/venv
 source /tmp/venv/bin/activate
 pip install --quiet --disable-pip-version-check pytest hypothesis
 pip install --quiet --disable-pip-version-check -r requirements.txt
-""")
+"""
+            )
             setup_script.chmod(0o755)
-            
+
             return True
         except Exception as e:
             logger.error(f"Failed to setup environment: {e}")
             return False
-    
+
     def extract_test_code(self, repo_dir: Path, node_id: str) -> Optional[str]:
         """Extract the source code of a specific test."""
         try:
             # Parse node_id (format: path/to/test.py::TestClass::test_method)
             parts = node_id.split("::")
             file_path = repo_dir / parts[0]
-            
+
             if not file_path.exists():
                 logger.error(f"Test file not found: {file_path}")
                 return None
-            
+
             # Read the entire file for now
             # In a more sophisticated version, we'd parse and extract just the test
             return file_path.read_text()
         except Exception as e:
             logger.error(f"Failed to extract test code: {e}")
             return None
-    
-    def run_in_container(self, repo_name: str, work_dir: Path, node_ids: List[str]) -> Dict[str, any]:
+
+    def run_in_container(
+        self, repo_name: str, work_dir: Path, node_ids: List[str]
+    ) -> Dict[str, any]:
         """Run tests in a Docker container and collect results."""
         try:
             # Create analysis script
             analysis_script = work_dir / "analyze.py"
             analysis_script.write_text(self._create_analysis_script(node_ids))
-            
+
             # Run container
             container = self.docker_client.containers.run(
                 self.docker_image,
-                command=[
-                    "bash", "-c",
-                    "cd /app && ./setup.sh && python analyze.py"
-                ],
-                volumes={
-                    str(work_dir): {'bind': '/app', 'mode': 'rw'}
-                },
+                command=["bash", "-c", "cd /app && ./setup.sh && python analyze.py"],
+                volumes={str(work_dir): {"bind": "/app", "mode": "rw"}},
                 remove=False,
                 detach=True,
-                mem_limit='2g',
-                network_mode='none',  # No network access for security
-                security_opt=['no-new-privileges'],
+                mem_limit="2g",
+                network_mode="none",  # No network access for security
+                security_opt=["no-new-privileges"],
             )
-            
+
             # Wait for completion
-            result = container.wait(timeout=self.timeout)
-            logs = container.logs(stdout=True, stderr=True).decode('utf-8')
-            
+            container.wait(timeout=self.timeout)
+            logs = container.logs(stdout=True, stderr=True).decode("utf-8")
+
             # Clean up container
             container.remove()
-            
+
             # Parse results
             results_file = work_dir / "results.json"
             if results_file.exists():
@@ -118,11 +116,11 @@ pip install --quiet --disable-pip-version-check -r requirements.txt
             else:
                 logger.error(f"No results file generated for {repo_name}")
                 return {"error": "No results generated", "logs": logs}
-            
+
         except Exception as e:
             logger.error(f"Container execution failed for {repo_name}: {e}")
             return {"error": str(e)}
-    
+
     def _create_analysis_script(self, node_ids: List[str]) -> str:
         """Create Python script to run inside container for analysis."""
         return f'''#!/usr/bin/env python
@@ -287,35 +285,38 @@ def main():
 if __name__ == '__main__':
     main()
 '''
-    
-    def process_repository(self, repo_name: str, node_ids: List[str], 
-                          requirements: str) -> Dict[str, any]:
+
+    def process_repository(
+        self, repo_name: str, node_ids: List[str], requirements: str
+    ) -> Dict[str, any]:
         """Process a complete repository."""
         work_dir = None
         try:
             # Create temporary working directory
-            work_dir = Path(tempfile.mkdtemp(prefix=f"pbt_analysis_{repo_name.replace('/', '_')}_"))
-            
+            work_dir = Path(
+                tempfile.mkdtemp(prefix=f"pbt_analysis_{repo_name.replace('/', '_')}_")
+            )
+
             # Clone repository
             if not self.clone_repository(repo_name, work_dir / "repo"):
                 return {"error": "Failed to clone repository"}
-            
+
             # Setup environment
             repo_dir = work_dir / "repo"
             if not self.setup_environment(repo_dir, requirements):
                 return {"error": "Failed to setup environment"}
-            
+
             # Run analysis in container
             results = self.run_in_container(repo_name, repo_dir, node_ids)
-            
+
             # Extract test code for each node_id
             for node_id in node_ids:
                 code = self.extract_test_code(repo_dir, node_id)
                 if code and node_id in results:
-                    results[node_id]['source_code'] = code
-            
+                    results[node_id]["source_code"] = code
+
             return results
-            
+
         except Exception as e:
             logger.error(f"Failed to process repository {repo_name}: {e}")
             return {"error": str(e)}

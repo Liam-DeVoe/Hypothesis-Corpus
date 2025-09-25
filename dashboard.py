@@ -2,15 +2,13 @@
 Streamlit dashboard for visualizing PBT corpus analysis results.
 """
 
-import streamlit as st
+from datetime import datetime
+from typing import Any, Dict
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
-import sqlite3
-from pathlib import Path
-import json
-from typing import Dict, List, Any
+import streamlit as st
 
 from analyzer.database import Database
 
@@ -19,11 +17,12 @@ st.set_page_config(
     page_title="PBT Corpus Analysis Dashboard",
     page_icon=None,
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 # Custom CSS
-st.markdown("""
+st.markdown(
+    """
 <style>
     .metric-card {
         background-color: #f0f2f6;
@@ -35,7 +34,9 @@ st.markdown("""
         background-color: #4CAF50;
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 @st.cache_resource
@@ -60,39 +61,38 @@ def render_overview_metrics(stats: Dict[str, Any]):
     with col1:
         st.metric(
             "Total Repositories",
-            stats['repositories']['total'],
-            f"{stats['repositories']['successful']} successful"
+            stats["repositories"]["total"],
+            f"{stats['repositories']['successful']} successful",
         )
 
     with col2:
         st.metric(
             "Total Tests Analyzed",
-            stats['tests']['total'],
-            f"{stats['tests']['successful']} successful"
+            stats["tests"]["total"],
+            f"{stats['tests']['successful']} successful",
         )
 
     with col3:
         success_rate = (
-            stats['repositories']['successful'] / stats['repositories']['total'] * 100
-            if stats['repositories']['total'] > 0 else 0
+            stats["repositories"]["successful"] / stats["repositories"]["total"] * 100
+            if stats["repositories"]["total"] > 0
+            else 0
         )
         st.metric(
             "Success Rate",
             f"{success_rate:.1f}%",
-            f"{stats['repositories']['failed']} failed"
+            f"{stats['repositories']['failed']} failed",
         )
 
     with col4:
-        pending = stats['repositories']['pending']
-        st.metric(
-            "Pending",
-            pending,
-            "In progress" if pending > 0 else "Complete"
-        )
+        pending = stats["repositories"]["pending"]
+        st.metric("Pending", pending, "In progress" if pending > 0 else "Complete")
 
     # Progress bar
-    if stats['repositories']['total'] > 0:
-        progress = (stats['repositories']['successful'] + stats['repositories']['failed']) / stats['repositories']['total']
+    if stats["repositories"]["total"] > 0:
+        progress = (
+            stats["repositories"]["successful"] + stats["repositories"]["failed"]
+        ) / stats["repositories"]["total"]
         st.progress(progress, text=f"Analysis Progress: {progress*100:.1f}%")
 
 
@@ -100,12 +100,12 @@ def render_generator_analysis(stats: Dict[str, Any]):
     """Render generator usage analysis."""
     st.header("Generator Usage Analysis")
 
-    if not stats.get('top_generators'):
+    if not stats.get("top_generators"):
         st.info("No generator data available yet.")
         return
 
     # Create DataFrame
-    df = pd.DataFrame(stats['top_generators'])
+    df = pd.DataFrame(stats["top_generators"])
 
     col1, col2 = st.columns([2, 1])
 
@@ -113,13 +113,13 @@ def render_generator_analysis(stats: Dict[str, Any]):
         # Bar chart of top generators
         fig = px.bar(
             df.head(15),
-            x='total_uses',
-            y='generator_name',
-            orientation='h',
+            x="total_uses",
+            y="generator_name",
+            orientation="h",
             title="Top 15 Most Used Generators",
-            labels={'total_uses': 'Total Uses', 'generator_name': 'Generator'},
-            color='total_uses',
-            color_continuous_scale='Viridis'
+            labels={"total_uses": "Total Uses", "generator_name": "Generator"},
+            color="total_uses",
+            color_continuous_scale="Viridis",
         )
         fig.update_layout(height=500)
         st.plotly_chart(fig, use_container_width=True)
@@ -129,8 +129,8 @@ def render_generator_analysis(stats: Dict[str, Any]):
         st.subheader("Generator Statistics")
 
         total_generators = len(df)
-        total_uses = df['total_uses'].sum()
-        avg_uses = df['total_uses'].mean()
+        total_uses = df["total_uses"].sum()
+        avg_uses = df["total_uses"].mean()
 
         st.metric("Unique Generators", total_generators)
         st.metric("Total Generator Uses", f"{total_uses:,}")
@@ -138,7 +138,7 @@ def render_generator_analysis(stats: Dict[str, Any]):
 
         # Top 5 table
         st.subheader("Top 5 Generators")
-        top_5 = df.head(5)[['generator_name', 'total_uses']]
+        top_5 = df.head(5)[["generator_name", "total_uses"]]
         st.dataframe(top_5, hide_index=True)
 
 
@@ -146,11 +146,11 @@ def render_property_types(stats: Dict[str, Any]):
     """Render property type distribution."""
     st.header("Property Type Distribution")
 
-    if not stats.get('property_types'):
+    if not stats.get("property_types"):
         st.info("No property type data available yet.")
         return
 
-    df = pd.DataFrame(stats['property_types'])
+    df = pd.DataFrame(stats["property_types"])
 
     col1, col2 = st.columns(2)
 
@@ -158,24 +158,24 @@ def render_property_types(stats: Dict[str, Any]):
         # Pie chart
         fig = px.pie(
             df,
-            values='count',
-            names='property_type',
+            values="count",
+            names="property_type",
             title="Property Type Distribution",
-            color_discrete_sequence=px.colors.qualitative.Set3
+            color_discrete_sequence=px.colors.qualitative.Set3,
         )
-        fig.update_traces(textposition='inside', textinfo='percent+label')
+        fig.update_traces(textposition="inside", textinfo="percent+label")
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
         # Bar chart
         fig = px.bar(
             df,
-            x='property_type',
-            y='count',
+            x="property_type",
+            y="count",
             title="Property Types by Count",
-            labels={'count': 'Number of Tests', 'property_type': 'Property Type'},
-            color='count',
-            color_continuous_scale='Blues'
+            labels={"count": "Number of Tests", "property_type": "Property Type"},
+            color="count",
+            color_continuous_scale="Blues",
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -184,43 +184,47 @@ def render_feature_usage(stats: Dict[str, Any]):
     """Render feature usage analysis."""
     st.header("Hypothesis Feature Usage")
 
-    if not stats.get('feature_usage'):
+    if not stats.get("feature_usage"):
         st.info("No feature usage data available yet.")
         return
 
-    df = pd.DataFrame(stats['feature_usage'])
+    df = pd.DataFrame(stats["feature_usage"])
 
     # Create a more detailed view
     fig = go.Figure()
 
     # Add bars for test count
-    fig.add_trace(go.Bar(
-        name='Tests Using Feature',
-        x=df['feature_name'],
-        y=df['test_count'],
-        yaxis='y',
-        marker_color='lightblue'
-    ))
+    fig.add_trace(
+        go.Bar(
+            name="Tests Using Feature",
+            x=df["feature_name"],
+            y=df["test_count"],
+            yaxis="y",
+            marker_color="lightblue",
+        )
+    )
 
     # Add line for total uses
-    fig.add_trace(go.Scatter(
-        name='Total Feature Uses',
-        x=df['feature_name'],
-        y=df['total_uses'],
-        yaxis='y2',
-        mode='lines+markers',
-        marker_color='red',
-        line=dict(width=2)
-    ))
+    fig.add_trace(
+        go.Scatter(
+            name="Total Feature Uses",
+            x=df["feature_name"],
+            y=df["total_uses"],
+            yaxis="y2",
+            mode="lines+markers",
+            marker_color="red",
+            line={"width": 2},
+        )
+    )
 
     # Update layout with dual y-axes
     fig.update_layout(
         title="Feature Usage Analysis",
         xaxis_title="Feature",
-        yaxis=dict(title="Number of Tests", side='left'),
-        yaxis2=dict(title="Total Uses", overlaying='y', side='right'),
-        hovermode='x unified',
-        height=400
+        yaxis={"title": "Number of Tests", "side": "left"},
+        yaxis2={"title": "Total Uses", "overlaying": "y", "side": "right"},
+        hovermode="x unified",
+        height=400,
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -230,24 +234,30 @@ def render_feature_usage(stats: Dict[str, Any]):
 
     with col1:
         st.subheader("Feature Usage Details")
-        feature_df = df[['feature_name', 'test_count', 'total_uses']]
-        feature_df.columns = ['Feature', 'Tests', 'Total Uses']
+        feature_df = df[["feature_name", "test_count", "total_uses"]]
+        feature_df.columns = ["Feature", "Tests", "Total Uses"]
         st.dataframe(feature_df, hide_index=True)
 
     with col2:
         st.subheader("Feature Insights")
 
         if len(df) > 0:
-            most_used = df.loc[df['total_uses'].idxmax()]
-            most_tests = df.loc[df['test_count'].idxmax()]
+            most_used = df.loc[df["total_uses"].idxmax()]
+            most_tests = df.loc[df["test_count"].idxmax()]
 
-            st.info(f"Most Used Feature: {most_used['feature_name']} ({most_used['total_uses']} uses)")
-            st.info(f"Most Popular Feature: {most_tests['feature_name']} (in {most_tests['test_count']} tests)")
+            st.info(
+                f"Most Used Feature: {most_used['feature_name']} ({most_used['total_uses']} uses)"
+            )
+            st.info(
+                f"Most Popular Feature: {most_tests['feature_name']} (in {most_tests['test_count']} tests)"
+            )
 
             # Calculate average uses per test
-            df['avg_uses_per_test'] = df['total_uses'] / df['test_count']
-            most_intensive = df.loc[df['avg_uses_per_test'].idxmax()]
-            st.info(f"Most Intensive Usage: {most_intensive['feature_name']} ({most_intensive['avg_uses_per_test']:.1f} uses/test)")
+            df["avg_uses_per_test"] = df["total_uses"] / df["test_count"]
+            most_intensive = df.loc[df["avg_uses_per_test"].idxmax()]
+            st.info(
+                f"Most Intensive Usage: {most_intensive['feature_name']} ({most_intensive['avg_uses_per_test']:.1f} uses/test)"
+            )
 
 
 def render_repository_details():
@@ -258,7 +268,8 @@ def render_repository_details():
 
     # Get repository list
     with db.connection() as conn:
-        repos = pd.read_sql_query("""
+        repos = pd.read_sql_query(
+            """
             SELECT
                 r.owner || '/' || r.name as repository,
                 r.clone_status as status,
@@ -269,7 +280,9 @@ def render_repository_details():
             GROUP BY r.id
             ORDER BY r.created_at DESC
             LIMIT 100
-        """, conn)
+        """,
+            conn,
+        )
 
     if repos.empty:
         st.info("No repositories processed yet.")
@@ -277,35 +290,38 @@ def render_repository_details():
 
     # Filter by status
     status_filter = st.selectbox(
-        "Filter by Status",
-        ["All", "success", "failed", "pending"],
-        index=0
+        "Filter by Status", ["All", "success", "failed", "pending"], index=0
     )
 
     if status_filter != "All":
-        repos = repos[repos['status'] == status_filter]
+        repos = repos[repos["status"] == status_filter]
 
     # Display repository table
     st.dataframe(
         repos,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "repository": st.column_config.TextColumn("Repository", width="medium"),
             "status": st.column_config.TextColumn("Status", width="small"),
             "test_count": st.column_config.NumberColumn("Tests", width="small"),
-            "created_at": st.column_config.DatetimeColumn("Analyzed At", width="medium")
-        }
+            "created_at": st.column_config.DatetimeColumn(
+                "Analyzed At", width="medium"
+            ),
+        },
     )
 
     # Repository selection for detailed view
     if not repos.empty:
-        selected_repo = st.selectbox("Select repository for detailed view", repos['repository'].tolist())
+        selected_repo = st.selectbox(
+            "Select repository for detailed view", repos["repository"].tolist()
+        )
 
         if selected_repo:
             with db.connection() as conn:
                 # Get test details for selected repository
-                test_details = pd.read_sql_query("""
+                test_details = pd.read_sql_query(
+                    """
                     SELECT
                         t.node_id,
                         t.status,
@@ -319,11 +335,14 @@ def render_repository_details():
                     LEFT JOIN feature_usage fu ON t.id = fu.test_id
                     WHERE r.owner || '/' || r.name = ?
                     GROUP BY t.id
-                """, conn, params=[selected_repo])
+                """,
+                    conn,
+                    params=[selected_repo],
+                )
 
                 if not test_details.empty:
                     st.subheader(f"Tests in {selected_repo}")
-                    st.dataframe(test_details, use_container_width=True, hide_index=True)
+                    st.dataframe(test_details, width="stretch", hide_index=True)
 
 
 def render_analysis_history():
@@ -333,17 +352,20 @@ def render_analysis_history():
     db = get_database()
 
     with db.connection() as conn:
-        runs = pd.read_sql_query("""
+        runs = pd.read_sql_query(
+            """
             SELECT * FROM analysis_runs
             ORDER BY start_time DESC
             LIMIT 10
-        """, conn)
+        """,
+            conn,
+        )
 
     if runs.empty:
         st.info("No analysis runs recorded yet.")
         return
 
-    st.dataframe(runs, use_container_width=True, hide_index=True)
+    st.dataframe(runs, width="stretch", hide_index=True)
 
 
 def main():
@@ -355,7 +377,14 @@ def main():
         st.title("Navigation")
         page = st.radio(
             "Select Page",
-            ["Overview", "Generators", "Property Types", "Features", "Repositories", "History"]
+            [
+                "Overview",
+                "Generators",
+                "Property Types",
+                "Features",
+                "Repositories",
+                "History",
+            ],
         )
 
         # Refresh button
