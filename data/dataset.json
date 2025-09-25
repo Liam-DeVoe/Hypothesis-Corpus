@@ -1,0 +1,7 @@
+{
+    "MarkCBell/bigger":
+        {
+            "node_ids": ["tests/structures.py::TestUnionFind::runTest"],
+            "requirements.txt": "attrs==24.2.0\nexceptiongroup==1.2.2\nhypothesis==6.112.5\niniconfig==2.0.0\npackaging==24.1\npillow==11.0.0\npluggy==1.5.0\npytest==8.2.2\nsortedcontainers==2.4.0\ntomli==2.0.2"
+        }
+}

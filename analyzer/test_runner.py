@@ -5,12 +5,12 @@ Test runner module for executing tests in isolated Docker containers.
 import json
 import logging
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
 
 import docker
-from git import Repo
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +32,17 @@ class TestRunner:
                 repo_url = f"https://github.com/{repo_url}.git"
 
             logger.info(f"Cloning repository: {repo_url}")
-            Repo.clone_from(repo_url, target_dir, depth=1)
+            # Use subprocess to run git clone command
+            result = subprocess.run(
+                ["git", "clone", "--depth", "1", repo_url, str(target_dir)],
+                capture_output=True,
+                text=True,
+                check=True
+            )
             return True
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to clone repository {repo_url}: {e.stderr}")
+            return False
         except Exception as e:
             logger.error(f"Failed to clone repository {repo_url}: {e}")
             return False
