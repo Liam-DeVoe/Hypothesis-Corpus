@@ -40,22 +40,13 @@ This system analyzes property-based tests from GitHub repositories to understand
 
 ## Setup
 
-1. Install dependencies:
+Run the analysis:
+
 ```bash
-pip install -r requirements.txt
+docker build -t pbt-analyzer . && python run_analysis.py --dataset data/dataset.json --workers 4
 ```
 
-2. Build Docker image:
-```bash
-docker build -t pbt-analyzer .
-```
-
-3. Run the analysis:
-```bash
-python run_analysis.py --dataset data/dataset.json --workers 4
-```
-
-4. View dashboard:
+View dashboard:
 ```bash
 streamlit run dashboard.py
 ```
