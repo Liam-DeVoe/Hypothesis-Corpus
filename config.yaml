@@ -1,0 +1,55 @@
+# Configuration for PBT corpus analysis
+
+database:
+  path: "data/analysis.db"
+  
+docker:
+  image: "pbt-analyzer:latest"
+  timeout: 300  # seconds per test
+  memory_limit: "2g"
+  
+analysis:
+  # Patterns to search for
+  generators:
+    builtin:
+      - "st.integers"
+      - "st.floats"
+      - "st.text"
+      - "st.lists"
+      - "st.dictionaries"
+      - "st.tuples"
+      - "st.sets"
+      - "st.booleans"
+      - "st.none"
+      - "st.just"
+      - "st.one_of"
+      - "st.sampled_from"
+    composite:
+      - "@st.composite"
+      - "@composite"
+    
+  features:
+    - "assume("
+    - "note("
+    - "event("
+    - "target("
+    
+  property_patterns:
+    mathematical:
+      - "commutative"
+      - "associative"
+      - "distributive"
+      - "identity"
+    roundtrip:
+      - "encode.*decode"
+      - "serialize.*deserialize"
+      - "dump.*load"
+      - "parse.*format"
+    model_based:
+      - "RuleBasedStateMachine"
+      - "@rule"
+      - "@invariant"
+      
+workers:
+  max_workers: 4
+  queue_size: 100

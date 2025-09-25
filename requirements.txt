@@ -1,0 +1,21 @@
+# Core dependencies
+streamlit>=1.28.0
+pandas>=2.0.0
+sqlalchemy>=2.0.0
+docker>=6.1.0
+gitpython>=3.1.0
+hypothesis>=6.0.0
+pytest>=7.0.0
+matplotlib>=3.7.0
+plotly>=5.17.0
+seaborn>=0.12.0
+
+# Analysis tools
+ast-grep-py>=0.12.0
+libcst>=1.1.0
+
+# Utilities
+click>=8.1.0
+rich>=13.0.0
+tqdm>=4.65.0
+pyyaml>=6.0.0
