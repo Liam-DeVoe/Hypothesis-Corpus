@@ -107,13 +107,16 @@ pip install --quiet --disable-pip-version-check -r requirements.txt
                 remove=False,
                 detach=True,
                 mem_limit="2g",
-                network_mode="none",  # No network access for security
                 security_opt=["no-new-privileges"],
             )
 
             # Wait for completion
-            container.wait(timeout=self.timeout)
+            result = container.wait(timeout=self.timeout)
             logs = container.logs(stdout=True, stderr=True).decode("utf-8")
+
+            # Log the container output for debugging
+            logger.debug(f"Container logs for {repo_name}:\n{logs}")
+            logger.debug(f"Container exit code: {result.get('StatusCode', 'unknown')}")
 
             # Clean up container
             container.remove()
@@ -124,6 +127,7 @@ pip install --quiet --disable-pip-version-check -r requirements.txt
                 return json.loads(results_file.read_text())
             else:
                 logger.error(f"No results file generated for {repo_name}")
+                logger.error(f"Container logs:\n{logs}")
                 return {"error": "No results generated", "logs": logs}
 
         except Exception as e:
@@ -144,7 +148,7 @@ import re
 from pathlib import Path
 
 # Activate virtual environment
-sys.path.insert(0, '/tmp/venv/lib/python3.11/site-packages')
+sys.path.insert(0, '/tmp/venv/lib/python3.13/site-packages')
 
 def analyze_test_file(file_path, node_ids):
     """Analyze a test file for PBT patterns."""
@@ -171,7 +175,7 @@ def analyze_test_file(file_path, node_ids):
 def find_generators(source):
     """Find Hypothesis strategy usage."""
     generators = {{}}
-    
+
     # Common Hypothesis strategies
     strategies = [
         'integers', 'floats', 'text', 'binary', 'booleans',
@@ -180,21 +184,25 @@ def find_generators(source):
         'datetimes', 'dates', 'times', 'timedeltas', 'uuids',
         'emails', 'urls', 'ip_addresses'
     ]
-    
+
     for strategy in strategies:
-        pattern = rf'\\bst\\.{{strategy}}\\b|\\bstrategies\\.{{strategy}}\\b'
+        pattern = r'\\bst\\.' + strategy + r'\\b|\\bstrategies\\.' + strategy + r'\\b'
         matches = re.findall(pattern, source)
         if matches:
-            generators[f'st.{{strategy}}'] = len(matches)
+            generators['st.' + strategy] = len(matches)
     
     # Check for composite strategies
     if '@composite' in source or '@st.composite' in source:
         generators['composite'] = True
-    
+
     # Check for custom strategies (basic heuristic)
     if re.search(r'def\\s+\\w+\\s*\\([^)]*\\)\\s*->.*Strategy', source):
         generators['custom_strategies'] = True
-    
+
+    # Check for data() strategy
+    if 'data()' in source or '.data()' in source:
+        generators['st.data'] = source.count('data()')
+
     return generators
 
 def find_features(source):
@@ -209,6 +217,7 @@ def find_features(source):
         'example': r'@example\\s*\\(',
         'given': r'@given\\s*\\(',
         'settings': r'@settings\\s*\\(',
+        'max_examples': r'max_examples\\s*=',
     }}
     
     for feature, pattern in feature_patterns.items():
@@ -275,21 +284,27 @@ def detect_test_runner(file_path):
 
 # Main execution
 def main():
+    print("Starting analysis...")
     node_ids = {json.dumps(node_ids)}
     results = {{}}
-    
+
     for node_id in node_ids:
         parts = node_id.split('::')
         file_path = Path(parts[0])
-        
+
+        print(f"Looking for file: {{file_path}}")
         if file_path.exists():
+            print(f"Found file: {{file_path}}")
             results[node_id] = analyze_test_file(file_path, node_id)
         else:
+            print(f"File not found: {{file_path}}")
             results[node_id] = {{'error': f'File not found: {{file_path}}'}}
-    
+
     # Write results
+    print(f"Writing results to results.json")
     with open('results.json', 'w') as f:
         json.dump(results, f, indent=2)
+    print("Analysis complete")
 
 if __name__ == '__main__':
     main()
