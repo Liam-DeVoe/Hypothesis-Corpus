@@ -345,6 +345,324 @@ def render_repository_details():
                     st.dataframe(test_details, width="stretch", hide_index=True)
 
 
+def render_coverage_analysis():
+    """Render coverage analysis and visualization."""
+    st.header("Test Coverage Analysis")
+
+    db = get_database()
+
+    # Get overall coverage statistics
+    with db.connection() as conn:
+        # Overall coverage stats
+        overall_stats = pd.read_sql_query(
+            """
+            SELECT
+                COUNT(DISTINCT tc.test_id) as tests_with_coverage,
+                COUNT(DISTINCT tc.file_path) as files_covered,
+                SUM(tc.covered_lines) as total_lines_covered,
+                AVG(tc.covered_lines) as avg_lines_per_file
+            FROM test_coverage tc
+            """,
+            conn,
+        )
+
+        # Coverage by repository
+        repo_coverage = pd.read_sql_query(
+            """
+            SELECT
+                r.owner || '/' || r.name as repository,
+                COUNT(DISTINCT t.id) as total_tests,
+                COUNT(DISTINCT tc.test_id) as tests_with_coverage,
+                SUM(tc.covered_lines) as total_lines_covered,
+                COUNT(DISTINCT tc.file_path) as files_covered
+            FROM repositories r
+            LEFT JOIN tests t ON r.id = t.repo_id
+            LEFT JOIN test_coverage tc ON t.id = tc.test_id
+            WHERE r.clone_status = 'success'
+            GROUP BY r.id
+            HAVING tests_with_coverage > 0
+            ORDER BY total_lines_covered DESC
+            LIMIT 20
+            """,
+            conn,
+        )
+
+        # Coverage over time
+        coverage_timeline = pd.read_sql_query(
+            """
+            SELECT
+                DATE(tc.collected_at) as date,
+                COUNT(DISTINCT tc.test_id) as tests_count,
+                SUM(tc.covered_lines) as lines_covered,
+                COUNT(DISTINCT tc.file_path) as files_covered
+            FROM test_coverage tc
+            GROUP BY DATE(tc.collected_at)
+            ORDER BY date
+            """,
+            conn,
+        )
+
+        # Test execution results
+        test_results = pd.read_sql_query(
+            """
+            SELECT
+                COUNT(*) as total_executions,
+                SUM(CASE WHEN passed = 1 THEN 1 ELSE 0 END) as passed,
+                SUM(CASE WHEN passed = 0 THEN 1 ELSE 0 END) as failed,
+                AVG(execution_time) as avg_execution_time
+            FROM test_executions
+            """,
+            conn,
+        )
+
+    # Display overall metrics
+    col1, col2, col3, col4 = st.columns(4)
+
+    if not overall_stats.empty:
+        with col1:
+            st.metric(
+                "Tests with Coverage",
+                f"{overall_stats['tests_with_coverage'].iloc[0]:,}",
+            )
+        with col2:
+            st.metric("Files Covered", f"{overall_stats['files_covered'].iloc[0]:,}")
+        with col3:
+            lines = overall_stats["total_lines_covered"].iloc[0]
+            st.metric(
+                "Total Lines Covered",
+                f"{lines:,}" if lines else "0",
+            )
+        with col4:
+            avg_lines = overall_stats["avg_lines_per_file"].iloc[0]
+            st.metric(
+                "Avg Lines/File",
+                f"{avg_lines:.0f}" if avg_lines else "0",
+            )
+
+    # Coverage by repository chart
+    if not repo_coverage.empty:
+        st.subheader("Coverage by Repository")
+
+        fig = px.bar(
+            repo_coverage.head(15),
+            x="total_lines_covered",
+            y="repository",
+            orientation="h",
+            title="Top 15 Repositories by Lines Covered",
+            labels={"total_lines_covered": "Total Lines Covered", "repository": "Repository"},
+            color="total_lines_covered",
+            color_continuous_scale="Viridis",
+            hover_data=["total_tests", "tests_with_coverage", "files_covered"],
+        )
+        fig.update_layout(height=500)
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Coverage timeline
+    if not coverage_timeline.empty and len(coverage_timeline) > 1:
+        st.subheader("Coverage Over Time")
+
+        fig = go.Figure()
+
+        # Add lines covered as primary metric
+        fig.add_trace(
+            go.Bar(
+                x=coverage_timeline["date"],
+                y=coverage_timeline["lines_covered"],
+                name="Lines Covered",
+                marker_color="lightgreen",
+                yaxis="y",
+            )
+        )
+
+        # Add files covered on secondary axis
+        fig.add_trace(
+            go.Scatter(
+                x=coverage_timeline["date"],
+                y=coverage_timeline["files_covered"],
+                name="Files Covered",
+                mode="lines+markers",
+                line={"color": "blue", "width": 2},
+                yaxis="y2",
+            )
+        )
+
+        fig.update_layout(
+            title="Coverage Metrics Over Time",
+            xaxis_title="Date",
+            yaxis={"title": "Lines Covered", "side": "left"},
+            yaxis2={"title": "Files Covered", "overlaying": "y", "side": "right"},
+            hovermode="x unified",
+            height=400,
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Test execution results
+    if not test_results.empty and test_results["total_executions"].iloc[0] > 0:
+        st.subheader("Test Execution Results")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Pass/Fail pie chart
+            passed = test_results["passed"].iloc[0]
+            failed = test_results["failed"].iloc[0]
+
+            fig = px.pie(
+                values=[passed, failed],
+                names=["Passed", "Failed"],
+                title="Test Execution Results",
+                color_discrete_map={"Passed": "green", "Failed": "red"},
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            # Execution statistics
+            st.metric(
+                "Total Test Executions", f"{test_results['total_executions'].iloc[0]:,}"
+            )
+            st.metric("Pass Rate", f"{(passed / (passed + failed) * 100):.1f}%")
+            avg_time = test_results["avg_execution_time"].iloc[0]
+            st.metric("Avg Execution Time", f"{avg_time:.2f}s" if avg_time else "N/A")
+
+    # Cumulative coverage over test cases
+    st.subheader("Cumulative Coverage Growth")
+
+    # Get cumulative coverage data
+    with db.connection() as conn:
+        cumulative_data = pd.read_sql_query(
+            """
+            SELECT
+                t.node_id,
+                tcc.case_number,
+                tcc.file_path,
+                tcc.cumulative_count,
+                r.owner || '/' || r.name as repository
+            FROM test_case_coverage tcc
+            JOIN tests t ON tcc.test_id = t.id
+            JOIN repositories r ON t.repo_id = r.id
+            ORDER BY t.id, tcc.file_path, tcc.case_number
+            """,
+            conn,
+        )
+
+    if not cumulative_data.empty:
+        # Select a test to visualize
+        test_options = cumulative_data[["repository", "node_id"]].drop_duplicates()
+        test_display = test_options.apply(
+            lambda x: f"{x['repository']} - {x['node_id'].split('::')[-1]}", axis=1
+        )
+        selected_test_idx = st.selectbox(
+            "Select a test to view cumulative coverage",
+            range(len(test_display)),
+            format_func=lambda x: test_display.iloc[x],
+        )
+
+        if selected_test_idx is not None:
+            selected_test = test_options.iloc[selected_test_idx]
+            test_data = cumulative_data[
+                (cumulative_data["repository"] == selected_test["repository"])
+                & (cumulative_data["node_id"] == selected_test["node_id"])
+            ]
+
+            if not test_data.empty:
+                # Create cumulative coverage chart
+                fig = go.Figure()
+
+                # Add a line for each file
+                for file_path in test_data["file_path"].unique():
+                    file_data = test_data[test_data["file_path"] == file_path]
+                    # Extract just the filename for display
+                    display_name = file_path.split("/")[-1]
+
+                    fig.add_trace(
+                        go.Scatter(
+                            x=file_data["case_number"],
+                            y=file_data["cumulative_count"],
+                            mode="lines+markers",
+                            name=display_name,
+                            line={"width": 2},
+                        )
+                    )
+
+                fig.update_layout(
+                    title=f"Cumulative Coverage Growth: {selected_test['node_id'].split('::')[-1]}",
+                    xaxis_title="Test Case Number",
+                    yaxis_title="Cumulative Lines Covered",
+                    hovermode="x unified",
+                    height=400,
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Show summary statistics
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    total_cases = test_data["case_number"].max() + 1
+                    st.metric("Total Test Cases", total_cases)
+                with col2:
+                    final_coverage = test_data.groupby("file_path")["cumulative_count"].max().sum()
+                    st.metric("Final Lines Covered", final_coverage)
+                with col3:
+                    files_count = test_data["file_path"].nunique()
+                    st.metric("Files Touched", files_count)
+
+    # Detailed test coverage view
+    st.subheader("Detailed Test Coverage")
+
+    selected_repo = st.selectbox(
+        "Select repository for detailed coverage view",
+        repo_coverage["repository"].tolist() if not repo_coverage.empty else [],
+    )
+
+    if selected_repo:
+        with db.connection() as conn:
+            # Get test coverage details for selected repository
+            test_coverage_details = pd.read_sql_query(
+                """
+                SELECT
+                    t.node_id,
+                    tc.file_path,
+                    tc.covered_lines,
+                    te.passed,
+                    te.execution_time
+                FROM tests t
+                JOIN repositories r ON t.repo_id = r.id
+                LEFT JOIN test_coverage tc ON t.id = tc.test_id
+                LEFT JOIN test_executions te ON t.id = te.test_id
+                WHERE r.owner || '/' || r.name = ?
+                AND tc.covered_lines IS NOT NULL
+                ORDER BY tc.covered_lines DESC
+                """,
+                conn,
+                params=[selected_repo],
+            )
+
+            if not test_coverage_details.empty:
+                st.dataframe(
+                    test_coverage_details,
+                    width="stretch",
+                    hide_index=True,
+                    column_config={
+                        "node_id": st.column_config.TextColumn("Test", width="large"),
+                        "file_path": st.column_config.TextColumn(
+                            "File", width="medium"
+                        ),
+                        "covered_lines": st.column_config.NumberColumn(
+                            "Lines Covered", width="small"
+                        ),
+                        "passed": st.column_config.CheckboxColumn(
+                            "Passed", width="small"
+                        ),
+                        "execution_time": st.column_config.NumberColumn(
+                            "Time (s)", format="%.2f", width="small"
+                        ),
+                    },
+                )
+            else:
+                st.info("No coverage data available for this repository.")
+
+
 def render_analysis_history():
     """Render analysis run history."""
     st.header("Analysis History")
@@ -382,6 +700,7 @@ def main():
                 "Generators",
                 "Property Types",
                 "Features",
+                "Coverage",
                 "Repositories",
                 "History",
             ],
@@ -423,6 +742,9 @@ def main():
 
     elif page == "Features":
         render_feature_usage(stats)
+
+    elif page == "Coverage":
+        render_coverage_analysis()
 
     elif page == "Repositories":
         render_repository_details()

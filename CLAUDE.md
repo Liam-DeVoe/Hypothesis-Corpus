@@ -52,9 +52,9 @@ sqlite3 data/analysis.db "SELECT * FROM repositories LIMIT 5;"
 #### Docker Container Execution
 - The TestRunner dynamically generates an analyze.py script that is injected into each container
 - The analysis script is a self-contained Python program with all pattern detection logic embedded
-- Virtual environment path must match Python version: `/tmp/venv/lib/python3.13/site-packages`
+- Each Docker container provides isolation - no virtual environments needed
 - Network access is required for pip installation of repository dependencies
-- Container runs as non-root user `testrunner` for security
+- Dependencies are installed directly into the container's Python environment
 
 #### Pattern Detection System
 The analyzer detects:

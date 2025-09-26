@@ -33,11 +33,11 @@ class TestRunner:
 
             logger.info(f"Cloning repository: {repo_url}")
             # Use subprocess to run git clone command
-            result = subprocess.run(
+            subprocess.run(
                 ["git", "clone", "--depth", "1", repo_url, str(target_dir)],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
             )
             return True
         except subprocess.CalledProcessError as e:
@@ -54,15 +54,24 @@ class TestRunner:
             req_file = work_dir / "requirements.txt"
             req_file.write_text(requirements)
 
-            # Create setup script
+            # Create setup script following the template to handle dependency conflicts
             setup_script = work_dir / "setup.sh"
             setup_script.write_text(
                 """#!/bin/bash
 set -e
-python -m venv /tmp/venv
-source /tmp/venv/bin/activate
+
+# Install core testing requirements
 pip install --quiet --disable-pip-version-check pytest hypothesis
-pip install --quiet --disable-pip-version-check -r requirements.txt
+
+# Install requirements with --no-dependencies to avoid version conflicts
+# This is safe because we're reproducing a frozen environment where all deps
+# were already resolved during pytest collection
+pip install --quiet --disable-pip-version-check --no-dependencies -r requirements.txt
+
+# Always try to install the repository itself as a library
+# This ensures imports like 'from mylibrary import func_under_test' work
+# Use --no-dependencies to avoid conflicts and ignore failures for non-libraries
+pip install --quiet --disable-pip-version-check --no-dependencies -e . 2>/dev/null || true
 """
             )
             setup_script.chmod(0o755)
@@ -99,11 +108,15 @@ pip install --quiet --disable-pip-version-check -r requirements.txt
             analysis_script = work_dir / "analyze.py"
             analysis_script.write_text(self._create_analysis_script(node_ids))
 
-            # Run container
+            # Run container with observability enabled
             container = self.docker_client.containers.run(
                 self.docker_image,
-                command=["bash", "-c", "cd /app && ./setup.sh && python analyze.py"],
+                command=["bash", "-xc", "cd /app && echo 'Starting setup...' && ./setup.sh && echo 'Running analysis...' && python analyze.py 2>&1"],
                 volumes={str(work_dir): {"bind": "/app", "mode": "rw"}},
+                environment={
+                    "HYPOTHESIS_EXPERIMENTAL_OBSERVABILITY": "1",
+                    "PYTHONDONTWRITEBYTECODE": "1",
+                },
                 remove=False,
                 detach=True,
                 mem_limit="2g",
@@ -145,31 +158,170 @@ import sys
 import json
 import ast
 import re
+import subprocess
+import shutil
+import traceback
 from pathlib import Path
+from typing import Dict, Any, List
 
-# Activate virtual environment
-sys.path.insert(0, '/tmp/venv/lib/python3.13/site-packages')
+print("Script starting...", flush=True)
+print(f"sys.executable: {{sys.executable}}", flush=True)
+
+def run_test_with_coverage(node_id: str) -> Dict[str, Any]:
+    """Run a single test and collect coverage information."""
+    results = {{
+        'node_id': node_id,
+        'coverage': {{}},
+        'observability_data': {{}},
+        'test_result': None,
+        'error': None
+    }}
+
+    try:
+        # Clear any previous observability data
+        obs_dir = Path('/app/.hypothesis/observed')
+        if obs_dir.exists():
+            shutil.rmtree(obs_dir)
+
+        # Run the specific test with pytest
+        # Need to be in the repo directory for pytest to find the tests
+        cmd = [
+            'python', '-m', 'pytest',
+            node_id,
+            '-xvs',  # Stop on first failure, verbose, no capture
+            '--tb=short'  # Short traceback format
+        ]
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd='/app',  # Run from the app directory where the repo is mounted
+            timeout=60  # 60 second timeout per test
+        )
+
+        results['test_result'] = {{
+            'exit_code': result.returncode,
+            'stdout': result.stdout[-5000:] if result.stdout else '',  # Last 5000 chars
+            'stderr': result.stderr[-5000:] if result.stderr else '',
+            'passed': result.returncode == 0
+        }}
+
+        # Parse observability data if it exists
+        if obs_dir.exists():
+            results['observability_data'] = parse_observability_data(obs_dir)
+
+    except subprocess.TimeoutExpired:
+        results['error'] = 'Test timed out after 60 seconds'
+    except Exception as e:
+        results['error'] = str(e)
+
+    return results
+
+def parse_observability_data(obs_dir: Path) -> Dict[str, Any]:
+    """Parse Hypothesis observability JSONL files."""
+    data = {{
+        'coverage': {{}},  # Aggregate coverage across all test cases
+        'timing': {{}},
+        'examples': [],
+        'metadata': {{}},
+        'test_cases': []  # Individual test case data with coverage
+    }}
+
+    try:
+        # Hypothesis writes to .jsonl files in jsonlines format
+        jsonl_files = list(obs_dir.glob('**/*.jsonl'))
+
+        for jsonl_file in jsonl_files:
+            try:
+                with open(jsonl_file, 'r') as f:
+                    for line_num, line in enumerate(f):
+                        line = line.strip()
+                        if line:
+                            entry = json.loads(line)
+                            # Store each test case with its order
+                            entry['case_number'] = line_num
+                            process_observability_entry(entry, data)
+            except (json.JSONDecodeError, IOError) as e:
+                data['parse_error'] = f"Error reading {{jsonl_file}}: {{e}}"
+
+    except Exception as e:
+        data['parse_error'] = str(e)
+
+    return data
+
+def process_observability_entry(entry: Dict, data: Dict) -> None:
+    """Process a single observability entry."""
+    # Store individual test case with its coverage
+    if 'type' in entry and entry['type'] == 'test_case':
+        test_case = {{
+            'case_number': entry.get('case_number', 0),
+            'args': entry.get('arguments', {{}}),
+            'result': entry.get('status'),
+            'timing': entry.get('timing'),
+            'coverage': {{}}
+        }}
+
+        # Extract coverage for this test case
+        if 'coverage' in entry:
+            coverage = entry['coverage']
+            if isinstance(coverage, dict):
+                for file_path, lines in coverage.items():
+                    if isinstance(lines, list):
+                        test_case['coverage'][file_path] = lines
+
+                        # Also update aggregate coverage
+                        if file_path not in data['coverage']:
+                            data['coverage'][file_path] = set()
+                        data['coverage'][file_path].update(lines)
+
+        data['test_cases'].append(test_case)
+
+        # Legacy: store in examples too for compatibility
+        data['examples'].append({{
+            'args': test_case['args'],
+            'result': test_case['result'],
+            'timing': test_case['timing']
+        }})
+
+    # Extract coverage information if not a test case entry
+    elif 'coverage' in entry:
+        coverage = entry['coverage']
+        if isinstance(coverage, dict):
+            for file_path, lines in coverage.items():
+                if file_path not in data['coverage']:
+                    data['coverage'][file_path] = set()
+                if isinstance(lines, list):
+                    data['coverage'][file_path].update(lines)
+
+    # Extract timing information
+    if 'timing' in entry:
+        data['timing'].update(entry['timing'])
+
+    # Store metadata
+    if 'metadata' in entry:
+        data['metadata'].update(entry['metadata'])
 
 def analyze_test_file(file_path, node_ids):
     """Analyze a test file for PBT patterns."""
     results = {{}}
-    
+
     try:
         with open(file_path, 'r') as f:
             source = f.read()
-        
+
         # Parse AST
         tree = ast.parse(source)
-        
+
         # Analyze for patterns
         results['generators'] = find_generators(source)
         results['features'] = find_features(source)
         results['property_types'] = classify_property(source)
         results['test_runner'] = detect_test_runner(file_path)
-        
+
     except Exception as e:
         results['error'] = str(e)
-    
+
     return results
 
 def find_generators(source):
@@ -190,7 +342,7 @@ def find_generators(source):
         matches = re.findall(pattern, source)
         if matches:
             generators['st.' + strategy] = len(matches)
-    
+
     # Check for composite strategies
     if '@composite' in source or '@st.composite' in source:
         generators['composite'] = True
@@ -208,7 +360,7 @@ def find_generators(source):
 def find_features(source):
     """Find usage of Hypothesis features."""
     features = {{}}
-    
+
     feature_patterns = {{
         'assume': r'\\bassume\\s*\\(',
         'note': r'\\bnote\\s*\\(',
@@ -219,24 +371,24 @@ def find_features(source):
         'settings': r'@settings\\s*\\(',
         'max_examples': r'max_examples\\s*=',
     }}
-    
+
     for feature, pattern in feature_patterns.items():
         matches = re.findall(pattern, source)
         if matches:
             features[feature] = len(matches)
-    
+
     return features
 
 def classify_property(source):
     """Classify the type of property being tested."""
     types = []
-    
+
     # Mathematical properties
     math_patterns = [
         (r'commutative|associative|distributive|identity', 'mathematical'),
         (r'inverse|idempotent|transitive', 'mathematical'),
     ]
-    
+
     # Round-trip properties
     roundtrip_patterns = [
         (r'encode.*decode|decode.*encode', 'roundtrip'),
@@ -244,67 +396,109 @@ def classify_property(source):
         (r'dump.*load|load.*dump', 'roundtrip'),
         (r'parse.*format|format.*parse', 'roundtrip'),
     ]
-    
+
     # Model-based testing
     model_patterns = [
         (r'RuleBasedStateMachine', 'model_based'),
         (r'@rule\\s*\\(', 'model_based'),
         (r'@invariant\\s*\\(', 'model_based'),
     ]
-    
+
     all_patterns = math_patterns + roundtrip_patterns + model_patterns
-    
+
     for pattern, prop_type in all_patterns:
         if re.search(pattern, source, re.IGNORECASE):
             if prop_type not in types:
                 types.append(prop_type)
-    
+
     # If no specific type detected, mark as general
     if not types:
         types.append('general')
-    
+
     return types
 
 def detect_test_runner(file_path):
     """Detect which test runner is being used."""
     runner_info = {{}}
-    
+
     # Check for pytest
     if 'pytest' in str(file_path) or file_path.name.startswith('test_'):
         runner_info['framework'] = 'pytest'
-    
+
     # Check for test directory structure
     parts = file_path.parts
     if 'tests' in parts:
         runner_info['test_dir'] = 'tests'
     elif 'test' in parts:
         runner_info['test_dir'] = 'test'
-    
+
     return runner_info
 
 # Main execution
 def main():
-    print("Starting analysis...")
-    node_ids = {json.dumps(node_ids)}
-    results = {{}}
+    import traceback
+    try:
+        print("Starting analysis...")
+        print(f"Python version: {{sys.version}}")
+        print(f"Current directory: {{Path.cwd()}}")
+        node_ids = {json.dumps(node_ids)}
+        print(f"Node IDs to process: {{node_ids}}")
+        results = {{}}
 
-    for node_id in node_ids:
-        parts = node_id.split('::')
-        file_path = Path(parts[0])
+        for node_id in node_ids:
+            parts = node_id.split('::')
+            file_path = Path(parts[0])
 
-        print(f"Looking for file: {{file_path}}")
-        if file_path.exists():
-            print(f"Found file: {{file_path}}")
-            results[node_id] = analyze_test_file(file_path, node_id)
-        else:
-            print(f"File not found: {{file_path}}")
-            results[node_id] = {{'error': f'File not found: {{file_path}}'}}
+            print(f"\\nProcessing: {{node_id}}")
+            print(f"Looking for file: {{file_path}}")
 
-    # Write results
-    print(f"Writing results to results.json")
-    with open('results.json', 'w') as f:
-        json.dump(results, f, indent=2)
-    print("Analysis complete")
+            if file_path.exists():
+                print(f"Found file: {{file_path}}")
+
+                # First analyze the test file for patterns
+                analysis_results = analyze_test_file(file_path, node_id)
+
+                # Then run the test to collect coverage
+                print(f"Running test with coverage...")
+                coverage_results = run_test_with_coverage(node_id)
+
+                # Combine results
+                results[node_id] = {{
+                    'analysis': analysis_results,
+                    'coverage': coverage_results,
+                    'file_path': str(file_path)
+                }}
+
+                print(f"Test result: {{coverage_results.get('test_result', {{}}).get('passed', False)}}")
+                if coverage_results.get('observability_data', {{}}).get('coverage'):
+                    coverage_files = len(coverage_results['observability_data']['coverage'])
+                    print(f"Coverage data collected for {{coverage_files}} files")
+            else:
+                print(f"File not found: {{file_path}}")
+                results[node_id] = {{'error': f'File not found: {{file_path}}'}}
+
+        # Convert sets to lists for JSON serialization
+        for node_id in results:
+            if 'coverage' in results[node_id]:
+                cov_data = results[node_id]['coverage']
+                if 'observability_data' in cov_data and 'coverage' in cov_data['observability_data']:
+                    for file_path in cov_data['observability_data']['coverage']:
+                        if isinstance(cov_data['observability_data']['coverage'][file_path], set):
+                            cov_data['observability_data']['coverage'][file_path] = list(
+                                cov_data['observability_data']['coverage'][file_path]
+                            )
+
+        # Write results
+        print(f"\\nWriting results to results.json")
+        with open('results.json', 'w') as f:
+            json.dump(results, f, indent=2)
+        print("Analysis complete")
+    except Exception as e:
+        print(f"ERROR in main: {{e}}")
+        print(f"Traceback: {{traceback.format_exc()}}")
+        # Still try to write partial results
+        with open('results.json', 'w') as f:
+            json.dump({{"error": str(e), "traceback": traceback.format_exc()}}, f, indent=2)
 
 if __name__ == '__main__':
     main()

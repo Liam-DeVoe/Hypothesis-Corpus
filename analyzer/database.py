@@ -111,6 +111,54 @@ class Database:
                     failed_repos INTEGER DEFAULT 0,
                     configuration TEXT  -- JSON configuration used
                 );
+
+                -- Coverage information for tests
+                CREATE TABLE IF NOT EXISTS test_coverage (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    test_id INTEGER NOT NULL,
+                    file_path TEXT NOT NULL,
+                    lines_covered TEXT,  -- JSON array of line numbers
+                    covered_lines INTEGER,
+                    collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (test_id) REFERENCES tests(id)
+                );
+
+                -- Test execution results
+                CREATE TABLE IF NOT EXISTS test_executions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    test_id INTEGER NOT NULL,
+                    passed BOOLEAN,
+                    exit_code INTEGER,
+                    stdout TEXT,
+                    stderr TEXT,
+                    execution_time REAL,  -- seconds
+                    examples_count INTEGER,
+                    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (test_id) REFERENCES tests(id)
+                );
+
+                -- Observability metadata
+                CREATE TABLE IF NOT EXISTS observability_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    test_id INTEGER NOT NULL,
+                    timing_data TEXT,  -- JSON timing information
+                    example_data TEXT,  -- JSON examples data
+                    metadata TEXT,  -- JSON additional metadata
+                    FOREIGN KEY (test_id) REFERENCES tests(id)
+                );
+
+                -- Per-test-case coverage tracking for cumulative analysis
+                CREATE TABLE IF NOT EXISTS test_case_coverage (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    test_id INTEGER NOT NULL,
+                    case_number INTEGER NOT NULL,  -- Order of test case execution
+                    file_path TEXT NOT NULL,
+                    lines_covered TEXT,  -- JSON array of line numbers for this test case
+                    cumulative_lines TEXT,  -- JSON array of all unique lines seen so far
+                    cumulative_count INTEGER,  -- Count of unique lines seen so far
+                    collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (test_id) REFERENCES tests(id)
+                );
                 
                 -- Create indexes for better query performance
                 CREATE INDEX IF NOT EXISTS idx_tests_repo ON tests(repo_id);
@@ -119,6 +167,11 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_features_test ON feature_usage(test_id);
                 CREATE INDEX IF NOT EXISTS idx_repos_status ON repositories(clone_status);
                 CREATE INDEX IF NOT EXISTS idx_tests_status ON tests(status);
+                CREATE INDEX IF NOT EXISTS idx_coverage_test ON test_coverage(test_id);
+                CREATE INDEX IF NOT EXISTS idx_executions_test ON test_executions(test_id);
+                CREATE INDEX IF NOT EXISTS idx_observability_test ON observability_data(test_id);
+                CREATE INDEX IF NOT EXISTS idx_test_case_coverage ON test_case_coverage(test_id, case_number);
+                CREATE INDEX IF NOT EXISTS idx_test_case_file ON test_case_coverage(test_id, file_path);
             """
             )
             conn.commit()
@@ -264,6 +317,120 @@ class Database:
                 WHERE id = ?
                 """,
                 (status, error_message, test_id),
+            )
+            conn.commit()
+
+    def add_test_coverage(
+        self,
+        test_id: int,
+        file_path: str,
+        lines_covered: list,
+    ):
+        """Store coverage information for a test."""
+        import json
+
+        covered_lines = len(lines_covered) if lines_covered else 0
+
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO test_coverage (test_id, file_path, lines_covered, covered_lines)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    test_id,
+                    file_path,
+                    json.dumps(lines_covered),
+                    covered_lines,
+                ),
+            )
+            conn.commit()
+
+    def add_test_execution(
+        self,
+        test_id: int,
+        passed: bool,
+        exit_code: int,
+        stdout: str = "",
+        stderr: str = "",
+        execution_time: Optional[float] = None,
+        examples_count: Optional[int] = None,
+    ):
+        """Store test execution results."""
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO test_executions (test_id, passed, exit_code, stdout, stderr,
+                                           execution_time, examples_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    test_id,
+                    passed,
+                    exit_code,
+                    stdout,
+                    stderr,
+                    execution_time,
+                    examples_count,
+                ),
+            )
+            conn.commit()
+
+    def add_observability_data(
+        self,
+        test_id: int,
+        timing_data: Optional[dict] = None,
+        example_data: Optional[list] = None,
+        metadata: Optional[dict] = None,
+    ):
+        """Store observability metadata."""
+        import json
+
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO observability_data (test_id, timing_data, example_data, metadata)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    test_id,
+                    json.dumps(timing_data) if timing_data else None,
+                    json.dumps(example_data) if example_data else None,
+                    json.dumps(metadata) if metadata else None,
+                ),
+            )
+            conn.commit()
+
+    def add_test_case_coverage(
+        self,
+        test_id: int,
+        case_number: int,
+        file_path: str,
+        lines_covered: list,
+        cumulative_lines: set,
+    ):
+        """Store per-test-case coverage with cumulative tracking."""
+        import json
+
+        cumulative_list = sorted(cumulative_lines)
+
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO test_case_coverage (
+                    test_id, case_number, file_path, lines_covered,
+                    cumulative_lines, cumulative_count
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    test_id,
+                    case_number,
+                    file_path,
+                    json.dumps(lines_covered),
+                    json.dumps(cumulative_list),
+                    len(cumulative_list),
+                ),
             )
             conn.commit()
 

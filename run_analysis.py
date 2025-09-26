@@ -125,9 +125,9 @@ def main(
         work_items = work_items[:limit]
         console.print(f"[yellow]Limited to {limit} repositories[/yellow]")
 
-    console.print(f"📊 Dataset loaded: [green]{len(work_items)} repositories[/green]")
-    console.print(f"⚙️  Workers: [green]{cfg['workers']['max_workers']}[/green]")
-    console.print(f"🐳 Docker image: [green]{cfg['docker']['image']}[/green]")
+    console.print(f"Dataset loaded: [green]{len(work_items)} repositories[/green]")
+    console.print(f"Workers: [green]{cfg['workers']['max_workers']}[/green]")
+    console.print(f"Docker image: [green]{cfg['docker']['image']}[/green]")
     console.print()
 
     # Initialize database
@@ -173,7 +173,7 @@ def main(
             failed = 0
 
             # Wait for completion
-            for i in range(len(work_items)):
+            for _ in range(len(work_items)):
                 result = pool.get_result(timeout=300)
                 if result:
                     if result["success"]:
@@ -231,7 +231,7 @@ def main(
 
     console.print()
     console.print(
-        f"[green]✨ View results in the dashboard: streamlit run dashboard.py[/green]"
+        "[green]✨ View results in the dashboard: streamlit run dashboard.py[/green]"
     )
 
 

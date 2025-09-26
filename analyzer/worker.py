@@ -150,23 +150,91 @@ class Worker(Process):
                     tests_failed += 1
                     continue
 
-                # Store test code if available
+                # Extract analysis and coverage data from new structure
+                analysis_data = test_results.get("analysis", {})
+                coverage_data = test_results.get("coverage", {})
+
+                # Store test code if available (now in analysis data)
                 if "source_code" in test_results:
+                    source_code = test_results["source_code"]
+                elif analysis_data:
+                    # Try to get source from file path
+                    source_code = None
+                else:
+                    source_code = None
+
+                if source_code:
                     # Perform additional analysis on source code
-                    enhanced_results = analyzer.analyze_source(
-                        test_results["source_code"]
-                    )
-                    test_results.update(enhanced_results)
+                    enhanced_results = analyzer.analyze_source(source_code)
+                    analysis_data.update(enhanced_results)
 
                     # Store in database
                     db.add_test_code(
                         test_id,
-                        test_results["source_code"],
-                        json.dumps(test_results.get("ast", {})),
+                        source_code,
+                        json.dumps(analysis_data.get("ast", {})),
                     )
 
-                # Store generator usage
-                for gen_name, count in test_results.get("generators", {}).items():
+                # Store test execution results if available
+                if coverage_data and "test_result" in coverage_data:
+                    test_result = coverage_data["test_result"]
+                    if test_result:
+                        db.add_test_execution(
+                            test_id,
+                            passed=test_result.get("passed", False),
+                            exit_code=test_result.get("exit_code", -1),
+                            stdout=test_result.get("stdout", ""),
+                            stderr=test_result.get("stderr", ""),
+                        )
+
+                # Store coverage information if available
+                if coverage_data and "observability_data" in coverage_data:
+                    obs_data = coverage_data["observability_data"]
+
+                    # Store aggregate coverage data for each file
+                    if "coverage" in obs_data:
+                        for cov_file_path, lines in obs_data["coverage"].items():
+                            db.add_test_coverage(
+                                test_id,
+                                cov_file_path,
+                                lines if isinstance(lines, list) else list(lines),
+                            )
+
+                    # Store per-test-case coverage for cumulative tracking
+                    if "test_cases" in obs_data:
+                        # Track cumulative coverage per file
+                        cumulative_coverage = {}
+
+                        for case_num, test_case in enumerate(obs_data["test_cases"]):
+                            if "coverage" in test_case:
+                                for file_path, lines in test_case["coverage"].items():
+                                    # Initialize cumulative set for this file if needed
+                                    if file_path not in cumulative_coverage:
+                                        cumulative_coverage[file_path] = set()
+
+                                    # Add this test case's lines to cumulative
+                                    cumulative_coverage[file_path].update(lines)
+
+                                    # Store this test case's coverage with cumulative total
+                                    db.add_test_case_coverage(
+                                        test_id,
+                                        case_num,
+                                        file_path,
+                                        lines,
+                                        cumulative_coverage[file_path],
+                                    )
+
+                    # Store observability metadata
+                    if any(k in obs_data for k in ["timing", "examples", "metadata"]):
+                        db.add_observability_data(
+                            test_id,
+                            timing_data=obs_data.get("timing"),
+                            example_data=obs_data.get("examples"),
+                            metadata=obs_data.get("metadata"),
+                        )
+
+                # Store generator usage (from analysis)
+                for gen_name, count in analysis_data.get("generators", {}).items():
                     if gen_name in ["composite", "custom_strategies"]:
                         db.add_generator_usage(
                             test_id,
@@ -178,12 +246,12 @@ class Worker(Process):
                     else:
                         db.add_generator_usage(test_id, gen_name, count)
 
-                # Store property types
-                for prop_type in test_results.get("property_types", ["general"]):
+                # Store property types (from analysis)
+                for prop_type in analysis_data.get("property_types", ["general"]):
                     db.add_property_type(test_id, prop_type)
 
-                # Store feature usage
-                for feature, count in test_results.get("features", {}).items():
+                # Store feature usage (from analysis)
+                for feature, count in analysis_data.get("features", {}).items():
                     db.add_feature_usage(test_id, feature, count)
 
                 db.update_test_status(test_id, "success")
