@@ -11,7 +11,6 @@ from typing import Any, Dict, List
 import click
 import yaml
 from rich.console import Console
-from rich.logging import RichHandler
 
 from analyzer.database import Database
 from analyzer.worker import WorkerPool, WorkItem
@@ -21,11 +20,11 @@ logging.basicConfig(
     format="%(message)s",
     datefmt="",
     handlers=[logging.StreamHandler()],
-    force=True  # Override any existing configuration
+    force=True,  # Override any existing configuration
 )
 
 # Ensure all loggers use the same format
-for name in ['analyzer.test_runner', 'analyzer.worker', 'analyzer.database']:
+for name in ["analyzer.test_runner", "analyzer.worker", "analyzer.database"]:
     logging.getLogger(name).handlers = []
     logging.getLogger(name).propagate = True
 
@@ -162,13 +161,19 @@ def main(
             if result:
                 if result["success"]:
                     successful += 1
-                    console.print(f"[w{result['worker_id']}] {result['repo_name']}: [green]Success[/green]")
+                    console.print(
+                        f"[w{result['worker_id']}] {result['repo_name']}: [green]Success[/green]"
+                    )
                 else:
                     failed += 1
                     error = result.get("error", "Unknown error")
-                    console.print(f"[w{result['worker_id']}] {result['repo_name']}: [red]{error}[/red]")
+                    console.print(
+                        f"[w{result['worker_id']}] {result['repo_name']}: [red]{error}[/red]"
+                    )
 
-                console.print(f"[w{result['worker_id']}] Finished repository {result['repo_name']}")
+                console.print(
+                    f"[w{result['worker_id']}] Finished repository {result['repo_name']}"
+                )
 
     # Update analysis run
     with db.connection() as conn:

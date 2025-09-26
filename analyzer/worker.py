@@ -67,7 +67,7 @@ class Worker(Process):
                     logger.info(f"[w{self.worker_id}] Worker stopping")
                     break
 
-                logger.info(f"[w{self.worker_id}] Processing {work_item.repo_name}")
+                logger.info(f"[w{self.worker_id}][{work_item.repo_name}] Processing")
 
                 # Process the repository
                 result = self._process_repository(work_item, db, test_runner, analyzer)
@@ -85,7 +85,8 @@ class Worker(Process):
             except mp.queues.Empty:
                 continue  # No work available, keep waiting
             except Exception as e:
-                logger.error(f"[w{self.worker_id}] Error: {e}")
+                repo_name = work_item.repo_name if 'work_item' in locals() else 'unknown'
+                logger.error(f"[w{self.worker_id}][{repo_name}] Error: {e}")
                 logger.error(traceback.format_exc())
 
                 # Send error result
@@ -108,17 +109,24 @@ class Worker(Process):
     ) -> Dict:
         """Process a single repository."""
         try:
-            # Add repository to database if not already there
-            if work_item.repo_id is None:
-                owner, name = work_item.repo_name.split("/")
-                work_item.repo_id = db.add_repository(
-                    owner, name, f"https://github.com/{work_item.repo_name}"
-                )
+            # Delete any existing data for this repository before processing
+            owner, name = work_item.repo_name.split("/")
+            db.delete_repository_data(owner, name)
+
+            # Add repository to database
+            work_item.repo_id = db.add_repository(
+                owner, name, f"https://github.com/{work_item.repo_name}"
+            )
 
             # Run tests in container and collect results
             results = test_runner.process_repository(
                 work_item.repo_name, work_item.node_ids, work_item.requirements
             )
+
+            if results is None:
+                error_msg = "No results returned from test runner"
+                db.update_repository_status(work_item.repo_id, "failed", error_msg)
+                return {"success": False, "error": error_msg}
 
             if "error" in results:
                 db.update_repository_status(
@@ -192,7 +200,7 @@ class Worker(Process):
                     obs_data = coverage_data["observability_data"]
 
                     # Store aggregate coverage data for each file
-                    if "coverage" in obs_data:
+                    if "coverage" in obs_data and obs_data["coverage"] is not None:
                         for cov_file_path, lines in obs_data["coverage"].items():
                             db.add_test_coverage(
                                 test_id,
@@ -206,7 +214,10 @@ class Worker(Process):
                         cumulative_coverage = {}
 
                         for case_num, test_case in enumerate(obs_data["test_cases"]):
-                            if "coverage" in test_case:
+                            if (
+                                "coverage" in test_case
+                                and test_case["coverage"] is not None
+                            ):
                                 for file_path, lines in test_case["coverage"].items():
                                     # Initialize cumulative set for this file if needed
                                     if file_path not in cumulative_coverage:
@@ -234,7 +245,8 @@ class Worker(Process):
                         )
 
                 # Store generator usage (from analysis)
-                for gen_name, count in analysis_data.get("generators", {}).items():
+                generators = analysis_data.get("generators", {}) or {}
+                for gen_name, count in generators.items():
                     if gen_name in ["composite", "custom_strategies"]:
                         db.add_generator_usage(
                             test_id,
@@ -251,7 +263,8 @@ class Worker(Process):
                     db.add_property_type(test_id, prop_type)
 
                 # Store feature usage (from analysis)
-                for feature, count in analysis_data.get("features", {}).items():
+                features = analysis_data.get("features", {}) or {}
+                for feature, count in features.items():
                     db.add_feature_usage(test_id, feature, count)
 
                 db.update_test_status(test_id, "success")
@@ -268,7 +281,7 @@ class Worker(Process):
             }
 
         except Exception as e:
-            logger.error(f"Error processing {work_item.repo_name}: {e}")
+            logger.error(f"[w{self.worker_id}][{work_item.repo_name}] Error processing: {e}")
             if work_item.repo_id:
                 db.update_repository_status(work_item.repo_id, "failed", str(e))
             return {"success": False, "error": str(e)}
@@ -359,7 +372,7 @@ class WorkerPool:
         for worker in self.workers:
             worker.join(timeout=10)
             if worker.is_alive():
-                logger.warning(f"Worker {worker.worker_id} did not stop gracefully")
+                logger.warning(f"[w{worker.worker_id}] Did not stop gracefully")
                 worker.terminate()
 
         logger.info("Worker pool shutdown complete")

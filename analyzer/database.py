@@ -434,6 +434,73 @@ class Database:
             )
             conn.commit()
 
+    def delete_repository_data(self, owner: str, name: str):
+        """Delete all data associated with a repository.
+
+        This includes:
+        - Repository record
+        - All tests for this repository
+        - All related data (generators, properties, features, code, coverage, executions, etc.)
+        """
+        with self.connection() as conn:
+            # Get repository ID
+            result = conn.execute(
+                "SELECT id FROM repositories WHERE owner = ? AND name = ?",
+                (owner, name),
+            ).fetchone()
+
+            if not result:
+                logger.debug(f"No existing data found for {owner}/{name}")
+                return
+
+            repo_id = result["id"]
+            logger.info(
+                f"Deleting existing data for {owner}/{name} (repo_id={repo_id})"
+            )
+
+            # Get all test IDs for this repository
+            test_ids = conn.execute(
+                "SELECT id FROM tests WHERE repo_id = ?", (repo_id,)
+            ).fetchall()
+            test_id_list = [row["id"] for row in test_ids]
+
+            if test_id_list:
+                # Delete all related data for these tests
+                # Using parameterized queries with proper placeholders
+                placeholders = ",".join("?" * len(test_id_list))
+
+                # Delete from all dependent tables
+                tables_to_clean = [
+                    "generator_usage",
+                    "property_types",
+                    "feature_usage",
+                    "test_code",
+                    "test_coverage",
+                    "test_executions",
+                    "observability_data",
+                    "test_case_coverage",
+                ]
+
+                for table in tables_to_clean:
+                    conn.execute(
+                        f"DELETE FROM {table} WHERE test_id IN ({placeholders})",
+                        test_id_list,
+                    )
+
+                # Delete tests
+                conn.execute(
+                    f"DELETE FROM tests WHERE id IN ({placeholders})", test_id_list
+                )
+
+            # Delete test runner info
+            conn.execute("DELETE FROM test_runners WHERE repo_id = ?", (repo_id,))
+
+            # Delete repository
+            conn.execute("DELETE FROM repositories WHERE id = ?", (repo_id,))
+
+            conn.commit()
+            logger.info(f"Successfully deleted all data for {owner}/{name}")
+
     def get_analysis_stats(self) -> Dict[str, Any]:
         """Get overall analysis statistics."""
         with self.connection() as conn:
