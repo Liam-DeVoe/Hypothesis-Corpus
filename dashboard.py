@@ -260,6 +260,98 @@ def render_feature_usage(stats: Dict[str, Any]):
             )
 
 
+def render_property_explorer():
+    """Render property source code explorer."""
+    st.header("Property Source Code Explorer")
+
+    db = get_database()
+
+    # Get tests with property text
+    with db.connection() as conn:
+        properties = pd.read_sql_query(
+            """
+            SELECT
+                r.owner || '/' || r.name as repository,
+                t.node_id,
+                t.test_name,
+                t.property_text,
+                t.github_permalink,
+                COUNT(DISTINCT gu.generator_name) as generator_count,
+                GROUP_CONCAT(DISTINCT pt.property_type) as property_types
+            FROM tests t
+            JOIN repositories r ON t.repo_id = r.id
+            LEFT JOIN generator_usage gu ON t.id = gu.test_id
+            LEFT JOIN property_types pt ON t.id = pt.test_id
+            WHERE t.property_text IS NOT NULL
+            GROUP BY t.id
+            ORDER BY r.name, t.node_id
+            """,
+            conn,
+        )
+
+    if properties.empty:
+        st.info("No property source code available yet. Run analysis to collect property implementations.")
+        return
+
+    # Repository filter
+    repos = properties["repository"].unique().tolist()
+    selected_repo = st.selectbox(
+        "Select Repository",
+        ["All"] + repos,
+        index=0
+    )
+
+    if selected_repo != "All":
+        filtered_props = properties[properties["repository"] == selected_repo]
+    else:
+        filtered_props = properties
+
+    # Property type filter
+    if not filtered_props.empty:
+        all_prop_types = set()
+        for types_str in filtered_props["property_types"].dropna():
+            if types_str:
+                all_prop_types.update(types_str.split(","))
+
+        if all_prop_types:
+            selected_type = st.selectbox(
+                "Filter by Property Type",
+                ["All"] + sorted(all_prop_types),
+                index=0
+            )
+
+            if selected_type != "All":
+                filtered_props = filtered_props[
+                    filtered_props["property_types"].str.contains(selected_type, na=False)
+                ]
+
+    # Display properties
+    st.subheader(f"Found {len(filtered_props)} properties")
+
+    for idx, prop in filtered_props.iterrows():
+        with st.expander(f"{prop['repository']} - {prop['test_name'] or prop['node_id'].split('::')[-1]}"):
+            # Metadata
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.caption(f"Node ID: {prop['node_id']}")
+                if prop['property_types']:
+                    st.caption(f"Types: {prop['property_types']}")
+                st.caption(f"Generators: {prop['generator_count']}")
+            with col2:
+                if prop['github_permalink']:
+                    st.link_button(
+                        "View on GitHub",
+                        prop['github_permalink'],
+                        use_container_width=True
+                    )
+
+            # Source code
+            if prop['property_text']:
+                st.code(prop['property_text'], language="python")
+            else:
+                st.warning("Source code not available")
+
+
 def render_repository_details():
     """Render detailed repository analysis."""
     st.header("Repository Details")
@@ -325,6 +417,8 @@ def render_repository_details():
                     SELECT
                         t.node_id,
                         t.status,
+                        t.github_permalink,
+                        CASE WHEN t.property_text IS NOT NULL THEN 'Yes' ELSE 'No' END as has_source,
                         COUNT(DISTINCT gu.generator_name) as generator_count,
                         COUNT(DISTINCT pt.property_type) as property_types,
                         COUNT(DISTINCT fu.feature_name) as features_used
@@ -342,7 +436,56 @@ def render_repository_details():
 
                 if not test_details.empty:
                     st.subheader(f"Tests in {selected_repo}")
-                    st.dataframe(test_details, width="stretch", hide_index=True)
+
+                    # Make GitHub permalinks clickable
+                    test_details_display = test_details.copy()
+
+                    st.dataframe(
+                        test_details_display,
+                        width="stretch",
+                        hide_index=True,
+                        column_config={
+                            "node_id": st.column_config.TextColumn("Test", width="large"),
+                            "status": st.column_config.TextColumn("Status", width="small"),
+                            "has_source": st.column_config.TextColumn("Source", width="small"),
+                            "github_permalink": st.column_config.LinkColumn(
+                                "GitHub",
+                                width="small",
+                                display_text="View"
+                            ),
+                            "generator_count": st.column_config.NumberColumn("Generators", width="small"),
+                            "property_types": st.column_config.NumberColumn("Types", width="small"),
+                            "features_used": st.column_config.NumberColumn("Features", width="small"),
+                        },
+                    )
+
+                    # Add option to view property source
+                    if st.checkbox("Show property source code"):
+                        selected_test = st.selectbox(
+                            "Select test to view source",
+                            test_details[test_details["has_source"] == "Yes"]["node_id"].tolist()
+                        )
+
+                        if selected_test:
+                            with db.connection() as conn:
+                                source = conn.execute(
+                                    """
+                                    SELECT property_text, github_permalink
+                                    FROM tests t
+                                    JOIN repositories r ON t.repo_id = r.id
+                                    WHERE r.owner || '/' || r.name = ?
+                                    AND t.node_id = ?
+                                    """,
+                                    (selected_repo, selected_test),
+                                ).fetchone()
+
+                                if source and source["property_text"]:
+                                    if source["github_permalink"]:
+                                        st.link_button(
+                                            "View on GitHub",
+                                            source["github_permalink"]
+                                        )
+                                    st.code(source["property_text"], language="python")
 
 
 def render_coverage_analysis():
@@ -705,6 +848,7 @@ def main():
                 "Generators",
                 "Property Types",
                 "Features",
+                "Property Explorer",
                 "Coverage",
                 "Repositories",
                 "History",
@@ -747,6 +891,9 @@ def main():
 
     elif page == "Features":
         render_feature_usage(stats)
+
+    elif page == "Property Explorer":
+        render_property_explorer()
 
     elif page == "Coverage":
         render_coverage_analysis()

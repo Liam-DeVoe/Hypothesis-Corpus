@@ -192,9 +192,9 @@ def main(
     # Print summary
     console.print()
     console.print("[bold]Analysis Complete![/bold]")
-    console.print(f"✅ Successful: [green]{successful}[/green]")
-    console.print(f"❌ Failed: [red]{failed}[/red]")
-    console.print(f"📊 Total: {len(work_items)}")
+    console.print(f"Successful: [green]{successful}[/green]")
+    console.print(f"Failed: [red]{failed}[/red]")
+    console.print(f"Total: {len(work_items)}")
 
     # Get and display statistics
     stats = db.get_analysis_stats()

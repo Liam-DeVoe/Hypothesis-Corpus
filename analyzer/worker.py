@@ -85,7 +85,9 @@ class Worker(Process):
             except mp.queues.Empty:
                 continue  # No work available, keep waiting
             except Exception as e:
-                repo_name = work_item.repo_name if 'work_item' in locals() else 'unknown'
+                repo_name = (
+                    work_item.repo_name if "work_item" in locals() else "unknown"
+                )
                 logger.error(f"[w{self.worker_id}][{repo_name}] Error: {e}")
                 logger.error(traceback.format_exc())
 
@@ -148,9 +150,19 @@ class Worker(Process):
                 class_name = parts[1] if len(parts) > 1 else None
                 test_name = parts[2] if len(parts) > 2 else parts[-1]
 
-                # Add test to database
+                # Extract property text and GitHub permalink from results
+                property_text = test_results.get("property_text")
+                github_permalink = test_results.get("github_permalink")
+
+                # Add test to database with property text and permalink
                 test_id = db.add_test(
-                    work_item.repo_id, node_id, file_path, class_name, test_name
+                    work_item.repo_id,
+                    node_id,
+                    file_path,
+                    class_name,
+                    test_name,
+                    property_text=property_text,
+                    github_permalink=github_permalink,
                 )
 
                 if "error" in test_results:
@@ -281,7 +293,9 @@ class Worker(Process):
             }
 
         except Exception as e:
-            logger.error(f"[w{self.worker_id}][{work_item.repo_name}] Error processing: {e}")
+            logger.error(
+                f"[w{self.worker_id}][{work_item.repo_name}] Error processing: {e}"
+            )
             if work_item.repo_id:
                 db.update_repository_status(work_item.repo_id, "failed", str(e))
             return {"success": False, "error": str(e)}

@@ -36,7 +36,7 @@ class Database:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(owner, name)
                 );
-                
+
                 -- Test information
                 CREATE TABLE IF NOT EXISTS tests (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,11 +47,13 @@ class Database:
                     test_name TEXT,
                     status TEXT DEFAULT 'pending',
                     error_message TEXT,
+                    property_text TEXT,  -- Source code of the property
+                    github_permalink TEXT,  -- GitHub permalink to the property
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (repo_id) REFERENCES repositories(id),
                     UNIQUE(repo_id, node_id)
                 );
-                
+
                 -- Generator usage
                 CREATE TABLE IF NOT EXISTS generator_usage (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,7 +64,7 @@ class Database:
                     is_custom BOOLEAN DEFAULT 0,
                     FOREIGN KEY (test_id) REFERENCES tests(id)
                 );
-                
+
                 -- Property types
                 CREATE TABLE IF NOT EXISTS property_types (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,7 +73,7 @@ class Database:
                     confidence REAL DEFAULT 1.0,
                     FOREIGN KEY (test_id) REFERENCES tests(id)
                 );
-                
+
                 -- Feature usage (assume, note, event, target)
                 CREATE TABLE IF NOT EXISTS feature_usage (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,7 +82,7 @@ class Database:
                     count INTEGER DEFAULT 1,
                     FOREIGN KEY (test_id) REFERENCES tests(id)
                 );
-                
+
                 -- Test runner information
                 CREATE TABLE IF NOT EXISTS test_runners (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,7 +92,7 @@ class Database:
                     test_directory TEXT,
                     FOREIGN KEY (repo_id) REFERENCES repositories(id)
                 );
-                
+
                 -- Raw test code for further analysis
                 CREATE TABLE IF NOT EXISTS test_code (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,7 +102,7 @@ class Database:
                     FOREIGN KEY (test_id) REFERENCES tests(id),
                     UNIQUE(test_id)
                 );
-                
+
                 -- Analysis metadata
                 CREATE TABLE IF NOT EXISTS analysis_runs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -159,7 +161,7 @@ class Database:
                     collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (test_id) REFERENCES tests(id)
                 );
-                
+
                 -- Create indexes for better query performance
                 CREATE INDEX IF NOT EXISTS idx_tests_repo ON tests(repo_id);
                 CREATE INDEX IF NOT EXISTS idx_generators_test ON generator_usage(test_id);
@@ -212,15 +214,25 @@ class Database:
         file_path: str,
         class_name: Optional[str] = None,
         test_name: Optional[str] = None,
+        property_text: Optional[str] = None,
+        github_permalink: Optional[str] = None,
     ) -> int:
         """Add a test to the database."""
         with self.connection() as conn:
             conn.execute(
                 """
-                INSERT OR IGNORE INTO tests (repo_id, node_id, file_path, class_name, test_name)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT OR IGNORE INTO tests (repo_id, node_id, file_path, class_name, test_name, property_text, github_permalink)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (repo_id, node_id, file_path, class_name, test_name),
+                (
+                    repo_id,
+                    node_id,
+                    file_path,
+                    class_name,
+                    test_name,
+                    property_text,
+                    github_permalink,
+                ),
             )
             conn.commit()
 
@@ -454,9 +466,6 @@ class Database:
                 return
 
             repo_id = result["id"]
-            logger.info(
-                f"Deleting existing data for {owner}/{name} (repo_id={repo_id})"
-            )
 
             # Get all test IDs for this repository
             test_ids = conn.execute(
@@ -499,7 +508,7 @@ class Database:
             conn.execute("DELETE FROM repositories WHERE id = ?", (repo_id,))
 
             conn.commit()
-            logger.info(f"Successfully deleted all data for {owner}/{name}")
+        logger.info(f"[{owner}/{name}] deleted all data")
 
     def get_analysis_stats(self) -> Dict[str, Any]:
         """Get overall analysis statistics."""
@@ -509,7 +518,7 @@ class Database:
             # Repository stats
             repo_stats = conn.execute(
                 """
-                SELECT 
+                SELECT
                     COUNT(*) as total,
                     SUM(CASE WHEN clone_status = 'success' THEN 1 ELSE 0 END) as successful,
                     SUM(CASE WHEN clone_status = 'failed' THEN 1 ELSE 0 END) as failed,
@@ -522,7 +531,7 @@ class Database:
             # Test stats
             test_stats = conn.execute(
                 """
-                SELECT 
+                SELECT
                     COUNT(*) as total,
                     SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful,
                     SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,

@@ -6,6 +6,7 @@ import json
 import logging
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -30,6 +31,21 @@ class TestRunner:
         self.docker_client = docker.from_env()
         self.docker_image = docker_image
         self.worker_id = worker_id
+
+    def get_git_commit_hash(self, repo_dir: Path) -> Optional[str]:
+        """Get the current git commit hash of a repository."""
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=repo_dir,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return result.stdout.strip()
+        except Exception as e:
+            logger.error(f"[w{self.worker_id}] Failed to get git hash: {e}")
+            return None
 
     def clone_repository(self, repo_url: str, target_dir: Path) -> bool:
         """Clone a repository to the target directory."""
@@ -80,7 +96,9 @@ class TestRunner:
 
             return True
         except Exception as e:
-            logger.error(f"[w{self.worker_id}][unknown] Failed to setup environment: {e}")
+            logger.error(
+                f"[w{self.worker_id}][unknown] Failed to setup environment: {e}"
+            )
             return False
 
     def extract_test_code(self, repo_dir: Path, node_id: str) -> Optional[str]:
@@ -91,7 +109,9 @@ class TestRunner:
             file_path = repo_dir / parts[0]
 
             if not file_path.exists():
-                logger.error(f"[w{self.worker_id}][unknown] Test file not found: {file_path}")
+                logger.error(
+                    f"[w{self.worker_id}][unknown] Test file not found: {file_path}"
+                )
                 return None
 
             # Read the entire file content
@@ -99,7 +119,9 @@ class TestRunner:
             return file_path.read_text()
 
         except Exception as e:
-            logger.error(f"[w{self.worker_id}][unknown] Failed to extract test code: {e}")
+            logger.error(
+                f"[w{self.worker_id}][unknown] Failed to extract test code: {e}"
+            )
             return None
 
     def run_in_container(
@@ -107,9 +129,7 @@ class TestRunner:
     ) -> Dict[str, any]:
         """Run tests in container by copying files instead of mounting (avoids Mac penalty)."""
         try:
-            logger.info(
-                f"[w{self.worker_id}][{repo_name}] Running container analysis"
-            )
+            logger.info(f"[w{self.worker_id}][{repo_name}] Running container analysis")
 
             # Create tar archive of the work directory
             start_tar = time.time()
@@ -120,7 +140,9 @@ class TestRunner:
                     tar.add(item, arcname=f"/app/{item.name}")
             tar_stream.seek(0)
             tar_time = time.time() - start_tar
-            logger.info(f"[w{self.worker_id}][{repo_name}] Created tar archive in {tar_time:.3f}s")
+            logger.info(
+                f"[w{self.worker_id}][{repo_name}] Created tar archive in {tar_time:.3f}s"
+            )
 
             # Create container WITHOUT volumes (no Mac penalty!)
             container = self.docker_client.containers.create(
@@ -195,7 +217,9 @@ class TestRunner:
                     logger.error(
                         f"[w{self.worker_id}][{repo_name}] No results file generated: {e}"
                     )
-                    logger.debug(f"[w{self.worker_id}][{repo_name}] Container logs:\n{logs}")
+                    logger.debug(
+                        f"[w{self.worker_id}][{repo_name}] Container logs:\n{logs}"
+                    )
                     return {"error": "No results generated", "logs": logs}
                 except Exception as e:
                     logger.error(
@@ -239,6 +263,9 @@ class TestRunner:
             if not self.setup_environment(repo_dir, requirements, node_ids):
                 return {"error": "Failed to setup environment"}
 
+            # Get git commit hash for permalink construction
+            git_hash = self.get_git_commit_hash(repo_dir)
+
             # Run analysis in container
             results = self.run_in_container(repo_name, repo_dir, node_ids)
             # Check if results is valid
@@ -248,11 +275,28 @@ class TestRunner:
             if "error" in results:
                 return results  # Return error as-is
 
-            # Extract test code for each node_id
+            # Extract test code and construct GitHub permalinks for each node_id
             for node_id in node_ids:
                 code = self.extract_test_code(repo_dir, node_id)
                 if code and node_id in results:
                     results[node_id]["source_code"] = code
+
+                # If we have analysis data with property info, construct permalink
+                if node_id in results and "analysis" in results[node_id]:
+                    analysis = results[node_id]["analysis"]
+
+                    if git_hash and analysis.get("property_line_number"):
+                        # Construct GitHub permalink
+                        # Format: https://github.com/owner/repo/blob/hash/file#Lline
+                        parts = node_id.split("::")
+                        file_path = parts[0]
+                        line_number = analysis["property_line_number"]
+                        permalink = f"https://github.com/{repo_name}/blob/{git_hash}/{file_path}#L{line_number}"
+                        results[node_id]["github_permalink"] = permalink
+
+                    # Store property source text if available
+                    if analysis.get("property_source"):
+                        results[node_id]["property_text"] = analysis["property_source"]
 
             return results
 
