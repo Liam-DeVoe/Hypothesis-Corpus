@@ -7,6 +7,8 @@ import logging
 import shutil
 import subprocess
 import tempfile
+import threading
+import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -18,11 +20,14 @@ logger = logging.getLogger(__name__)
 class TestRunner:
     """Run tests in isolated Docker containers."""
 
-    def __init__(self, docker_image: str = "pbt-analyzer:latest", timeout: int = 300):
+    # 1 hour
+    RUNNER_TIMEOUT = 60 * 60
+
+    def __init__(self, docker_image: str = "pbt-analyzer:latest", worker_id: Optional[int] = None):
         """Initialize test runner with Docker client."""
         self.docker_client = docker.from_env()
         self.docker_image = docker_image
-        self.timeout = timeout
+        self.worker_id = worker_id
 
     def clone_repository(self, repo_url: str, target_dir: Path) -> bool:
         """Clone a repository to the target directory."""
@@ -31,7 +36,7 @@ class TestRunner:
             if not repo_url.startswith(("http://", "https://", "git@")):
                 repo_url = f"https://github.com/{repo_url}.git"
 
-            logger.info(f"Cloning repository: {repo_url}")
+            logger.info(f"[w{self.worker_id}] Cloning repository: {repo_url}")
             # Use subprocess to run git clone command
             subprocess.run(
                 ["git", "clone", "--depth", "1", repo_url, str(target_dir)],
@@ -41,10 +46,10 @@ class TestRunner:
             )
             return True
         except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to clone repository {repo_url}: {e.stderr}")
+            logger.error(f"[w{self.worker_id}] Failed to clone repository {repo_url}: {e.stderr}")
             return False
         except Exception as e:
-            logger.error(f"Failed to clone repository {repo_url}: {e}")
+            logger.error(f"[w{self.worker_id}] Failed to clone repository {repo_url}: {e}")
             return False
 
     def setup_environment(self, work_dir: Path, requirements: str) -> bool:
@@ -60,26 +65,65 @@ class TestRunner:
                 """#!/bin/bash
 set -e
 
+# Write progress updates as simple strings
+echo 'Installing pytest and hypothesis...' > /app/progress.json
+
 # Install core testing requirements
 pip install --quiet --disable-pip-version-check pytest hypothesis
+
+echo 'Installing project requirements...' > /app/progress.json
 
 # Install requirements with --no-dependencies to avoid version conflicts
 # This is safe because we're reproducing a frozen environment where all deps
 # were already resolved during pytest collection
 pip install --quiet --disable-pip-version-check --no-dependencies -r requirements.txt
 
+echo 'Installing repository package...' > /app/progress.json
+
 # Always try to install the repository itself as a library
 # This ensures imports like 'from mylibrary import func_under_test' work
 # Use --no-dependencies to avoid conflicts and ignore failures for non-libraries
 pip install --quiet --disable-pip-version-check --no-dependencies -e . 2>/dev/null || true
+
+echo 'Setup complete, starting analysis...' > /app/progress.json
 """
             )
             setup_script.chmod(0o755)
 
             return True
         except Exception as e:
-            logger.error(f"Failed to setup environment: {e}")
+            logger.error(f"[w{self.worker_id}] Failed to setup environment: {e}")
             return False
+
+    def _monitor_container_progress(self, container, work_dir: Path, repo_name: str, worker_id: Optional[int] = None):
+        """Monitor container progress by reading progress.json file."""
+        progress_file = work_dir / "progress.json"
+        last_message_seen = None
+
+        # Format worker prefix
+        worker_prefix = f"[w{worker_id}]" if worker_id is not None else f"[{repo_name}]"
+
+        while True:
+            try:
+                # Check container status
+                container.reload()
+                if container.status not in ["running", "created"]:
+                    break
+
+                # Read progress file if it exists
+                if progress_file.exists():
+                    with open(progress_file) as f:
+                        content = f.read().strip()
+
+                    # If the message changed, log it
+                    if content != last_message_seen:
+                        logger.info(f"{worker_prefix} {repo_name}: {content}")
+                        last_message_seen = content
+
+                time.sleep(5)
+            except Exception as e:
+                logger.debug(f"[w{self.worker_id}] Error monitoring progress for {repo_name}: {e}")
+                break
 
     def extract_test_code(self, repo_dir: Path, node_id: str) -> Optional[str]:
         """Extract the source code of a specific test."""
@@ -89,14 +133,14 @@ pip install --quiet --disable-pip-version-check --no-dependencies -e . 2>/dev/nu
             file_path = repo_dir / parts[0]
 
             if not file_path.exists():
-                logger.error(f"Test file not found: {file_path}")
+                logger.error(f"[w{self.worker_id}] Test file not found: {file_path}")
                 return None
 
             # Read the entire file for now
             # In a more sophisticated version, we'd parse and extract just the test
             return file_path.read_text()
         except Exception as e:
-            logger.error(f"Failed to extract test code: {e}")
+            logger.error(f"[w{self.worker_id}] Failed to extract test code: {e}")
             return None
 
     def run_in_container(
@@ -111,7 +155,11 @@ pip install --quiet --disable-pip-version-check --no-dependencies -e . 2>/dev/nu
             # Run container with observability enabled
             container = self.docker_client.containers.run(
                 self.docker_image,
-                command=["bash", "-xc", "cd /app && echo 'Starting setup...' && ./setup.sh && echo 'Running analysis...' && python analyze.py 2>&1"],
+                command=[
+                    "bash",
+                    "-xc",
+                    "cd /app && echo 'Starting setup...' && ./setup.sh && echo 'Running analysis...' && python analyze.py 2>&1",
+                ],
                 volumes={str(work_dir): {"bind": "/app", "mode": "rw"}},
                 environment={
                     "HYPOTHESIS_EXPERIMENTAL_OBSERVABILITY": "1",
@@ -123,13 +171,21 @@ pip install --quiet --disable-pip-version-check --no-dependencies -e . 2>/dev/nu
                 security_opt=["no-new-privileges"],
             )
 
+            # Start progress monitoring in a separate thread
+            monitor_thread = threading.Thread(
+                target=self._monitor_container_progress,
+                args=(container, work_dir, repo_name, self.worker_id),
+                daemon=True,
+            )
+            monitor_thread.start()
+
             # Wait for completion
-            result = container.wait(timeout=self.timeout)
+            result = container.wait(timeout=self.RUNNER_TIMEOUT)
             logs = container.logs(stdout=True, stderr=True).decode("utf-8")
 
             # Log the container output for debugging
-            logger.debug(f"Container logs for {repo_name}:\n{logs}")
-            logger.debug(f"Container exit code: {result.get('StatusCode', 'unknown')}")
+            logger.debug(f"[w{self.worker_id}] Container logs for {repo_name}:\n{logs}")
+            logger.debug(f"[w{self.worker_id}] Container exit code: {result.get('StatusCode', 'unknown')}")
 
             # Clean up container
             container.remove()
@@ -139,12 +195,12 @@ pip install --quiet --disable-pip-version-check --no-dependencies -e . 2>/dev/nu
             if results_file.exists():
                 return json.loads(results_file.read_text())
             else:
-                logger.error(f"No results file generated for {repo_name}")
-                logger.error(f"Container logs:\n{logs}")
+                logger.error(f"[w{self.worker_id}] No results file generated for {repo_name}")
+                logger.error(f"[w{self.worker_id}] Container logs:\n{logs}")
                 return {"error": "No results generated", "logs": logs}
 
         except Exception as e:
-            logger.error(f"Container execution failed for {repo_name}: {e}")
+            logger.error(f"[w{self.worker_id}] Container execution failed for {repo_name}: {e}")
             return {"error": str(e)}
 
     def _create_analysis_script(self, node_ids: List[str]) -> str:
@@ -176,6 +232,8 @@ def run_test_with_coverage(node_id: str) -> Dict[str, Any]:
         'test_result': None,
         'error': None
     }}
+    # 5 minute timeout per test
+    test_timeout = 60 * 5
 
     try:
         # Clear any previous observability data
@@ -197,7 +255,7 @@ def run_test_with_coverage(node_id: str) -> Dict[str, Any]:
             capture_output=True,
             text=True,
             cwd='/app',  # Run from the app directory where the repo is mounted
-            timeout=60  # 60 second timeout per test
+            timeout=test_timeout
         )
 
         results['test_result'] = {{
@@ -212,7 +270,7 @@ def run_test_with_coverage(node_id: str) -> Dict[str, Any]:
             results['observability_data'] = parse_observability_data(obs_dir)
 
     except subprocess.TimeoutExpired:
-        results['error'] = 'Test timed out after 60 seconds'
+        results['error'] = f'Test timed out after {{test_timeout}} seconds'
     except Exception as e:
         results['error'] = str(e)
 
@@ -445,11 +503,18 @@ def main():
         print(f"Node IDs to process: {{node_ids}}")
         results = {{}}
 
-        for node_id in node_ids:
+        total_tests = len(node_ids)
+        for i, node_id in enumerate(node_ids, 1):
             parts = node_id.split('::')
             file_path = Path(parts[0])
 
-            print(f"\\nProcessing: {{node_id}}")
+            # Write progress file for external monitoring
+            progress_file = Path('/app/progress.json')
+            test_name = parts[-1] if len(parts) > 1 else parts[0]
+            with open(progress_file, 'w') as f:
+                f.write(f'Test {{i}}/{{total_tests}}: {{test_name}}')
+
+            print(f"\\nProcessing test {{i}}/{{total_tests}}: {{node_id}}")
             print(f"Looking for file: {{file_path}}")
 
             if file_path.exists():
@@ -490,8 +555,12 @@ def main():
 
         # Write results
         print(f"\\nWriting results to results.json")
+        with open('/app/progress.json', 'w') as f:
+            f.write('Writing results...')
         with open('results.json', 'w') as f:
             json.dump(results, f, indent=2)
+        with open('/app/progress.json', 'w') as f:
+            f.write('Analysis complete')
         print("Analysis complete")
     except Exception as e:
         print(f"ERROR in main: {{e}}")
@@ -536,7 +605,7 @@ if __name__ == '__main__':
             return results
 
         except Exception as e:
-            logger.error(f"Failed to process repository {repo_name}: {e}")
+            logger.error(f"[w{self.worker_id}] Failed to process repository {repo_name}: {e}")
             return {"error": str(e)}
         finally:
             # Clean up temporary directory

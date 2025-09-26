@@ -449,7 +449,10 @@ def render_coverage_analysis():
             y="repository",
             orientation="h",
             title="Top 15 Repositories by Lines Covered",
-            labels={"total_lines_covered": "Total Lines Covered", "repository": "Repository"},
+            labels={
+                "total_lines_covered": "Total Lines Covered",
+                "repository": "Repository",
+            },
             color="total_lines_covered",
             color_continuous_scale="Viridis",
             hover_data=["total_tests", "tests_with_coverage", "files_covered"],
@@ -601,7 +604,9 @@ def render_coverage_analysis():
                     total_cases = test_data["case_number"].max() + 1
                     st.metric("Total Test Cases", total_cases)
                 with col2:
-                    final_coverage = test_data.groupby("file_path")["cumulative_count"].max().sum()
+                    final_coverage = (
+                        test_data.groupby("file_path")["cumulative_count"].max().sum()
+                    )
                     st.metric("Final Lines Covered", final_coverage)
                 with col3:
                     files_count = test_data["file_path"].nunique()

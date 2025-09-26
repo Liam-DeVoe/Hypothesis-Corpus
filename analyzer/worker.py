@@ -51,11 +51,11 @@ class Worker(Process):
 
     def run(self):
         """Main worker loop."""
-        logger.info(f"Worker {self.worker_id} started")
+        logger.info(f"[w{self.worker_id}] Worker started")
 
         # Initialize components in the worker process
         db = Database(self.db_path)
-        test_runner = TestRunner(self.docker_image)
+        test_runner = TestRunner(self.docker_image, worker_id=self.worker_id)
         analyzer = PropertyAnalyzer()
 
         while True:
@@ -64,10 +64,10 @@ class Worker(Process):
                 work_item = self.task_queue.get(timeout=5)
 
                 if work_item is None:  # Poison pill to stop worker
-                    logger.info(f"Worker {self.worker_id} stopping")
+                    logger.info(f"[w{self.worker_id}] Worker stopping")
                     break
 
-                logger.info(f"Worker {self.worker_id} processing {work_item.repo_name}")
+                logger.info(f"[w{self.worker_id}] Processing {work_item.repo_name}")
 
                 # Process the repository
                 result = self._process_repository(work_item, db, test_runner, analyzer)
@@ -85,7 +85,7 @@ class Worker(Process):
             except mp.queues.Empty:
                 continue  # No work available, keep waiting
             except Exception as e:
-                logger.error(f"Worker {self.worker_id} error: {e}")
+                logger.error(f"[w{self.worker_id}] Error: {e}")
                 logger.error(traceback.format_exc())
 
                 # Send error result

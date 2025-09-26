@@ -12,23 +12,23 @@ import click
 import yaml
 from rich.console import Console
 from rich.logging import RichHandler
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeRemainingColumn,
-)
 
 from analyzer.database import Database
 from analyzer.worker import WorkerPool, WorkItem
 
-# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(message)s",
-    handlers=[RichHandler(rich_tracebacks=True)],
+    datefmt="",
+    handlers=[logging.StreamHandler()],
+    force=True  # Override any existing configuration
 )
+
+# Ensure all loggers use the same format
+for name in ['analyzer.test_runner', 'analyzer.worker', 'analyzer.database']:
+    logging.getLogger(name).handlers = []
+    logging.getLogger(name).propagate = True
+
 logger = logging.getLogger(__name__)
 console = Console()
 
@@ -148,45 +148,27 @@ def main(
     # Create worker pool
     console.print("[bold]Starting analysis...[/bold]")
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TimeRemainingColumn(),
-        console=console,
-    ) as progress:
+    with WorkerPool(
+        num_workers=cfg["workers"]["max_workers"],
+        db_path=cfg["database"]["path"],
+        docker_image=cfg["docker"]["image"],
+    ) as pool:
+        pool.submit_batch(work_items)
+        successful = 0
+        failed = 0
 
-        task = progress.add_task("Processing repositories", total=len(work_items))
+        for _ in range(len(work_items)):
+            result = pool.get_result(timeout=None)
+            if result:
+                if result["success"]:
+                    successful += 1
+                    console.print(f"[w{result['worker_id']}] {result['repo_name']}: [green]Success[/green]")
+                else:
+                    failed += 1
+                    error = result.get("error", "Unknown error")
+                    console.print(f"[w{result['worker_id']}] {result['repo_name']}: [red]{error}[/red]")
 
-        with WorkerPool(
-            num_workers=cfg["workers"]["max_workers"],
-            db_path=cfg["database"]["path"],
-            docker_image=cfg["docker"]["image"],
-        ) as pool:
-
-            # Submit all work items
-            pool.submit_batch(work_items)
-
-            # Track results
-            successful = 0
-            failed = 0
-
-            # Wait for completion
-            for _ in range(len(work_items)):
-                result = pool.get_result(timeout=300)
-                if result:
-                    if result["success"]:
-                        successful += 1
-                        console.print(
-                            f"✅ {result['repo_name']}: [green]Success[/green]"
-                        )
-                    else:
-                        failed += 1
-                        error = result.get("error", "Unknown error")
-                        console.print(f"❌ {result['repo_name']}: [red]{error}[/red]")
-
-                    progress.update(task, advance=1)
+                console.print(f"[w{result['worker_id']}] Finished repository {result['repo_name']}")
 
     # Update analysis run
     with db.connection() as conn:
