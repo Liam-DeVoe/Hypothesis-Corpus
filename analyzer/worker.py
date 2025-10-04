@@ -9,7 +9,6 @@ import time
 import traceback
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
-from typing import Dict, List, Optional
 
 from .analysis import PropertyAnalyzer
 from .database import Database
@@ -24,9 +23,9 @@ class WorkItem:
     """Represents a repository to process."""
 
     repo_name: str
-    node_ids: List[str]
+    node_ids: list[str]
     requirements: str
-    repo_id: Optional[int] = None
+    repo_id: int | None = None
 
 
 class Worker(Process):
@@ -108,7 +107,7 @@ class Worker(Process):
         db: Database,
         test_runner: TestRunner,
         analyzer: PropertyAnalyzer,
-    ) -> Dict:
+    ) -> dict:
         """Process a single repository."""
         try:
             # Delete any existing data for this repository before processing
@@ -334,12 +333,12 @@ class WorkerPool:
         """Submit a work item to the pool."""
         self.task_queue.put(work_item)
 
-    def submit_batch(self, work_items: List[WorkItem]):
+    def submit_batch(self, work_items: list[WorkItem]):
         """Submit multiple work items."""
         for item in work_items:
             self.submit(item)
 
-    def get_result(self, timeout: Optional[float] = None) -> Optional[Dict]:
+    def get_result(self, timeout: float | None = None) -> dict | None:
         """Get a result from the result queue."""
         try:
             result = self.result_queue.get(timeout=timeout)
@@ -350,7 +349,7 @@ class WorkerPool:
 
     def wait_for_completion(
         self, expected_count: int, timeout: int = 3600
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """Wait for all tasks to complete."""
         logger.info(f"Waiting for {expected_count} tasks to complete")
 

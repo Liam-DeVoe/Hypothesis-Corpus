@@ -6,13 +6,11 @@ import json
 import logging
 import shutil
 import subprocess
-import sys
 import tarfile
 import tempfile
 import time
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import docker
 
@@ -25,14 +23,14 @@ class TestRunner:
     RUNNER_TIMEOUT = 60 * 60  # 1 hour timeout
 
     def __init__(
-        self, docker_image: str = "pbt-analyzer:latest", worker_id: Optional[int] = None
+        self, docker_image: str = "pbt-analyzer:latest", worker_id: int | None = None
     ):
         """Initialize the test runner."""
         self.docker_client = docker.from_env()
         self.docker_image = docker_image
         self.worker_id = worker_id
 
-    def get_git_commit_hash(self, repo_dir: Path) -> Optional[str]:
+    def get_git_commit_hash(self, repo_dir: Path) -> str | None:
         """Get the current git commit hash of a repository."""
         try:
             result = subprocess.run(
@@ -74,7 +72,7 @@ class TestRunner:
             return False
 
     def setup_environment(
-        self, work_dir: Path, requirements: str, node_ids: List[str]
+        self, work_dir: Path, requirements: str, node_ids: list[str]
     ) -> bool:
         """Set up environment by copying analysis module and config."""
         try:
@@ -101,7 +99,7 @@ class TestRunner:
             )
             return False
 
-    def extract_test_code(self, repo_dir: Path, node_id: str) -> Optional[str]:
+    def extract_test_code(self, repo_dir: Path, node_id: str) -> str | None:
         """Extract the source code of a specific test."""
         try:
             # Parse node_id (format: path/to/test.py::TestClass::test_method)
@@ -125,8 +123,8 @@ class TestRunner:
             return None
 
     def run_in_container(
-        self, repo_name: str, work_dir: Path, node_ids: List[str]
-    ) -> Dict[str, any]:
+        self, repo_name: str, work_dir: Path, node_ids: list[str]
+    ) -> dict[str, any]:
         """Run tests in container by copying files instead of mounting (avoids Mac penalty)."""
         try:
             logger.info(f"[w{self.worker_id}][{repo_name}] Running container analysis")
@@ -244,8 +242,8 @@ class TestRunner:
             return {"error": str(e)}
 
     def process_repository(
-        self, repo_name: str, node_ids: List[str], requirements: str
-    ) -> Dict[str, any]:
+        self, repo_name: str, node_ids: list[str], requirements: str
+    ) -> dict[str, any]:
         """Process a complete repository."""
         work_dir = None
         try:

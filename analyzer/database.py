@@ -6,7 +6,7 @@ import logging
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -212,10 +212,10 @@ class Database:
         repo_id: int,
         node_id: str,
         file_path: str,
-        class_name: Optional[str] = None,
-        test_name: Optional[str] = None,
-        property_text: Optional[str] = None,
-        github_permalink: Optional[str] = None,
+        class_name: str | None = None,
+        test_name: str | None = None,
+        property_text: str | None = None,
+        github_permalink: str | None = None,
     ) -> int:
         """Add a test to the database."""
         with self.connection() as conn:
@@ -289,7 +289,7 @@ class Database:
             conn.commit()
 
     def add_test_code(
-        self, test_id: int, source_code: str, ast_json: Optional[str] = None
+        self, test_id: int, source_code: str, ast_json: str | None = None
     ):
         """Store test source code and optional AST."""
         with self.connection() as conn:
@@ -303,7 +303,7 @@ class Database:
             conn.commit()
 
     def update_repository_status(
-        self, repo_id: int, status: str, error_message: Optional[str] = None
+        self, repo_id: int, status: str, error_message: str | None = None
     ):
         """Update repository processing status."""
         with self.connection() as conn:
@@ -318,7 +318,7 @@ class Database:
             conn.commit()
 
     def update_test_status(
-        self, test_id: int, status: str, error_message: Optional[str] = None
+        self, test_id: int, status: str, error_message: str | None = None
     ):
         """Update test processing status."""
         with self.connection() as conn:
@@ -365,8 +365,8 @@ class Database:
         exit_code: int,
         stdout: str = "",
         stderr: str = "",
-        execution_time: Optional[float] = None,
-        examples_count: Optional[int] = None,
+        execution_time: float | None = None,
+        examples_count: int | None = None,
     ):
         """Store test execution results."""
         with self.connection() as conn:
@@ -391,9 +391,9 @@ class Database:
     def add_observability_data(
         self,
         test_id: int,
-        timing_data: Optional[dict] = None,
-        example_data: Optional[list] = None,
-        metadata: Optional[dict] = None,
+        timing_data: dict | None = None,
+        example_data: list | None = None,
+        metadata: dict | None = None,
     ):
         """Store observability metadata."""
         import json
@@ -510,7 +510,7 @@ class Database:
             conn.commit()
         logger.info(f"[{owner}/{name}] deleted all data")
 
-    def get_analysis_stats(self) -> Dict[str, Any]:
+    def get_analysis_stats(self) -> dict[str, Any]:
         """Get overall analysis statistics."""
         with self.connection() as conn:
             stats = {}

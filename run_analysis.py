@@ -6,7 +6,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import click
 import yaml
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
-def load_dataset(dataset_path: str) -> Dict[str, Any]:
+def load_dataset(dataset_path: str) -> dict[str, Any]:
     """Load dataset from JSON file."""
     path = Path(dataset_path)
     if not path.exists():
@@ -42,7 +42,7 @@ def load_dataset(dataset_path: str) -> Dict[str, Any]:
         return json.load(f)
 
 
-def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
+def load_config(config_path: str = "config.yaml") -> dict[str, Any]:
     """Load configuration from YAML file."""
     path = Path(config_path)
     if not path.exists():
@@ -59,7 +59,7 @@ def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def prepare_work_items(dataset: Dict[str, Any]) -> List[WorkItem]:
+def prepare_work_items(dataset: dict[str, Any]) -> list[WorkItem]:
     """Convert dataset to work items."""
     work_items = []
 

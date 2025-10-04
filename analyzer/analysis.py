@@ -5,7 +5,7 @@ Analysis module for extracting patterns from property-based tests.
 import ast
 import logging
 import re
-from typing import Any, Dict, List
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ class PropertyAnalyzer:
         self.strategy_patterns = self._build_strategy_patterns()
         self.property_type_patterns = self._build_property_patterns()
 
-    def _build_strategy_patterns(self) -> Dict[str, re.Pattern]:
+    def _build_strategy_patterns(self) -> dict[str, re.Pattern]:
         """Build regex patterns for detecting Hypothesis strategies."""
         strategies = [
             "integers",
@@ -69,7 +69,7 @@ class PropertyAnalyzer:
 
         return patterns
 
-    def _build_property_patterns(self) -> Dict[str, List[re.Pattern]]:
+    def _build_property_patterns(self) -> dict[str, list[re.Pattern]]:
         """Build patterns for classifying property types."""
         return {
             "mathematical": [
@@ -112,7 +112,7 @@ class PropertyAnalyzer:
             ],
         }
 
-    def analyze_source(self, source_code: str) -> Dict[str, Any]:
+    def analyze_source(self, source_code: str) -> dict[str, Any]:
         """Perform comprehensive analysis on source code."""
         results = {
             "generators": {},
@@ -151,7 +151,7 @@ class PropertyAnalyzer:
 
         return results
 
-    def extract_generators(self, source: str) -> Dict[str, int]:
+    def extract_generators(self, source: str) -> dict[str, int]:
         """Extract Hypothesis strategy usage from source code."""
         generators = {}
 
@@ -188,7 +188,7 @@ class PropertyAnalyzer:
 
         return generators
 
-    def extract_features(self, source: str) -> Dict[str, int]:
+    def extract_features(self, source: str) -> dict[str, int]:
         """Extract Hypothesis feature usage."""
         features = {}
 
@@ -222,7 +222,7 @@ class PropertyAnalyzer:
 
         return features
 
-    def classify_property_types(self, source: str) -> List[str]:
+    def classify_property_types(self, source: str) -> list[str]:
         """Classify the types of properties being tested."""
         detected_types = []
 
@@ -239,7 +239,7 @@ class PropertyAnalyzer:
 
         return detected_types
 
-    def analyze_ast(self, tree: ast.AST) -> Dict[str, Any]:
+    def analyze_ast(self, tree: ast.AST) -> dict[str, Any]:
         """Analyze AST for structural information."""
         ast_info = {"classes": [], "functions": [], "decorators": [], "imports": []}
 
@@ -280,7 +280,7 @@ class PropertyAnalyzer:
         else:
             return str(type(node).__name__)
 
-    def calculate_complexity(self, tree: ast.AST, source: str) -> Dict[str, Any]:
+    def calculate_complexity(self, tree: ast.AST, source: str) -> dict[str, Any]:
         """Calculate various complexity metrics."""
         metrics = {
             "lines_of_code": len(source.splitlines()),
@@ -324,7 +324,7 @@ class PropertyAnalyzer:
 
         return complexity
 
-    def detect_patterns(self, source: str) -> Dict[str, bool]:
+    def detect_patterns(self, source: str) -> dict[str, bool]:
         """Detect specific testing patterns."""
         patterns = {}
 

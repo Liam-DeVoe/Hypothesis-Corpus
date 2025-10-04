@@ -3,7 +3,7 @@ Streamlit dashboard for visualizing PBT corpus analysis results.
 """
 
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 import plotly.express as px
@@ -52,7 +52,7 @@ def load_data():
     return stats
 
 
-def render_overview_metrics(stats: Dict[str, Any]):
+def render_overview_metrics(stats: dict[str, Any]):
     """Render overview metrics."""
     st.header("Overview")
 
@@ -96,7 +96,7 @@ def render_overview_metrics(stats: Dict[str, Any]):
         st.progress(progress, text=f"Analysis Progress: {progress*100:.1f}%")
 
 
-def render_generator_analysis(stats: Dict[str, Any]):
+def render_generator_analysis(stats: dict[str, Any]):
     """Render generator usage analysis."""
     st.header("Generator Usage Analysis")
 
@@ -142,7 +142,7 @@ def render_generator_analysis(stats: Dict[str, Any]):
         st.dataframe(top_5, hide_index=True)
 
 
-def render_property_types(stats: Dict[str, Any]):
+def render_property_types(stats: dict[str, Any]):
     """Render property type distribution."""
     st.header("Property Type Distribution")
 
@@ -180,7 +180,7 @@ def render_property_types(stats: Dict[str, Any]):
         st.plotly_chart(fig, use_container_width=True)
 
 
-def render_feature_usage(stats: Dict[str, Any]):
+def render_feature_usage(stats: dict[str, Any]):
     """Render feature usage analysis."""
     st.header("Hypothesis Feature Usage")
 
@@ -290,16 +290,14 @@ def render_property_explorer():
         )
 
     if properties.empty:
-        st.info("No property source code available yet. Run analysis to collect property implementations.")
+        st.info(
+            "No property source code available yet. Run analysis to collect property implementations."
+        )
         return
 
     # Repository filter
     repos = properties["repository"].unique().tolist()
-    selected_repo = st.selectbox(
-        "Select Repository",
-        ["All"] + repos,
-        index=0
-    )
+    selected_repo = st.selectbox("Select Repository", ["All"] + repos, index=0)
 
     if selected_repo != "All":
         filtered_props = properties[properties["repository"] == selected_repo]
@@ -315,39 +313,41 @@ def render_property_explorer():
 
         if all_prop_types:
             selected_type = st.selectbox(
-                "Filter by Property Type",
-                ["All"] + sorted(all_prop_types),
-                index=0
+                "Filter by Property Type", ["All"] + sorted(all_prop_types), index=0
             )
 
             if selected_type != "All":
                 filtered_props = filtered_props[
-                    filtered_props["property_types"].str.contains(selected_type, na=False)
+                    filtered_props["property_types"].str.contains(
+                        selected_type, na=False
+                    )
                 ]
 
     # Display properties
     st.subheader(f"Found {len(filtered_props)} properties")
 
     for idx, prop in filtered_props.iterrows():
-        with st.expander(f"{prop['repository']} - {prop['test_name'] or prop['node_id'].split('::')[-1]}"):
+        with st.expander(
+            f"{prop['repository']} - {prop['test_name'] or prop['node_id'].split('::')[-1]}"
+        ):
             # Metadata
             col1, col2 = st.columns([3, 1])
             with col1:
                 st.caption(f"Node ID: {prop['node_id']}")
-                if prop['property_types']:
+                if prop["property_types"]:
                     st.caption(f"Types: {prop['property_types']}")
                 st.caption(f"Generators: {prop['generator_count']}")
             with col2:
-                if prop['github_permalink']:
+                if prop["github_permalink"]:
                     st.link_button(
                         "View on GitHub",
-                        prop['github_permalink'],
-                        use_container_width=True
+                        prop["github_permalink"],
+                        use_container_width=True,
                     )
 
             # Source code
-            if prop['property_text']:
-                st.code(prop['property_text'], language="python")
+            if prop["property_text"]:
+                st.code(prop["property_text"], language="python")
             else:
                 st.warning("Source code not available")
 
@@ -445,17 +445,27 @@ def render_repository_details():
                         width="stretch",
                         hide_index=True,
                         column_config={
-                            "node_id": st.column_config.TextColumn("Test", width="large"),
-                            "status": st.column_config.TextColumn("Status", width="small"),
-                            "has_source": st.column_config.TextColumn("Source", width="small"),
-                            "github_permalink": st.column_config.LinkColumn(
-                                "GitHub",
-                                width="small",
-                                display_text="View"
+                            "node_id": st.column_config.TextColumn(
+                                "Test", width="large"
                             ),
-                            "generator_count": st.column_config.NumberColumn("Generators", width="small"),
-                            "property_types": st.column_config.NumberColumn("Types", width="small"),
-                            "features_used": st.column_config.NumberColumn("Features", width="small"),
+                            "status": st.column_config.TextColumn(
+                                "Status", width="small"
+                            ),
+                            "has_source": st.column_config.TextColumn(
+                                "Source", width="small"
+                            ),
+                            "github_permalink": st.column_config.LinkColumn(
+                                "GitHub", width="small", display_text="View"
+                            ),
+                            "generator_count": st.column_config.NumberColumn(
+                                "Generators", width="small"
+                            ),
+                            "property_types": st.column_config.NumberColumn(
+                                "Types", width="small"
+                            ),
+                            "features_used": st.column_config.NumberColumn(
+                                "Features", width="small"
+                            ),
                         },
                     )
 
@@ -463,7 +473,9 @@ def render_repository_details():
                     if st.checkbox("Show property source code"):
                         selected_test = st.selectbox(
                             "Select test to view source",
-                            test_details[test_details["has_source"] == "Yes"]["node_id"].tolist()
+                            test_details[test_details["has_source"] == "Yes"][
+                                "node_id"
+                            ].tolist(),
                         )
 
                         if selected_test:
@@ -482,8 +494,7 @@ def render_repository_details():
                                 if source and source["property_text"]:
                                     if source["github_permalink"]:
                                         st.link_button(
-                                            "View on GitHub",
-                                            source["github_permalink"]
+                                            "View on GitHub", source["github_permalink"]
                                         )
                                     st.code(source["property_text"], language="python")
 

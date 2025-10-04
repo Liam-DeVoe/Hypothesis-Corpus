@@ -11,13 +11,13 @@ import sys
 import time
 import traceback
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
-def setup_dependencies(requirements_file: Optional[Path] = None) -> bool:
+def setup_dependencies(requirements_file: Path | None = None) -> bool:
     """Install Python dependencies in the container."""
 
-    def run_pip_install(args: List[str], description: str) -> bool:
+    def run_pip_install(args: list[str], description: str) -> bool:
         """Run pip install with timing."""
         print(f"Installing {description}...", flush=True)
         start_time = time.time()
@@ -76,7 +76,9 @@ def setup_dependencies(requirements_file: Optional[Path] = None) -> bool:
     return True
 
 
-def extract_property_source(file_path: Path, node_id: str) -> tuple[Optional[str], Optional[int]]:
+def extract_property_source(
+    file_path: Path, node_id: str
+) -> tuple[str | None, int | None]:
     """Extract the source code of a specific property test and its line number."""
     try:
         import ast
@@ -88,7 +90,6 @@ def extract_property_source(file_path: Path, node_id: str) -> tuple[Optional[str
         parts = node_id.split("::")
         test_name = parts[-1] if parts else None
         class_name = parts[-2] if len(parts) > 2 else None
-
 
         # Special case for stateful tests (e.g., TestUnionFind::runTest)
         if class_name and test_name == "runTest":
@@ -163,7 +164,7 @@ def extract_property_source(file_path: Path, node_id: str) -> tuple[Optional[str
     return None, None
 
 
-def analyze_test_file(file_path: Path, node_id: str) -> Dict[str, Any]:
+def analyze_test_file(file_path: Path, node_id: str) -> dict[str, Any]:
     """Analyze a test file for property-based testing patterns."""
 
     HYPOTHESIS_STRATEGIES = [
@@ -296,7 +297,7 @@ def analyze_test_file(file_path: Path, node_id: str) -> Dict[str, Any]:
     return results
 
 
-def run_test_with_coverage(node_id: str, timeout: int = 300) -> Dict[str, Any]:
+def run_test_with_coverage(node_id: str, timeout: int = 300) -> dict[str, Any]:
     """Run a single test and collect coverage information."""
     results = {
         "node_id": node_id,
@@ -341,7 +342,7 @@ def run_test_with_coverage(node_id: str, timeout: int = 300) -> Dict[str, Any]:
     return results
 
 
-def parse_observability_data(obs_dir: Path) -> Dict[str, Any]:
+def parse_observability_data(obs_dir: Path) -> dict[str, Any]:
     """Parse Hypothesis observability JSONL files."""
     data = {"coverage": {}, "timing": {}, "examples": [], "test_cases": []}
 
@@ -384,7 +385,7 @@ def parse_observability_data(obs_dir: Path) -> Dict[str, Any]:
     return data
 
 
-def analyze_repository(node_ids: List[str]) -> Dict[str, Any]:
+def analyze_repository(node_ids: list[str]) -> dict[str, Any]:
     """Main analysis function that processes all tests in a repository."""
     import time
 
