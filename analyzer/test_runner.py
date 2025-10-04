@@ -72,23 +72,63 @@ class TestRunner:
             return False
 
     def setup_environment(
-        self, work_dir: Path, requirements: str, node_ids: list[str]
+        self,
+        work_dir: Path,
+        requirements: str,
+        node_ids: list[str],
+        experiment_name: str = "all",
     ) -> bool:
-        """Set up environment by copying analysis module and config."""
+        """Set up environment by copying experiment modules and config."""
         try:
             # Write requirements to file if provided
             if requirements:
                 req_file = work_dir / "requirements.txt"
                 req_file.write_text(requirements)
 
-            # Copy the container analysis module
-            import analyzer.container_analysis as container_analysis
+            # Copy experiment modules that will run in the container
+            import analyzer.experiments as experiments_package
 
-            analysis_module_path = Path(container_analysis.__file__)
-            shutil.copy(analysis_module_path, work_dir / "container_analysis.py")
+            experiments_dir = Path(experiments_package.__file__).parent
+
+            # Always copy shared helpers and runner
+            shutil.copy(
+                experiments_dir / "container_helpers.py",
+                work_dir / "container_helpers.py",
+            )
+            shutil.copy(
+                experiments_dir / "container_runner.py",
+                work_dir / "container_runner.py",
+            )
+
+            # Copy experiment-specific modules based on what will run
+            if experiment_name == "static":
+                shutil.copy(
+                    experiments_dir / "static_analysis.py",
+                    work_dir / "static_analysis.py",
+                )
+            elif experiment_name == "coverage":
+                shutil.copy(experiments_dir / "coverage.py", work_dir / "coverage.py")
+            elif experiment_name == "ast":
+                shutil.copy(
+                    experiments_dir / "ast_analysis.py", work_dir / "ast_analysis.py"
+                )
+            elif experiment_name == "all":
+                # Copy all experiment modules
+                shutil.copy(
+                    experiments_dir / "static_analysis.py",
+                    work_dir / "static_analysis.py",
+                )
+                shutil.copy(experiments_dir / "coverage.py", work_dir / "coverage.py")
+                shutil.copy(
+                    experiments_dir / "ast_analysis.py", work_dir / "ast_analysis.py"
+                )
 
             # Write configuration for the container
-            config = {"node_ids": node_ids, "repo_dir": "/app"}
+            config = {
+                "node_ids": node_ids,
+                "repo_dir": "/app",
+                "experiment_name": experiment_name,
+            }
             config_file = work_dir / "config.json"
             config_file.write_text(json.dumps(config, indent=2))
 
@@ -145,7 +185,7 @@ class TestRunner:
             # Create container WITHOUT volumes (no Mac penalty!)
             container = self.docker_client.containers.create(
                 self.docker_image,
-                command=["python", "/app/container_analysis.py"],
+                command=["python", "/app/container_runner.py"],
                 environment={
                     "HYPOTHESIS_EXPERIMENTAL_OBSERVABILITY": "1",
                     "PYTHONDONTWRITEBYTECODE": "1",
@@ -242,7 +282,11 @@ class TestRunner:
             return {"error": str(e)}
 
     def process_repository(
-        self, repo_name: str, node_ids: list[str], requirements: str
+        self,
+        repo_name: str,
+        node_ids: list[str],
+        requirements: str,
+        experiment_name: str = "all",
     ) -> dict[str, any]:
         """Process a complete repository."""
         work_dir = None
@@ -258,7 +302,9 @@ class TestRunner:
 
             # Setup environment
             repo_dir = work_dir / "repo"
-            if not self.setup_environment(repo_dir, requirements, node_ids):
+            if not self.setup_environment(
+                repo_dir, requirements, node_ids, experiment_name
+            ):
                 return {"error": "Failed to setup environment"}
 
             # Get git commit hash for permalink construction

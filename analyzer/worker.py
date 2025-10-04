@@ -2,7 +2,6 @@
 Worker module for parallel processing of repositories.
 """
 
-import json
 import logging
 import multiprocessing as mp
 import time
@@ -38,6 +37,7 @@ class Worker(Process):
         result_queue: Queue,
         db_path: str,
         docker_image: str = "pbt-analyzer:latest",
+        experiment_name: str = "all",
     ):
         """Initialize worker process."""
         super().__init__()
@@ -46,6 +46,7 @@ class Worker(Process):
         self.result_queue = result_queue
         self.db_path = db_path
         self.docker_image = docker_image
+        self.experiment_name = experiment_name
         self.daemon = True
 
     def run(self):
@@ -56,6 +57,16 @@ class Worker(Process):
         db = Database(self.db_path)
         test_runner = TestRunner(self.docker_image, worker_id=self.worker_id)
         analyzer = PropertyAnalyzer()
+
+        # Load experiment
+        from .experiments import get_experiment
+
+        try:
+            experiment = get_experiment(self.experiment_name)
+            logger.info(f"[w{self.worker_id}] Loaded experiment: {experiment.name}")
+        except ValueError as e:
+            logger.error(f"[w{self.worker_id}] {e}")
+            return
 
         while True:
             try:
@@ -69,7 +80,9 @@ class Worker(Process):
                 logger.info(f"[w{self.worker_id}][{work_item.repo_name}] Processing")
 
                 # Process the repository
-                result = self._process_repository(work_item, db, test_runner, analyzer)
+                result = self._process_repository(
+                    work_item, db, test_runner, analyzer, experiment
+                )
 
                 # Send result back
                 self.result_queue.put(
@@ -107,21 +120,25 @@ class Worker(Process):
         db: Database,
         test_runner: TestRunner,
         analyzer: PropertyAnalyzer,
+        experiment,
     ) -> dict:
         """Process a single repository."""
         try:
             # Delete any existing data for this repository before processing
             owner, name = work_item.repo_name.split("/")
-            db.delete_repository_data(owner, name)
+            experiment.delete_data(db, owner, name)
 
             # Add repository to database
             work_item.repo_id = db.add_repository(
                 owner, name, f"https://github.com/{work_item.repo_name}"
             )
 
-            # Run tests in container and collect results
+            # Run tests in container with experiment name
             results = test_runner.process_repository(
-                work_item.repo_name, work_item.node_ids, work_item.requirements
+                work_item.repo_name,
+                work_item.node_ids,
+                work_item.requirements,
+                experiment_name=experiment.name,
             )
 
             if results is None:
@@ -135,7 +152,7 @@ class Worker(Process):
                 )
                 return {"success": False, "error": results["error"]}
 
-            # Process each test result
+            # Process each test result using the experiment
             tests_processed = 0
             tests_failed = 0
 
@@ -169,117 +186,68 @@ class Worker(Process):
                     tests_failed += 1
                     continue
 
-                # Extract analysis and coverage data from new structure
-                analysis_data = test_results.get("analysis", {})
-                coverage_data = test_results.get("coverage", {})
+                # Use experiment to process and store results
+                try:
+                    # Import ExperimentResult for deserialization
+                    from .experiments.base import ExperimentResult
 
-                # Store test code if available (now in analysis data)
-                if "source_code" in test_results:
-                    source_code = test_results["source_code"]
-                elif analysis_data:
-                    # Try to get source from file path
-                    source_code = None
-                else:
-                    source_code = None
-
-                if source_code:
-                    # Perform additional analysis on source code
-                    enhanced_results = analyzer.analyze_source(source_code)
-                    analysis_data.update(enhanced_results)
-
-                    # Store in database
-                    db.add_test_code(
-                        test_id,
-                        source_code,
-                        json.dumps(analysis_data.get("ast", {})),
-                    )
-
-                # Store test execution results if available
-                if coverage_data and "test_result" in coverage_data:
-                    test_result = coverage_data["test_result"]
-                    if test_result:
-                        db.add_test_execution(
-                            test_id,
-                            passed=test_result.get("passed", False),
-                            exit_code=test_result.get("exit_code", -1),
-                            stdout=test_result.get("stdout", ""),
-                            stderr=test_result.get("stderr", ""),
-                        )
-
-                # Store coverage information if available
-                if coverage_data and "observability_data" in coverage_data:
-                    obs_data = coverage_data["observability_data"]
-
-                    # Store aggregate coverage data for each file
-                    if "coverage" in obs_data and obs_data["coverage"] is not None:
-                        for cov_file_path, lines in obs_data["coverage"].items():
-                            db.add_test_coverage(
-                                test_id,
-                                cov_file_path,
-                                lines if isinstance(lines, list) else list(lines),
-                            )
-
-                    # Store per-test-case coverage for cumulative tracking
-                    if "test_cases" in obs_data:
-                        # Track cumulative coverage per file
-                        cumulative_coverage = {}
-
-                        for case_num, test_case in enumerate(obs_data["test_cases"]):
-                            if (
-                                "coverage" in test_case
-                                and test_case["coverage"] is not None
-                            ):
-                                for file_path, lines in test_case["coverage"].items():
-                                    # Initialize cumulative set for this file if needed
-                                    if file_path not in cumulative_coverage:
-                                        cumulative_coverage[file_path] = set()
-
-                                    # Add this test case's lines to cumulative
-                                    cumulative_coverage[file_path].update(lines)
-
-                                    # Store this test case's coverage with cumulative total
-                                    db.add_test_case_coverage(
-                                        test_id,
-                                        case_num,
-                                        file_path,
-                                        lines,
-                                        cumulative_coverage[file_path],
-                                    )
-
-                    # Store observability metadata
-                    if any(k in obs_data for k in ["timing", "examples", "metadata"]):
-                        db.add_observability_data(
-                            test_id,
-                            timing_data=obs_data.get("timing"),
-                            example_data=obs_data.get("examples"),
-                            metadata=obs_data.get("metadata"),
-                        )
-
-                # Store generator usage (from analysis)
-                generators = analysis_data.get("generators", {}) or {}
-                for gen_name, count in generators.items():
-                    if gen_name in ["composite", "custom_strategies"]:
-                        db.add_generator_usage(
-                            test_id,
-                            gen_name,
-                            1,
-                            is_composite=(gen_name == "composite"),
-                            is_custom=(gen_name == "custom_strategies"),
+                    # For "all" experiment, pass the whole dict (contains all sub-experiments)
+                    # For individual experiments, extract their specific result
+                    if experiment.name == "all":
+                        # Process results through composite experiment
+                        experiment_result = experiment.process_results(
+                            node_id, test_results
                         )
                     else:
-                        db.add_generator_usage(test_id, gen_name, count)
+                        # Get the result dict from the appropriate key
+                        result_key_map = {
+                            "static": "analysis",
+                            "coverage": "coverage",
+                            "ast": "ast_data",
+                        }
+                        result_key = result_key_map.get(experiment.name)
 
-                # Store property types (from analysis)
-                for prop_type in analysis_data.get("property_types", ["general"]):
-                    db.add_property_type(test_id, prop_type)
+                        if not result_key or result_key not in test_results:
+                            db.update_test_status(
+                                test_id,
+                                "failed",
+                                f"Missing result key '{result_key}' in test results",
+                            )
+                            tests_failed += 1
+                            continue
 
-                # Store feature usage (from analysis)
-                features = analysis_data.get("features", {}) or {}
-                for feature, count in features.items():
-                    db.add_feature_usage(test_id, feature, count)
+                        # Deserialize the container result
+                        container_result = ExperimentResult.from_dict(
+                            test_results[result_key]
+                        )
 
-                db.update_test_status(test_id, "success")
-                tests_processed += 1
+                        # Process results through experiment (pass-through for most, enhanced for AST)
+                        experiment_result = experiment.process_results(
+                            node_id, container_result
+                        )
+
+                    if not experiment_result.success:
+                        db.update_test_status(
+                            test_id, "failed", experiment_result.error
+                        )
+                        tests_failed += 1
+                        continue
+
+                    # Store results using experiment
+                    experiment.store_to_database(
+                        db, work_item.repo_id, test_id, experiment_result
+                    )
+
+                    db.update_test_status(test_id, "success")
+                    tests_processed += 1
+
+                except Exception as e:
+                    logger.error(
+                        f"[w{self.worker_id}][{work_item.repo_name}] Error "
+                        f"processing {node_id}: {traceback.format_exception(e)}"
+                    )
+                    db.update_test_status(test_id, "failed", str(e))
+                    tests_failed += 1
 
             # Update repository status
             db.update_repository_status(work_item.repo_id, "success")
@@ -308,11 +276,13 @@ class WorkerPool:
         num_workers: int = 4,
         db_path: str = "data/analysis.db",
         docker_image: str = "pbt-analyzer:latest",
+        experiment_name: str = "all",
     ):
         """Initialize worker pool."""
         self.num_workers = num_workers
         self.db_path = db_path
         self.docker_image = docker_image
+        self.experiment_name = experiment_name
         self.task_queue = mp.Queue(maxsize=100)
         self.result_queue = mp.Queue()
         self.workers = []
@@ -324,7 +294,12 @@ class WorkerPool:
 
         for i in range(self.num_workers):
             worker = Worker(
-                i, self.task_queue, self.result_queue, self.db_path, self.docker_image
+                i,
+                self.task_queue,
+                self.result_queue,
+                self.db_path,
+                self.docker_image,
+                self.experiment_name,
             )
             worker.start()
             self.workers.append(worker)

@@ -85,12 +85,49 @@ def prepare_work_items(dataset: dict[str, Any]) -> list[WorkItem]:
 )
 @click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
 @click.option("--docker-image", type=str, help="Docker image to use")
+@click.option(
+    "--experiment",
+    "-e",
+    type=str,
+    default="all",
+    help="Experiment to run (static, coverage, ast, all)",
+)
+@click.option(
+    "--list-experiments",
+    is_flag=True,
+    help="List available experiments and exit",
+)
 def main(
-    dataset: str, config: str, workers: int, sample: bool, limit: int, docker_image: str
+    dataset: str,
+    config: str,
+    workers: int,
+    sample: bool,
+    limit: int,
+    docker_image: str,
+    experiment: str,
+    list_experiments: bool,
 ):
     """Run PBT corpus analysis."""
 
+    # Handle --list-experiments first
+    if list_experiments:
+        from analyzer.experiments import list_experiments as get_experiments_list
+
+        console.print("[bold]Available Experiments:[/bold]")
+        console.print()
+        for exp_name in get_experiments_list():
+            console.print(f"  • [cyan]{exp_name}[/cyan]")
+        console.print()
+        return
+
     console.print("[bold blue]🔬 Property-Based Testing Corpus Analysis[/bold blue]")
+    console.print()
+
+    # Validate experiment
+    from analyzer.experiments import Experiment
+
+    exp = Experiment.get_experiment(experiment)
+    console.print(f"[bold]Experiment:[/bold] [green]{exp.name}[/green]")
     console.print()
 
     # Load configuration
@@ -136,10 +173,10 @@ def main(
     with db.connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO analysis_runs (configuration, total_repos)
-            VALUES (?, ?)
+            INSERT INTO analysis_runs (configuration, total_repos, experiment_name)
+            VALUES (?, ?, ?)
         """,
-            (json.dumps(cfg), len(work_items)),
+            (json.dumps(cfg), len(work_items), experiment),
         )
         run_id = cursor.lastrowid
         conn.commit()
@@ -151,6 +188,7 @@ def main(
         num_workers=cfg["workers"]["max_workers"],
         db_path=cfg["database"]["path"],
         docker_image=cfg["docker"]["image"],
+        experiment_name=experiment,
     ) as pool:
         pool.submit_batch(work_items)
         successful = 0

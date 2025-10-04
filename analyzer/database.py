@@ -111,6 +111,7 @@ class Database:
                     total_repos INTEGER DEFAULT 0,
                     successful_repos INTEGER DEFAULT 0,
                     failed_repos INTEGER DEFAULT 0,
+                    experiment_name TEXT,  -- Name of experiment run
                     configuration TEXT  -- JSON configuration used
                 );
 
@@ -509,6 +510,54 @@ class Database:
 
             conn.commit()
         logger.info(f"[{owner}/{name}] deleted all data")
+
+    def delete_experiment_data(
+        self, owner: str, name: str, tables: list[str]
+    ) -> list[int]:
+        """Delete specific experiment data for a repository.
+
+        Args:
+            owner: Repository owner
+            name: Repository name
+            tables: List of table names to delete data from
+
+        Returns:
+            List of test IDs that were affected
+        """
+        with self.connection() as conn:
+            # Get repository ID
+            result = conn.execute(
+                "SELECT id FROM repositories WHERE owner = ? AND name = ?",
+                (owner, name),
+            ).fetchone()
+
+            if not result:
+                logger.debug(f"No existing data found for {owner}/{name}")
+                return []
+
+            repo_id = result["id"]
+
+            # Get all test IDs for this repository
+            test_ids = conn.execute(
+                "SELECT id FROM tests WHERE repo_id = ?", (repo_id,)
+            ).fetchall()
+            test_id_list = [row["id"] for row in test_ids]
+
+            if test_id_list:
+                # Delete from specified tables only
+                placeholders = ",".join("?" * len(test_id_list))
+
+                for table in tables:
+                    conn.execute(
+                        f"DELETE FROM {table} WHERE test_id IN ({placeholders})",
+                        test_id_list,
+                    )
+
+            conn.commit()
+            logger.info(
+                f"[{owner}/{name}] deleted experiment data from tables: {', '.join(tables)}"
+            )
+            return test_id_list
 
     def get_analysis_stats(self) -> dict[str, Any]:
         """Get overall analysis statistics."""
