@@ -1,7 +1,3 @@
-"""
-Worker module for parallel processing of repositories.
-"""
-
 import logging
 import multiprocessing as mp
 import time
@@ -9,7 +5,6 @@ import traceback
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
 
-from .analysis import PropertyAnalyzer
 from .database import Database
 from .test_runner import TestRunner
 
@@ -19,8 +14,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class WorkItem:
-    """Represents a repository to process."""
-
     repo_name: str
     node_ids: list[str]
     requirements: str
@@ -37,7 +30,7 @@ class Worker(Process):
         result_queue: Queue,
         db_path: str,
         docker_image: str = "pbt-analyzer:latest",
-        experiment_name: str = "all",
+        experiment_name: str = "coverage",
     ):
         """Initialize worker process."""
         super().__init__()
@@ -56,17 +49,12 @@ class Worker(Process):
         # Initialize components in the worker process
         db = Database(self.db_path)
         test_runner = TestRunner(self.docker_image, worker_id=self.worker_id)
-        analyzer = PropertyAnalyzer()
 
         # Load experiment
-        from .experiments import get_experiment
+        from .experiments import Experiment
 
-        try:
-            experiment = get_experiment(self.experiment_name)
-            logger.info(f"[w{self.worker_id}] Loaded experiment: {experiment.name}")
-        except ValueError as e:
-            logger.error(f"[w{self.worker_id}] {e}")
-            return
+        experiment = Experiment.experiments[self.experiment_name]
+        logger.info(f"[w{self.worker_id}] Loaded experiment: {experiment.name}")
 
         while True:
             try:
@@ -81,7 +69,7 @@ class Worker(Process):
 
                 # Process the repository
                 result = self._process_repository(
-                    work_item, db, test_runner, analyzer, experiment
+                    work_item, db, test_runner, experiment
                 )
 
                 # Send result back
@@ -119,7 +107,6 @@ class Worker(Process):
         work_item: WorkItem,
         db: Database,
         test_runner: TestRunner,
-        analyzer: PropertyAnalyzer,
         experiment,
     ) -> dict:
         """Process a single repository."""
@@ -129,9 +116,17 @@ class Worker(Process):
             experiment.delete_data(db, owner, name)
 
             # Add repository to database
-            work_item.repo_id = db.add_repository(
-                owner, name, f"https://github.com/{work_item.repo_name}"
-            )
+            with db.connection() as conn:
+                conn.execute(
+                    "INSERT OR IGNORE INTO repositories (owner, name, url) VALUES (?, ?, ?)",
+                    (owner, name, f"https://github.com/{work_item.repo_name}"),
+                )
+                conn.commit()
+                result = conn.execute(
+                    "SELECT id FROM repositories WHERE owner = ? AND name = ?",
+                    (owner, name),
+                ).fetchone()
+                work_item.repo_id = result["id"]
 
             # Run tests in container with experiment name
             results = test_runner.process_repository(
@@ -143,18 +138,26 @@ class Worker(Process):
 
             if results is None:
                 error_msg = "No results returned from test runner"
-                db.update_repository_status(work_item.repo_id, "failed", error_msg)
+                with db.connection() as conn:
+                    conn.execute(
+                        "UPDATE repositories SET clone_status = ?, error_message = ? WHERE id = ?",
+                        ("failed", error_msg, work_item.repo_id),
+                    )
+                    conn.commit()
                 return {"success": False, "error": error_msg}
 
             if "error" in results:
-                db.update_repository_status(
-                    work_item.repo_id, "failed", results["error"]
-                )
+                with db.connection() as conn:
+                    conn.execute(
+                        "UPDATE repositories SET clone_status = ?, error_message = ? WHERE id = ?",
+                        ("failed", results["error"], work_item.repo_id),
+                    )
+                    conn.commit()
                 return {"success": False, "error": results["error"]}
 
-            # Process each test result using the experiment
-            tests_processed = 0
-            tests_failed = 0
+            # Process each node result using the experiment
+            nodes_processed = 0
+            nodes_failed = 0
 
             for node_id, test_results in results.items():
                 if node_id == "error":
@@ -164,98 +167,93 @@ class Worker(Process):
                 parts = node_id.split("::")
                 file_path = parts[0]
                 class_name = parts[1] if len(parts) > 1 else None
-                test_name = parts[2] if len(parts) > 2 else parts[-1]
+                node_name = parts[2] if len(parts) > 2 else parts[-1]
 
-                # Extract property text and GitHub permalink from results
-                property_text = test_results.get("property_text")
-                github_permalink = test_results.get("github_permalink")
-
-                # Add test to database with property text and permalink
-                test_id = db.add_test(
-                    work_item.repo_id,
-                    node_id,
-                    file_path,
-                    class_name,
-                    test_name,
-                    property_text=property_text,
-                    github_permalink=github_permalink,
-                )
+                # Add node to database
+                with db.connection() as conn:
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO nodes (repo_id, node_id, file_path, class_name, node_name)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (
+                            work_item.repo_id,
+                            node_id,
+                            file_path,
+                            class_name,
+                            node_name,
+                        ),
+                    )
+                    conn.commit()
+                    result = conn.execute(
+                        "SELECT id FROM nodes WHERE repo_id = ? AND node_id = ?",
+                        (work_item.repo_id, node_id),
+                    ).fetchone()
+                    node_db_id = result["id"]
 
                 if "error" in test_results:
-                    db.update_test_status(test_id, "failed", test_results["error"])
-                    tests_failed += 1
+                    with db.connection() as conn:
+                        conn.execute(
+                            "UPDATE nodes SET status = ?, error_message = ? WHERE id = ?",
+                            ("failed", test_results["error"], node_db_id),
+                        )
+                        conn.commit()
+                    nodes_failed += 1
                     continue
 
-                # Use experiment to process and store results
                 try:
-                    # Import ExperimentResult for deserialization
-                    from .experiments.base import ExperimentResult
+                    # Extract experiment data (now just a dict)
+                    # For coverage experiment, the data is under the "coverage" key
+                    experiment_data = test_results.get("coverage", {})
 
-                    # For "all" experiment, pass the whole dict (contains all sub-experiments)
-                    # For individual experiments, extract their specific result
-                    if experiment.name == "all":
-                        # Process results through composite experiment
-                        experiment_result = experiment.process_results(
-                            node_id, test_results
-                        )
-                    else:
-                        # Get the result dict from the appropriate key
-                        result_key_map = {
-                            "static": "analysis",
-                            "coverage": "coverage",
-                            "ast": "ast_data",
-                        }
-                        result_key = result_key_map.get(experiment.name)
-
-                        if not result_key or result_key not in test_results:
-                            db.update_test_status(
-                                test_id,
-                                "failed",
-                                f"Missing result key '{result_key}' in test results",
+                    if not experiment_data:
+                        with db.connection() as conn:
+                            conn.execute(
+                                "UPDATE nodes SET status = ?, error_message = ? WHERE id = ?",
+                                ("failed", "No experiment data returned", node_db_id),
                             )
-                            tests_failed += 1
-                            continue
-
-                        # Deserialize the container result
-                        container_result = ExperimentResult.from_dict(
-                            test_results[result_key]
-                        )
-
-                        # Process results through experiment (pass-through for most, enhanced for AST)
-                        experiment_result = experiment.process_results(
-                            node_id, container_result
-                        )
-
-                    if not experiment_result.success:
-                        db.update_test_status(
-                            test_id, "failed", experiment_result.error
-                        )
-                        tests_failed += 1
+                            conn.commit()
+                        nodes_failed += 1
                         continue
 
                     # Store results using experiment
                     experiment.store_to_database(
-                        db, work_item.repo_id, test_id, experiment_result
+                        db, work_item.repo_id, node_db_id, experiment_data
                     )
 
-                    db.update_test_status(test_id, "success")
-                    tests_processed += 1
+                    with db.connection() as conn:
+                        conn.execute(
+                            "UPDATE nodes SET status = ?, error_message = ? WHERE id = ?",
+                            ("success", None, node_db_id),
+                        )
+                        conn.commit()
+                    nodes_processed += 1
 
                 except Exception as e:
                     logger.error(
                         f"[w{self.worker_id}][{work_item.repo_name}] Error "
                         f"processing {node_id}: {traceback.format_exception(e)}"
                     )
-                    db.update_test_status(test_id, "failed", str(e))
-                    tests_failed += 1
+                    with db.connection() as conn:
+                        conn.execute(
+                            "UPDATE nodes SET status = ?, error_message = ? WHERE id = ?",
+                            ("failed", str(e), node_db_id),
+                        )
+                        conn.commit()
+                    nodes_failed += 1
 
             # Update repository status
-            db.update_repository_status(work_item.repo_id, "success")
+            with db.connection() as conn:
+                conn.execute(
+                    "UPDATE repositories SET clone_status = ?, error_message = ? WHERE id = ?",
+                    ("success", None, work_item.repo_id),
+                )
+                conn.commit()
 
             return {
                 "success": True,
-                "tests_processed": tests_processed,
-                "tests_failed": tests_failed,
+                "nodes_processed": nodes_processed,
+                "nodes_failed": nodes_failed,
                 "results": results,
             }
 
@@ -264,7 +262,12 @@ class Worker(Process):
                 f"[w{self.worker_id}][{work_item.repo_name}] Error processing: {e}"
             )
             if work_item.repo_id:
-                db.update_repository_status(work_item.repo_id, "failed", str(e))
+                with db.connection() as conn:
+                    conn.execute(
+                        "UPDATE repositories SET clone_status = ?, error_message = ? WHERE id = ?",
+                        ("failed", str(e), work_item.repo_id),
+                    )
+                    conn.commit()
             return {"success": False, "error": str(e)}
 
 
@@ -276,7 +279,7 @@ class WorkerPool:
         num_workers: int = 4,
         db_path: str = "data/analysis.db",
         docker_image: str = "pbt-analyzer:latest",
-        experiment_name: str = "all",
+        experiment_name: str = "coverage",
     ):
         """Initialize worker pool."""
         self.num_workers = num_workers
@@ -307,11 +310,6 @@ class WorkerPool:
     def submit(self, work_item: WorkItem):
         """Submit a work item to the pool."""
         self.task_queue.put(work_item)
-
-    def submit_batch(self, work_items: list[WorkItem]):
-        """Submit multiple work items."""
-        for item in work_items:
-            self.submit(item)
 
     def get_result(self, timeout: float | None = None) -> dict | None:
         """Get a result from the result queue."""
@@ -366,10 +364,8 @@ class WorkerPool:
         logger.info("Worker pool shutdown complete")
 
     def __enter__(self):
-        """Context manager entry."""
         self.start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
         self.shutdown()

@@ -20,7 +20,7 @@ python run_analysis.py --sample
 python run_analysis.py --dataset data/dataset.json --limit 10 --workers 2
 
 # Start visualization dashboard
-streamlit run dashboard.py
+streamlit run dashboard/Overview.py
 ```
 
 ### Development & Debugging

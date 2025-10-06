@@ -48,7 +48,7 @@ docker build -t pbt-analyzer . && python run_analysis.py --dataset data/dataset.
 
 View dashboard:
 ```bash
-streamlit run dashboard.py
+streamlit run dashboard/Overview.py
 ```
 
 ## Dataset Format

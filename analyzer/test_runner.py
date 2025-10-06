@@ -1,7 +1,3 @@
-"""
-Test runner module for executing tests in isolated Docker containers.
-"""
-
 import json
 import logging
 import shutil
@@ -76,7 +72,7 @@ class TestRunner:
         work_dir: Path,
         requirements: str,
         node_ids: list[str],
-        experiment_name: str = "all",
+        experiment_name: str = "coverage",
     ) -> bool:
         """Set up environment by copying experiment modules and config."""
         try:
@@ -92,36 +88,16 @@ class TestRunner:
 
             # Always copy shared helpers and runner
             shutil.copy(
-                experiments_dir / "container_helpers.py",
-                work_dir / "container_helpers.py",
+                experiments_dir / "utils.py",
+                work_dir / "utils.py",
             )
             shutil.copy(
-                experiments_dir / "container_runner.py",
-                work_dir / "container_runner.py",
+                experiments_dir / "runner.py",
+                work_dir / "runner.py",
             )
 
-            # Copy experiment-specific modules based on what will run
-            if experiment_name == "static":
-                shutil.copy(
-                    experiments_dir / "static_analysis.py",
-                    work_dir / "static_analysis.py",
-                )
-            elif experiment_name == "coverage":
-                shutil.copy(experiments_dir / "coverage.py", work_dir / "coverage.py")
-            elif experiment_name == "ast":
-                shutil.copy(
-                    experiments_dir / "ast_analysis.py", work_dir / "ast_analysis.py"
-                )
-            elif experiment_name == "all":
-                # Copy all experiment modules
-                shutil.copy(
-                    experiments_dir / "static_analysis.py",
-                    work_dir / "static_analysis.py",
-                )
-                shutil.copy(experiments_dir / "coverage.py", work_dir / "coverage.py")
-                shutil.copy(
-                    experiments_dir / "ast_analysis.py", work_dir / "ast_analysis.py"
-                )
+            # Copy coverage experiment module
+            shutil.copy(experiments_dir / "coverage.py", work_dir / "coverage.py")
 
             # Write configuration for the container
             config = {
@@ -139,154 +115,89 @@ class TestRunner:
             )
             return False
 
-    def extract_test_code(self, repo_dir: Path, node_id: str) -> str | None:
-        """Extract the source code of a specific test."""
-        try:
-            # Parse node_id (format: path/to/test.py::TestClass::test_method)
-            parts = node_id.split("::")
-            file_path = repo_dir / parts[0]
-
-            if not file_path.exists():
-                logger.error(
-                    f"[w{self.worker_id}][unknown] Test file not found: {file_path}"
-                )
-                return None
-
-            # Read the entire file content
-            # In a production implementation, you could extract just the specific test
-            return file_path.read_text()
-
-        except Exception as e:
-            logger.error(
-                f"[w{self.worker_id}][unknown] Failed to extract test code: {e}"
-            )
-            return None
-
     def run_in_container(
         self, repo_name: str, work_dir: Path, node_ids: list[str]
     ) -> dict[str, any]:
         """Run tests in container by copying files instead of mounting (avoids Mac penalty)."""
+        logger.info(f"[w{self.worker_id}][{repo_name}] Running container analysis")
+
+        # Create tar archive of the work directory
+        start_tar = time.time()
+        tar_stream = BytesIO()
+        with tarfile.open(fileobj=tar_stream, mode="w") as tar:
+            # Add all files from work_dir as /app in the container
+            for item in work_dir.iterdir():
+                tar.add(item, arcname=f"/app/{item.name}")
+        tar_stream.seek(0)
+        tar_time = time.time() - start_tar
+        logger.info(
+            f"[w{self.worker_id}][{repo_name}] Created tar archive in {tar_time:.3f}s"
+        )
+
+        # Create container WITHOUT volumes (no Mac penalty!)
+        container = self.docker_client.containers.create(
+            self.docker_image,
+            command=["python", "/app/runner.py"],
+            environment={
+                "HYPOTHESIS_EXPERIMENTAL_OBSERVABILITY": "1",
+            },
+            mem_limit="2g",
+            security_opt=["no-new-privileges"],
+        )
+
+        # Copy files into container
+        start_copy = time.time()
+        container.put_archive("/", tar_stream.read())
+        copy_time = time.time() - start_copy
+        logger.info(
+            f"[w{self.worker_id}][{repo_name}] Copied files into container in {copy_time:.3f}s"
+        )
+
+        container.start()
+        result = container.wait(timeout=self.RUNNER_TIMEOUT)
+        logs = container.logs(stdout=True, stderr=True).decode("utf-8")
+        logger.debug(f"[w{self.worker_id}][{repo_name}] Container logs:\n{logs}")
+        logger.debug(
+            f"[w{self.worker_id}][{repo_name}] Container exit code: {result.get('StatusCode', 'unknown')}"
+        )
+
+        for line in logs.split("\n"):
+            if "[TIMING]" in line:
+                logger.info(f"[w{self.worker_id}][{repo_name}] {line.strip()}")
+
+        # Extract results from container
+        start_extract = time.time()
+        # Get results.json from container
+        bits, _ = container.get_archive("/app/results.json")
+        tar_stream = BytesIO()
+        for chunk in bits:
+            tar_stream.write(chunk)
+        tar_stream.seek(0)
+
         try:
-            logger.info(f"[w{self.worker_id}][{repo_name}] Running container analysis")
-
-            # Create tar archive of the work directory
-            start_tar = time.time()
-            tar_stream = BytesIO()
-            with tarfile.open(fileobj=tar_stream, mode="w") as tar:
-                # Add all files from work_dir as /app in the container
-                for item in work_dir.iterdir():
-                    tar.add(item, arcname=f"/app/{item.name}")
-            tar_stream.seek(0)
-            tar_time = time.time() - start_tar
-            logger.info(
-                f"[w{self.worker_id}][{repo_name}] Created tar archive in {tar_time:.3f}s"
-            )
-
-            # Create container WITHOUT volumes (no Mac penalty!)
-            container = self.docker_client.containers.create(
-                self.docker_image,
-                command=["python", "/app/container_runner.py"],
-                environment={
-                    "HYPOTHESIS_EXPERIMENTAL_OBSERVABILITY": "1",
-                    "PYTHONDONTWRITEBYTECODE": "1",
-                },
-                mem_limit="2g",
-                security_opt=["no-new-privileges"],
-            )
-
-            try:
-                # Copy files into container
-                start_copy = time.time()
-                container.put_archive("/", tar_stream.read())
-                copy_time = time.time() - start_copy
-                logger.info(
-                    f"[w{self.worker_id}][{repo_name}] Copied files into container in {copy_time:.3f}s"
-                )
-
-                # Start container
-                container.start()
-
-                # Wait for completion
-                result = container.wait(timeout=self.RUNNER_TIMEOUT)
-
-                # Get logs
-                logs = container.logs(stdout=True, stderr=True).decode("utf-8")
-
-                # Log the container output for debugging
-                logger.debug(
-                    f"[w{self.worker_id}][{repo_name}] Container logs:\n{logs}"
-                )
-                logger.debug(
-                    f"[w{self.worker_id}][{repo_name}] Container exit code: {result.get('StatusCode', 'unknown')}"
-                )
-
-                # Extract and log timing information
-                for line in logs.split("\n"):
-                    if "[TIMING]" in line:
-                        logger.info(f"[w{self.worker_id}][{repo_name}] {line.strip()}")
-
-                # Extract results from container
-                start_extract = time.time()
-                try:
-                    # Get results.json from container
-                    bits, _ = container.get_archive("/app/results.json")
-                    tar_stream = BytesIO()
-                    for chunk in bits:
-                        tar_stream.write(chunk)
-                    tar_stream.seek(0)
-
-                    # Extract from tar
-                    with tarfile.open(fileobj=tar_stream) as tar:
-                        results_file = tar.extractfile("results.json")
-                        if results_file:
-                            results = json.loads(results_file.read().decode("utf-8"))
-                            extract_time = time.time() - start_extract
-                            logger.info(
-                                f"[w{self.worker_id}][{repo_name}] Extracted results in {extract_time:.3f}s"
-                            )
-                            return results
-                        else:
-                            logger.error(
-                                f"[w{self.worker_id}][{repo_name}] Could not extract results.json from tar"
-                            )
-                            return {"error": "Could not extract results", "logs": logs}
-
-                except docker.errors.NotFound as e:
+            with tarfile.open(fileobj=tar_stream) as tar:
+                results_file = tar.extractfile("results.json")
+                if results_file:
+                    results = json.loads(results_file.read().decode("utf-8"))
+                    extract_time = time.time() - start_extract
+                    logger.info(
+                        f"[w{self.worker_id}][{repo_name}] Extracted results in {extract_time:.3f}s"
+                    )
+                    return results
+                else:
                     logger.error(
-                        f"[w{self.worker_id}][{repo_name}] No results file generated: {e}"
+                        f"[w{self.worker_id}][{repo_name}] Could not extract results.json from tar"
                     )
-                    logger.debug(
-                        f"[w{self.worker_id}][{repo_name}] Container logs:\n{logs}"
-                    )
-                    return {"error": "No results generated", "logs": logs}
-                except Exception as e:
-                    logger.error(
-                        f"[w{self.worker_id}][{repo_name}] Error extracting results: {e}"
-                    )
-                    logger.debug(
-                        f"[w{self.worker_id}][{repo_name}] Error type: {type(e).__name__}, message: {str(e)}"
-                    )
-                    return {"error": f"Failed to extract results: {str(e)}"}
-
-            finally:
-                # Clean up container
-                container.remove(force=True)
-
-            # If we get here without returning, something went wrong
-            return {"error": "Unknown error during container execution"}
-
-        except Exception as e:
-            logger.error(
-                f"[w{self.worker_id}][{repo_name}] Container execution failed: {e}"
-            )
-            return {"error": str(e)}
+                    return {"error": "Could not extract results", "logs": logs}
+        finally:
+            container.remove(force=True)
 
     def process_repository(
         self,
         repo_name: str,
         node_ids: list[str],
         requirements: str,
-        experiment_name: str = "all",
+        experiment_name: str = "coverage",
     ) -> dict[str, any]:
         """Process a complete repository."""
         work_dir = None
@@ -307,40 +218,12 @@ class TestRunner:
             ):
                 return {"error": "Failed to setup environment"}
 
-            # Get git commit hash for permalink construction
-            git_hash = self.get_git_commit_hash(repo_dir)
-
-            # Run analysis in container
             results = self.run_in_container(repo_name, repo_dir, node_ids)
-            # Check if results is valid
             if results is None:
                 return {"error": "No results returned from container"}
 
             if "error" in results:
-                return results  # Return error as-is
-
-            # Extract test code and construct GitHub permalinks for each node_id
-            for node_id in node_ids:
-                code = self.extract_test_code(repo_dir, node_id)
-                if code and node_id in results:
-                    results[node_id]["source_code"] = code
-
-                # If we have analysis data with property info, construct permalink
-                if node_id in results and "analysis" in results[node_id]:
-                    analysis = results[node_id]["analysis"]
-
-                    if git_hash and analysis.get("property_line_number"):
-                        # Construct GitHub permalink
-                        # Format: https://github.com/owner/repo/blob/hash/file#Lline
-                        parts = node_id.split("::")
-                        file_path = parts[0]
-                        line_number = analysis["property_line_number"]
-                        permalink = f"https://github.com/{repo_name}/blob/{git_hash}/{file_path}#L{line_number}"
-                        results[node_id]["github_permalink"] = permalink
-
-                    # Store property source text if available
-                    if analysis.get("property_source"):
-                        results[node_id]["property_text"] = analysis["property_source"]
+                return results
 
             return results
 

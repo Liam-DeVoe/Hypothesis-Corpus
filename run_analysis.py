@@ -13,6 +13,7 @@ import yaml
 from rich.console import Console
 
 from analyzer.database import Database
+from analyzer.experiments import Experiment
 from analyzer.worker import WorkerPool, WorkItem
 
 logging.basicConfig(
@@ -89,13 +90,8 @@ def prepare_work_items(dataset: dict[str, Any]) -> list[WorkItem]:
     "--experiment",
     "-e",
     type=str,
-    default="all",
-    help="Experiment to run (static, coverage, ast, all)",
-)
-@click.option(
-    "--list-experiments",
-    is_flag=True,
-    help="List available experiments and exit",
+    default="coverage",
+    help="Experiment to run (coverage)",
 )
 def main(
     dataset: str,
@@ -105,28 +101,12 @@ def main(
     limit: int,
     docker_image: str,
     experiment: str,
-    list_experiments: bool,
 ):
     """Run PBT corpus analysis."""
 
-    # Handle --list-experiments first
-    if list_experiments:
-        from analyzer.experiments import list_experiments as get_experiments_list
-
-        console.print("[bold]Available Experiments:[/bold]")
-        console.print()
-        for exp_name in get_experiments_list():
-            console.print(f"  • [cyan]{exp_name}[/cyan]")
-        console.print()
-        return
-
-    console.print("[bold blue]🔬 Property-Based Testing Corpus Analysis[/bold blue]")
     console.print()
 
-    # Validate experiment
-    from analyzer.experiments import Experiment
-
-    exp = Experiment.get_experiment(experiment)
+    exp = Experiment.experiments[experiment]
     console.print(f"[bold]Experiment:[/bold] [green]{exp.name}[/green]")
     console.print()
 
@@ -190,7 +170,9 @@ def main(
         docker_image=cfg["docker"]["image"],
         experiment_name=experiment,
     ) as pool:
-        pool.submit_batch(work_items)
+        for item in work_items:
+            pool.submit(item)
+
         successful = 0
         failed = 0
 
@@ -234,29 +216,9 @@ def main(
     console.print(f"Failed: [red]{failed}[/red]")
     console.print(f"Total: {len(work_items)}")
 
-    # Get and display statistics
-    stats = db.get_analysis_stats()
-
-    console.print()
-    console.print("[bold]Top Generators:[/bold]")
-    for gen in stats["top_generators"][:5]:
-        console.print(f"  • {gen['generator_name']}: {gen['total_uses']} uses")
-
-    console.print()
-    console.print("[bold]Property Types:[/bold]")
-    for prop in stats["property_types"]:
-        console.print(f"  • {prop['property_type']}: {prop['count']} tests")
-
-    console.print()
-    console.print("[bold]Feature Usage:[/bold]")
-    for feature in stats["feature_usage"]:
-        console.print(
-            f"  • {feature['feature_name']}: {feature['total_uses']} uses in {feature['test_count']} tests"
-        )
-
     console.print()
     console.print(
-        "[green]✨ View results in the dashboard: streamlit run dashboard.py[/green]"
+        "[green]✨ View results in the dashboard: streamlit run dashboard/Overview.py[/green]"
     )
 
 
