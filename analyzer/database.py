@@ -16,6 +16,7 @@ class Database:
         self._run_migrations()
         self._init_core_schema()
         self._init_experiment_schemas()
+        self._init_task_schemas()
 
     def _run_migrations(self):
         pass
@@ -78,6 +79,16 @@ class Database:
             for experiment_name, experiment_class in Experiment.experiments.items():
                 logger.debug(f"Initializing schema for experiment: {experiment_name}")
                 schema_sql = experiment_class.get_schema_sql()
+                conn.executescript(schema_sql)
+
+    def _init_task_schemas(self):
+        """Initialize database schemas for all registered tasks."""
+        from .tasks import Task
+
+        with self.connection() as conn:
+            for task_name, task_class in Task.tasks.items():
+                logger.debug(f"Initializing schema for task: {task_name}")
+                schema_sql = task_class.get_schema_sql()
                 conn.executescript(schema_sql)
 
     @contextmanager

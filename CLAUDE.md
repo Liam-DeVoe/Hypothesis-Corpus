@@ -23,6 +23,15 @@ python run_analysis.py --dataset data/dataset.json --limit 10 --workers 2
 streamlit run dashboard/Overview.py
 ```
 
+### Running Tasks
+```bash
+# Run clustering task (Clio-style analysis of patterns/domains)
+python run_tasks.py run clustering
+
+# Clear task data
+python run_tasks.py clear --task clustering
+```
+
 ### Development & Debugging
 ```bash
 # Run debug scripts for troubleshooting Docker execution
@@ -63,16 +72,34 @@ The analyzer detects:
 - **Feature usage**: assume, note, event, target, settings, max_examples
 - **Custom strategies** through AST analysis
 
+#### Experiments & Tasks System
+**Experiments** run in Docker containers to analyze tests:
+- `coverage`: Detects Hypothesis strategies and features
+- `facets`: Uses Claude to generate summaries, property patterns, and technical domains
+
+**Tasks** run after experiments to analyze their results:
+- `clustering`: Uses all-mpnet-base-v2 embeddings and k-means to cluster patterns/domains (Clio-style)
+- Tasks declare `follows = ["experiment_name"]` to automatically run after experiments
+- Store results in separate tables for dashboard visualization
+
+Clustering implementation:
+- Embeds facets using sentence-transformers (all-mpnet-base-v2, 768-dimensional)
+- Determines optimal k based on dataset size: `k = sqrt(n) * factor`
+- Uses Claude to generate human-readable cluster names and descriptions
+- Model is cached at class level to avoid reloading
+
 #### Database Schema
-8 interconnected tables track:
+Core tables track repository analysis:
 - Repository metadata and processing status
 - Individual test information
 - Generator usage with composition patterns
 - Property type classifications
 - Feature adoption metrics
 - Full source code storage
-- Test runner information
-- Analysis run metadata
+
+Additional tables for experiments and tasks:
+- `facets`: Summaries, property patterns, and technical domains (by facets experiment)
+- `facet_clusters` & `facet_cluster_assignments`: Cluster metadata and assignments (by clustering task)
 
 ### Configuration
 
@@ -111,6 +138,12 @@ Input datasets must follow this JSON structure:
 2. Update corresponding database schema if tracking new metrics
 3. Regenerate Docker image after changes
 
+### Creating New Tasks
+1. Create class inheriting from `Task` in analyzer/tasks/
+2. Implement `get_schema_sql()`, `run()`, `store_to_database()`, `delete_data()`
+3. Set `follows = ["experiment_name"]` to declare dependencies
+4. Export from analyzer/tasks/__init__.py
+
 ### Database Operations
 The database uses context managers for all operations:
 ```python
@@ -125,3 +158,8 @@ with db.connection() as conn:
 - **analyzer/worker.py**: Multiprocessing orchestration and error handling
 - **analyzer/database.py**: Schema definition and data persistence
 - **run_analysis.py**: CLI interface and main orchestration
+
+### Experiments & Tasks
+- **analyzer/experiments/**: Experiment implementations (coverage, facets)
+- **analyzer/tasks/**: Task implementations (clustering) and runner logic
+- **run_tasks.py**: CLI for manually running tasks

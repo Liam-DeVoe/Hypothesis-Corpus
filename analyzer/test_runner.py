@@ -4,7 +4,6 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
-import time
 from io import BytesIO
 from pathlib import Path
 

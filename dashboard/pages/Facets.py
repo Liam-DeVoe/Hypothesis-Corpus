@@ -221,10 +221,10 @@ def main():
         st.plotly_chart(fig, use_container_width=True)
 
     # Pattern and Domain analysis
-    st.subheader("Property Patterns")
+    st.subheader("Patterns")
 
     if not patterns.empty:
-        col1, = st.columns(1)
+        (col1,) = st.columns(1)
 
         with col1:
             # Show pattern table
@@ -248,7 +248,7 @@ def main():
     st.subheader("Domains")
 
     if not domains.empty:
-        col1, = st.columns(1)
+        (col1,) = st.columns(1)
 
         with col1:
             # Show domain table
