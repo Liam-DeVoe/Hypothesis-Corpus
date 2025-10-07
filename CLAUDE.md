@@ -34,9 +34,6 @@ python run_tasks.py clear --task clustering
 
 ### Development & Debugging
 ```bash
-# Run debug scripts for troubleshooting Docker execution
-python debug_docker.py
-
 # Check database contents
 sqlite3 data/analysis.db ".tables"
 sqlite3 data/analysis.db "SELECT * FROM repositories LIMIT 5;"
@@ -49,57 +46,63 @@ sqlite3 data/analysis.db "SELECT * FROM repositories LIMIT 5;"
 2. **WorkerPool** (analyzer/worker.py) distributes repositories across multiple processes
 3. Each worker uses **TestRunner** (analyzer/test_runner.py) to:
    - Clone repository into temporary directory
-   - Create setup.sh to install dependencies in Docker container
-   - Generate analyze.py script with embedded analysis logic
-   - Execute in Docker container with network access
+   - Copy experiment modules into repo directory
+   - Create config.json with node_ids and experiment configuration
+   - Execute runner.py in Docker container with network access
    - Parse results.json output
 4. Results stored in SQLite database (analyzer/database.py)
-5. **dashboard.py** provides real-time Streamlit visualization
+5. **dashboard/Overview.py** provides real-time Streamlit visualization
 
 ### Critical Implementation Details
 
 #### Docker Container Execution
-- The TestRunner dynamically generates an analyze.py script that is injected into each container
-- The analysis script is a self-contained Python program with all pattern detection logic embedded
-- Each Docker container provides isolation - no virtual environments needed
+- The TestRunner copies experiment modules (runner.py, experiment.py, utils.py, {experiment_name}.py) into the repo directory before containerization
+- Files are packaged into a tar archive and sent to the container via docker API (avoiding Mac mount penalties)
+- Each Docker container provides isolation - dependencies installed directly into container Python environment
 - Network access is required for pip installation of repository dependencies
-- Dependencies are installed directly into the container's Python environment
+- Container runs runner.py which reads config.json, installs dependencies, and runs the specified experiment
 
-#### Pattern Detection System
-The analyzer detects:
-- **60+ Hypothesis strategies** through regex patterns
-- **Property types**: mathematical, round-trip, model-based, oracle, metamorphic
-- **Feature usage**: assume, note, event, target, settings, max_examples
-- **Custom strategies** through AST analysis
+#### Experiment System
+**Experiments** run in Docker containers to analyze tests. Each experiment:
+- Inherits from `Experiment` base class (analyzer/experiments/experiment.py)
+- Auto-registers via `__init_subclass__` using the `name` class attribute
+- Implements `get_schema_sql()`, `run()`, `delete_data()`, `store_to_database()`
+- Runs inside container via runner.py (analyzer/experiments/runner.py)
+- Returns results as dict which are stored in results.json
 
-#### Experiments & Tasks System
-**Experiments** run in Docker containers to analyze tests:
-- `coverage`: Detects Hypothesis strategies and features
+Built-in experiments:
+- `coverage`: Detects Hypothesis strategies, features, and execution data
 - `facets`: Uses Claude to generate summaries, property patterns, and technical domains
 
+#### Tasks System
 **Tasks** run after experiments to analyze their results:
-- `clustering`: Uses all-mpnet-base-v2 embeddings and k-means to cluster patterns/domains (Clio-style)
-- Tasks declare `follows = ["experiment_name"]` to automatically run after experiments
+- Inherit from `Task` base class (analyzer/tasks/task.py)
+- Auto-register via `__init_subclass__` using the `name` class attribute
+- Declare `follows = ["experiment_name"]` to automatically run after experiments
+- Implement `get_schema_sql()`, `run()`, `store_to_database()`, `delete_data()`
 - Store results in separate tables for dashboard visualization
+
+Built-in tasks:
+- `clustering`: Uses all-mpnet-base-v2 embeddings and k-means to cluster patterns/domains (Clio-style)
 
 Clustering implementation:
 - Embeds facets using sentence-transformers (all-mpnet-base-v2, 768-dimensional)
 - Determines optimal k based on dataset size: `k = sqrt(n) * factor`
-- Uses Claude to generate human-readable cluster names and descriptions
+- Uses Claude CLI to generate human-readable cluster names and descriptions
 - Model is cached at class level to avoid reloading
 
 #### Database Schema
 Core tables track repository analysis:
-- Repository metadata and processing status
-- Individual test information
-- Generator usage with composition patterns
-- Property type classifications
-- Feature adoption metrics
-- Full source code storage
+- `repositories`: Repository metadata and processing status
+- `nodes`: Individual test information
+- `analysis_runs`: Metadata about analysis runs
 
-Additional tables for experiments and tasks:
-- `facets`: Summaries, property patterns, and technical domains (by facets experiment)
-- `facet_clusters` & `facet_cluster_assignments`: Cluster metadata and assignments (by clustering task)
+Experiment-specific tables are defined by each experiment's `get_schema_sql()`:
+- `coverage` experiment: `node_coverage`, `node_executions`, `observability_data`
+- `facets` experiment: `facets` table with summaries, property patterns, and technical domains
+
+Task-specific tables are defined by each task's `get_schema_sql()`:
+- `clustering` task: `facet_clusters`, `facet_cluster_assignments`
 
 ### Configuration
 
@@ -129,20 +132,24 @@ Input datasets must follow this JSON structure:
 
 ### Analysis Failing
 1. Check Docker container logs are being captured properly
-2. Ensure Python version in analyze.py matches Docker image (currently 3.13)
+2. Ensure Python version in runner.py matches Docker image (currently 3.13)
 3. Verify network access is enabled for pip installations
-4. Check that setup.sh has correct venv activation
+4. Check that experiment modules are being copied correctly
 
-### Adding New Pattern Detection
-1. Modify the `_create_analysis_script` method in analyzer/test_runner.py
-2. Update corresponding database schema if tracking new metrics
-3. Regenerate Docker image after changes
+### Adding New Experiments
+1. Create class inheriting from `Experiment` in analyzer/experiments/
+2. Set `name` class attribute for auto-registration
+3. Implement `get_schema_sql()`, `run()`, `store_to_database()`, `delete_data()`
+4. Ensure imports work both as package and standalone (use try/except pattern)
+5. Experiment runs inside container, so all dependencies must be installable via pip
+6. Rebuild Docker image if adding system dependencies
 
 ### Creating New Tasks
 1. Create class inheriting from `Task` in analyzer/tasks/
-2. Implement `get_schema_sql()`, `run()`, `store_to_database()`, `delete_data()`
-3. Set `follows = ["experiment_name"]` to declare dependencies
-4. Export from analyzer/tasks/__init__.py
+2. Set `name` class attribute for auto-registration
+3. Implement `get_schema_sql()`, `run()`, `store_to_database()`, `delete_data()`
+4. Set `follows = ["experiment_name"]` to declare dependencies
+5. Export from analyzer/tasks/__init__.py
 
 ### Database Operations
 The database uses context managers for all operations:
@@ -154,8 +161,9 @@ with db.connection() as conn:
 
 ## Key Files to Understand
 
-- **analyzer/test_runner.py**: Contains the entire analysis logic embedded in `_create_analysis_script()` method
+- **analyzer/test_runner.py**: Orchestrates cloning, environment setup, and Docker execution
 - **analyzer/worker.py**: Multiprocessing orchestration and error handling
+- **analyzer/experiments/runner.py**: Entry point that runs inside Docker containers
 - **analyzer/database.py**: Schema definition and data persistence
 - **run_analysis.py**: CLI interface and main orchestration
 
