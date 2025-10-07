@@ -65,9 +65,7 @@ def main():
         return
 
     # Filter by status
-    status_filter = st.selectbox(
-        "Status", ["All", "success", "failed"], index=0
-    )
+    status_filter = st.selectbox("Status", ["All", "success", "failed"], index=0)
 
     if status_filter != "All":
         repos = repos[repos["status"] == status_filter]
@@ -89,9 +87,7 @@ def main():
 
     # Repository selection for detailed view
     if not repos.empty:
-        selected_repo = st.selectbox(
-            "Repository", repos["repository"].tolist()
-        )
+        selected_repo = st.selectbox("Repository", repos["repository"].tolist())
 
         if selected_repo:
             with db.connection() as conn:
@@ -126,6 +122,7 @@ def main():
                             ),
                         },
                     )
+
 
 if __name__ == "__main__":
     main()

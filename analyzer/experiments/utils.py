@@ -1,7 +1,6 @@
 import json
 import subprocess
 import sys
-import time
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +11,6 @@ def setup_dependencies(requirements_file: Path | None = None) -> bool:
     def run_pip_install(args: list[str], description: str) -> bool:
         """Run pip install with timing."""
         print(f"Installing {description}...", flush=True)
-        start_time = time.time()
 
         try:
             result = subprocess.run(
@@ -28,21 +26,13 @@ def setup_dependencies(requirements_file: Path | None = None) -> bool:
                 capture_output=True,
                 text=True,
             )
-            elapsed = time.time() - start_time
-            print(f"[TIMING] Install {description}: {elapsed:.3f}s", flush=True)
-
             if result.returncode != 0:
                 print(
                     f"Warning: {description} install had issues: {result.stderr}",
                     flush=True,
                 )
             return result.returncode == 0
-        except Exception as e:
-            elapsed = time.time() - start_time
-            print(
-                f"[TIMING] Install {description} failed after {elapsed:.3f}s: {e}",
-                flush=True,
-            )
+        except Exception:
             return False
 
     print("Starting dependency installation...", flush=True)

@@ -276,9 +276,11 @@ def main():
                 test_data = cumulative_data[cumulative_data["node_id"] == node_id]
 
                 # Aggregate coverage across all files for each case
-                aggregated_data = test_data.groupby("case_number").agg({
-                    "cumulative_count": "sum"
-                }).reset_index()
+                aggregated_data = (
+                    test_data.groupby("case_number")
+                    .agg({"cumulative_count": "sum"})
+                    .reset_index()
+                )
 
                 test_name = node_id.lstrip(common_prefix)
 

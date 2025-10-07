@@ -1,6 +1,5 @@
 import json
 import sys
-import time
 import traceback
 from pathlib import Path
 
@@ -60,7 +59,6 @@ def main():
 
             # Run coverage experiment
             print(f"Running {experiment_name} experiment...", flush=True)
-            start = time.time()
 
             try:
                 exp_data = CoverageExperiment.run(file_path, node_id)
@@ -68,11 +66,6 @@ def main():
             except Exception as e:
                 print(f"ERROR: Experiment failed: {e}", flush=True)
                 node_results["error"] = str(e)
-
-            print(
-                f"[TIMING] {experiment_name}: {time.time() - start:.3f}s",
-                flush=True,
-            )
 
             results[node_id] = node_results
 

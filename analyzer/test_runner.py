@@ -161,10 +161,6 @@ class TestRunner:
             f"[w{self.worker_id}][{repo_name}] Container exit code: {result.get('StatusCode', 'unknown')}"
         )
 
-        for line in logs.split("\n"):
-            if "[TIMING]" in line:
-                logger.info(f"[w{self.worker_id}][{repo_name}] {line.strip()}")
-
         # Extract results from container
         start_extract = time.time()
         # Get results.json from container

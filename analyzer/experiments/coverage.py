@@ -153,12 +153,15 @@ class CoverageExperiment(Experiment):
 
                 for case_num, test_case in enumerate(test_cases):
                     if "coverage" in test_case and test_case["coverage"] is not None:
+                        # Update cumulative coverage with lines from this test case
                         for file_path, lines in test_case["coverage"].items():
                             if file_path not in cumulative_coverage:
                                 cumulative_coverage[file_path] = set()
-
                             cumulative_coverage[file_path].update(lines)
+
+                        for file_path in cumulative_coverage:
                             cumulative_list = sorted(cumulative_coverage[file_path])
+                            lines_this_case = test_case["coverage"].get(file_path, [])
 
                             conn.execute(
                                 """
@@ -172,7 +175,7 @@ class CoverageExperiment(Experiment):
                                     node_id,
                                     case_num,
                                     file_path,
-                                    json.dumps(lines),
+                                    json.dumps(lines_this_case),
                                     json.dumps(cumulative_list),
                                     len(cumulative_list),
                                 ),

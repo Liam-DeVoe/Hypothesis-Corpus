@@ -4,6 +4,7 @@ import time
 import traceback
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
+
 import requests
 
 from .database import Database
@@ -116,16 +117,19 @@ class Worker(Process):
             try:
                 response = requests.get(
                     f"https://api.github.com/repos/{work_item.repo_name}",
-                    headers={'User-Agent': 'PBT-Analyzer'},
-                    timeout=10
+                    timeout=10,
                 )
                 if response.status_code != 200:
                     error_msg = f"Repository not found or not accessible (status {response.status_code})"
-                    logger.warning(f"[w{self.worker_id}][{work_item.repo_name}] {error_msg}")
+                    logger.warning(
+                        f"[w{self.worker_id}][{work_item.repo_name}] {error_msg}"
+                    )
                     return {"success": False, "error": error_msg}
             except requests.RequestException as e:
                 error_msg = f"Failed to check repository: {str(e)}"
-                logger.warning(f"[w{self.worker_id}][{work_item.repo_name}] {error_msg}")
+                logger.warning(
+                    f"[w{self.worker_id}][{work_item.repo_name}] {error_msg}"
+                )
                 return {"success": False, "error": error_msg}
 
             # Delete any existing data for this repository before processing
