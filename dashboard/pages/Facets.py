@@ -150,7 +150,7 @@ def main():
 
     # Display overall metrics
     if not overall_stats.empty and overall_stats["nodes_with_summaries"].iloc[0] > 0:
-        col1, col2, col3, col4, col5, col6 = st.columns(6)
+        col1, col2, col4, col5, col6 = st.columns(5)
 
         with col1:
             st.metric(
@@ -161,12 +161,6 @@ def main():
             st.metric(
                 "Repositories",
                 f"{overall_stats['repos_with_summaries'].iloc[0]:,}",
-            )
-        with col3:
-            avg_length = overall_stats["avg_summary_length"].iloc[0]
-            st.metric(
-                "Avg Summary Length",
-                f"{avg_length:.0f} chars" if avg_length else "0",
             )
         with col4:
             if not pattern_stats.empty:
@@ -230,25 +224,9 @@ def main():
     st.subheader("Property Patterns")
 
     if not patterns.empty:
-        col1, col2 = st.columns(2)
+        col1, = st.columns(1)
 
         with col1:
-            # Bar chart of top patterns
-            fig = px.bar(
-                patterns.head(15),
-                x="count",
-                y="pattern",
-                orientation="h",
-                title="Top 15 Property Patterns",
-                labels={
-                    "count": "Number of Tests",
-                    "pattern": "Pattern",
-                },
-            )
-            fig.update_layout(height=600, yaxis={"categoryorder": "total ascending"})
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col2:
             # Show pattern table
             st.markdown("**All Patterns**")
             st.dataframe(
@@ -270,25 +248,9 @@ def main():
     st.subheader("Domains")
 
     if not domains.empty:
-        col1, col2 = st.columns(2)
+        col1, = st.columns(1)
 
         with col1:
-            # Bar chart of top domains
-            fig = px.bar(
-                domains.head(15),
-                x="count",
-                y="domain",
-                orientation="h",
-                title="Top 15 Domains",
-                labels={
-                    "count": "Number of Tests",
-                    "domain": "Domain",
-                },
-            )
-            fig.update_layout(height=600, yaxis={"categoryorder": "total ascending"})
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col2:
             # Show domain table
             st.markdown("**All Domains**")
             st.dataframe(

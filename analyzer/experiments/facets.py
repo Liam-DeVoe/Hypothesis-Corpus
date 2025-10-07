@@ -40,7 +40,7 @@ Here is the summary:
 Now output your answer in English inside <answer> tags:"""
 
 
-DOMAIN_PROMPT = """Your job is to determine the technical domain or subject matter being tested based on a summary description of a property-based test. Focus on the technology, system, or problem area being tested, not on the testing strategy itself. Be clear, concise, and get to the point in exactly one phrase. Wrap each domain in <domain> tags. A summary might involve multiple domains.
+DOMAIN_PROMPT = """Your job is to determine the technical programming domain being tested based on a summary description of a property-based test. Focus on the specific technologies, data structures, algorithms, or system components being tested, not on the testing strategy itself. Be clear, concise, and get to the point in exactly one phrase. Wrap each domain in <domain> tags. A summary might involve multiple domains.
 
 <examples>
 * <domain>file format serialization</domain>
