@@ -43,7 +43,7 @@ def load_dataset(dataset_path: str) -> dict[str, Any]:
         return json.load(f)
 
 
-def load_config(config_path: str = "config.yaml") -> dict[str, Any]:
+def load_config(config_path: str = "analyzer/config.yaml") -> dict[str, Any]:
     """Load configuration from YAML file."""
     path = Path(config_path)
     if not path.exists():
@@ -78,7 +78,7 @@ def prepare_work_items(dataset: dict[str, Any]) -> list[WorkItem]:
 @click.command()
 @click.option("--dataset", "-d", type=str, help="Path to dataset JSON file")
 @click.option(
-    "--config", "-c", default="config.yaml", help="Path to configuration file"
+    "--config", "-c", default="analyzer/config.yaml", help="Path to configuration file"
 )
 @click.option("--workers", "-w", type=int, help="Number of worker processes")
 @click.option(
@@ -218,7 +218,7 @@ def main(
 
     console.print()
     console.print(
-        "[green]✨ View results in the dashboard: streamlit run dashboard/Overview.py[/green]"
+        "[green]To view results in the dashboard: streamlit run dashboard/Overview.py[/green]"
     )
 
 

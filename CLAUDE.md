@@ -11,7 +11,7 @@ This is a Property-Based Testing (PBT) Corpus Analysis system that analyzes Hypo
 ### Running Analysis
 ```bash
 # Build Docker image and run analysis
-docker build -t pbt-analyzer . && python run_analysis.py --dataset data/dataset.json --workers 4
+docker build -f analyzer/Dockerfile -t pbt-analyzer . && python run_analysis.py --dataset data/dataset.json --workers 4
 
 # Run sample test with MarkCBell/bigger repository
 python run_analysis.py --sample
@@ -76,7 +76,7 @@ The analyzer detects:
 
 ### Configuration
 
-The system uses `config.yaml` for:
+The system uses `analyzer/config.yaml` for:
 ```yaml
 database:
   path: "data/analysis.db"

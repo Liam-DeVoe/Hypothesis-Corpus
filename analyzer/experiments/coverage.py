@@ -1,6 +1,5 @@
 import shutil
 import subprocess
-import time
 from pathlib import Path
 from typing import Any
 
@@ -81,8 +80,6 @@ class CoverageExperiment(Experiment):
         if obs_dir.exists():
             shutil.rmtree(obs_dir)
 
-        print(f"Starting pytest subprocess for {node_id}", flush=True)
-        start_pytest = time.time()
         result = subprocess.run(
             ["python", "-m", "pytest", node_id, "-xvs", "--tb=short"],
             capture_output=True,
@@ -90,8 +87,6 @@ class CoverageExperiment(Experiment):
             cwd="/app",
             timeout=timeout,
         )
-        pytest_time = time.time() - start_pytest
-        print(f"[TIMING] Pytest execution: {pytest_time:.3f}s", flush=True)
 
         test_result = {
             "exit_code": result.returncode,

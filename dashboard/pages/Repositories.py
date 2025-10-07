@@ -66,7 +66,7 @@ def main():
 
     # Filter by status
     status_filter = st.selectbox(
-        "Filter by Status", ["All", "success", "failed"], index=0
+        "Status", ["All", "success", "failed"], index=0
     )
 
     if status_filter != "All":
@@ -90,7 +90,7 @@ def main():
     # Repository selection for detailed view
     if not repos.empty:
         selected_repo = st.selectbox(
-            "Select repository for detailed view", repos["repository"].tolist()
+            "Repository", repos["repository"].tolist()
         )
 
         if selected_repo:
@@ -111,7 +111,7 @@ def main():
                 )
 
                 if not node_details.empty:
-                    st.subheader(f"Tests in {selected_repo}")
+                    st.subheader(f"{selected_repo}")
 
                     st.dataframe(
                         node_details,

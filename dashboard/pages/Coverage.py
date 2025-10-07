@@ -27,6 +27,29 @@ def get_database():
     return Database("data/analysis.db")
 
 
+def shared_prefix(strings: list[str]) -> str:
+    if not strings:
+        return ""
+    if len(strings) == 1:
+        return ""
+
+    # Find the shortest string length
+    min_len = min(len(s) for s in strings)
+    if min_len == 0:
+        return ""
+
+    # Find common prefix
+    prefix = ""
+    for i in range(min_len):
+        char = strings[0][i]
+        if all(s[i] == char for s in strings):
+            prefix += char
+        else:
+            break
+
+    return prefix
+
+
 def main():
     """Coverage analysis page."""
     # Sidebar
@@ -74,8 +97,8 @@ def main():
             WHERE r.clone_status = 'success'
             GROUP BY r.id
             HAVING nodes_with_coverage > 0
-            ORDER BY total_lines_covered DESC
-            LIMIT 20
+            ORDER BY total_nodes DESC
+            LIMIT 50
             """,
             conn,
         )
@@ -114,7 +137,7 @@ def main():
     if not overall_stats.empty:
         with col1:
             st.metric(
-                "Nodes with Coverage",
+                "Node count",
                 f"{overall_stats['nodes_with_coverage'].iloc[0]:,}",
             )
         with col2:
@@ -129,20 +152,17 @@ def main():
         st.subheader("Coverage by Repository")
 
         fig = px.bar(
-            repo_coverage.head(15),
-            x="total_lines_covered",
-            y="repository",
-            orientation="h",
-            title="Top 15 Repositories by Lines Covered",
+            repo_coverage.head(50),
+            x="repository",
+            y="total_nodes",
+            title="Top 50 Repositories by Node Count",
             labels={
-                "total_lines_covered": "Total Lines Covered",
+                "total_nodes": "Total Nodes",
                 "repository": "Repository",
             },
-            color="total_lines_covered",
-            color_continuous_scale="Viridis",
-            hover_data=["total_nodes", "nodes_with_coverage", "files_covered"],
+            hover_data=["nodes_with_coverage", "total_lines_covered", "files_covered"],
         )
-        fig.update_layout(height=500)
+        fig.update_layout(height=600, xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
 
     # Coverage timeline
@@ -213,94 +233,7 @@ def main():
             avg_time = test_results["avg_execution_time"].iloc[0]
             st.metric("Avg Execution Time", f"{avg_time:.2f}s" if avg_time else "N/A")
 
-    # Cumulative coverage over test cases
-    st.subheader("Cumulative coverage")
-
-    # Get cumulative coverage data
-    with db.connection() as conn:
-        cumulative_data = pd.read_sql_query(
-            """
-            SELECT
-                t.node_id,
-                tcc.case_number,
-                tcc.file_path,
-                tcc.cumulative_count,
-                r.owner || '/' || r.name as repository
-            FROM case_coverage tcc
-            JOIN nodes t ON tcc.node_id = t.id
-            JOIN repositories r ON t.repo_id = r.id
-            ORDER BY t.id, tcc.file_path, tcc.case_number
-            """,
-            conn,
-        )
-
-    if not cumulative_data.empty:
-        # Select a test to visualize
-        test_options = cumulative_data[["repository", "node_id"]].drop_duplicates()
-        test_display = test_options.apply(
-            lambda x: f"{x['repository']} - {x['node_id'].split('::')[-1]}", axis=1
-        )
-        selected_node_idx = st.selectbox(
-            "Select node",
-            range(len(test_display)),
-            format_func=lambda x: test_display.iloc[x],
-            label_visibility="collapsed",
-        )
-
-        if selected_node_idx is not None:
-            selected_test = test_options.iloc[selected_node_idx]
-            test_data = cumulative_data[
-                (cumulative_data["repository"] == selected_test["repository"])
-                & (cumulative_data["node_id"] == selected_test["node_id"])
-            ]
-
-            if not test_data.empty:
-                # Create cumulative coverage chart
-                fig = go.Figure()
-
-                # Add a line for each file
-                for file_path in test_data["file_path"].unique():
-                    file_data = test_data[test_data["file_path"] == file_path]
-                    # Extract just the filename for display
-                    display_name = file_path.split("/")[-1]
-
-                    fig.add_trace(
-                        go.Scatter(
-                            x=file_data["case_number"],
-                            y=file_data["cumulative_count"],
-                            mode="lines+markers",
-                            name=display_name,
-                            line={"width": 2},
-                        )
-                    )
-
-                fig.update_layout(
-                    title=f"{selected_test['node_id']}",
-                    xaxis_title="Test Case Number",
-                    yaxis_title="Cumulative Lines Covered",
-                    hovermode="x unified",
-                    height=400,
-                )
-
-                st.plotly_chart(fig, use_container_width=True)
-
-                # Show summary statistics
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    total_cases = test_data["case_number"].max() + 1
-                    st.metric("Total Test Cases", total_cases)
-                with col2:
-                    final_coverage = (
-                        test_data.groupby("file_path")["cumulative_count"].max().sum()
-                    )
-                    st.metric("Final Lines Covered", final_coverage)
-                with col3:
-                    files_count = test_data["file_path"].nunique()
-                    st.metric("Files Touched", files_count)
-
-    # Detailed test coverage view
-    st.subheader("Details")
-
+    # Repository selector for both cumulative coverage and details
     selected_repo = st.selectbox(
         "Select repository",
         repo_coverage["repository"].tolist() if not repo_coverage.empty else [],
@@ -308,6 +241,70 @@ def main():
     )
 
     if selected_repo:
+        # Cumulative coverage over test cases
+        st.subheader("Cumulative coverage")
+
+        # Get cumulative coverage data
+        with db.connection() as conn:
+            cumulative_data = pd.read_sql_query(
+                """
+                SELECT
+                    t.node_id,
+                    tcc.case_number,
+                    tcc.file_path,
+                    tcc.cumulative_count,
+                    r.owner || '/' || r.name as repository
+                FROM case_coverage tcc
+                JOIN nodes t ON tcc.node_id = t.id
+                JOIN repositories r ON t.repo_id = r.id
+                WHERE r.owner || '/' || r.name = ?
+                ORDER BY t.id, tcc.file_path, tcc.case_number
+                """,
+                conn,
+                params=[selected_repo],
+            )
+
+        if not cumulative_data.empty:
+            # Create cumulative coverage chart
+            fig = go.Figure()
+
+            # Get all unique tests for this repository
+            node_ids = cumulative_data["node_id"].unique()
+            common_prefix = shared_prefix(node_ids.tolist())
+
+            for node_id in node_ids:
+                test_data = cumulative_data[cumulative_data["node_id"] == node_id]
+
+                # Aggregate coverage across all files for each case
+                aggregated_data = test_data.groupby("case_number").agg({
+                    "cumulative_count": "sum"
+                }).reset_index()
+
+                test_name = node_id.lstrip(common_prefix)
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=aggregated_data["case_number"],
+                        y=aggregated_data["cumulative_count"],
+                        mode="lines",
+                        name=test_name,
+                        line={"width": 2},
+                    )
+                )
+
+            fig.update_layout(
+                title=f"{selected_repo}",
+                xaxis_title="Input count",
+                yaxis_title="Line coverage",
+                hovermode="x unified",
+                height=600,
+                showlegend=True,
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+        # Detailed test coverage view
+        st.subheader("Details")
         with db.connection() as conn:
             # Get test coverage details for selected repository
             node_coverage_details = pd.read_sql_query(
