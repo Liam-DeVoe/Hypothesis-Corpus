@@ -1,0 +1,10 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pytest-pbt-analysis"
+version = "0.1.0"
+
+[project.entry-points.pytest11]
+pbt_analysis = "pytest_pbt_analysis"

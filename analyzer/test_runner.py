@@ -129,18 +129,12 @@ class TestRunner:
         """Run tests in container by copying files instead of mounting (avoids Mac penalty)."""
         logger.info(f"[w{self.worker_id}][{repo_name}] Running container analysis")
 
-        # Create tar archive of the work directory
-        start_tar = time.time()
         tar_stream = BytesIO()
         with tarfile.open(fileobj=tar_stream, mode="w") as tar:
             # Add all files from work_dir as /app in the container
             for item in work_dir.iterdir():
                 tar.add(item, arcname=f"/app/{item.name}")
         tar_stream.seek(0)
-        tar_time = time.time() - start_tar
-        logger.info(
-            f"[w{self.worker_id}][{repo_name}] Created tar archive in {tar_time:.3f}s"
-        )
 
         from analyzer.config import CLAUDE_CODE_OAUTH_TOKEN
 
@@ -156,14 +150,7 @@ class TestRunner:
             mem_limit="2g",
             security_opt=["no-new-privileges"],
         )
-
-        # Copy files into container
-        start_copy = time.time()
         container.put_archive("/", tar_stream.read())
-        copy_time = time.time() - start_copy
-        logger.info(
-            f"[w{self.worker_id}][{repo_name}] Copied files into container in {copy_time:.3f}s"
-        )
 
         container.start()
         result = container.wait(timeout=self.RUNNER_TIMEOUT)
@@ -173,9 +160,6 @@ class TestRunner:
             f"[w{self.worker_id}][{repo_name}] Container exit code: {result.get('StatusCode', 'unknown')}"
         )
 
-        # Extract results from container
-        start_extract = time.time()
-        # Get results.json from container
         bits, _ = container.get_archive("/app/results.json")
         tar_stream = BytesIO()
         for chunk in bits:
@@ -187,10 +171,6 @@ class TestRunner:
                 results_file = tar.extractfile("results.json")
                 if results_file:
                     results = json.loads(results_file.read().decode("utf-8"))
-                    extract_time = time.time() - start_extract
-                    logger.info(
-                        f"[w{self.worker_id}][{repo_name}] Extracted results in {extract_time:.3f}s"
-                    )
                     return results
                 else:
                     logger.error(

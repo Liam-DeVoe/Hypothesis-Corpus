@@ -76,8 +76,16 @@ class CoverageExperiment(Experiment):
         if obs_dir.exists():
             shutil.rmtree(obs_dir)
 
+        file_path = node_id.split("::")[0]
         result = subprocess.run(
-            ["python", "-m", "pytest", node_id, "-xvs", "--tb=short"],
+            [
+                "python",
+                "-m",
+                "pytest",
+                file_path,
+                "--experiment-nodeid",
+                node_id,
+            ],
             capture_output=True,
             text=True,
             cwd="/app",
