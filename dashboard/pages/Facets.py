@@ -57,6 +57,35 @@ def main():
             FROM facets s
             JOIN nodes n ON s.node_id = n.id
             JOIN repositories r ON n.repo_id = r.id
+            WHERE s.type = 'summary'
+            """,
+            conn,
+        )
+
+        # Category stats
+        category_stats = pd.read_sql_query(
+            """
+            SELECT
+                COUNT(DISTINCT node_id) as nodes_with_categories,
+                COUNT(*) as total_categories
+            FROM facets
+            WHERE type = 'category'
+            """,
+            conn,
+        )
+
+        # Top categories
+        top_categories = pd.read_sql_query(
+            """
+            SELECT
+                facet as category,
+                COUNT(*) as count,
+                COUNT(DISTINCT node_id) as unique_tests
+            FROM facets
+            WHERE type = 'category'
+            GROUP BY facet
+            ORDER BY count DESC
+            LIMIT 20
             """,
             conn,
         )
@@ -97,7 +126,7 @@ def main():
 
     # Display overall metrics
     if not overall_stats.empty and overall_stats["nodes_with_summaries"].iloc[0] > 0:
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
 
         with col1:
             st.metric(
@@ -116,11 +145,17 @@ def main():
                 f"{avg_length:.0f} chars" if avg_length else "0",
             )
         with col4:
-            max_length = overall_stats["max_summary_length"].iloc[0]
-            st.metric(
-                "Max Summary Length",
-                f"{max_length:.0f} chars" if max_length else "0",
-            )
+            if not category_stats.empty:
+                st.metric(
+                    "Total Categories",
+                    f"{category_stats['total_categories'].iloc[0]:,}",
+                )
+        with col5:
+            if not category_stats.empty:
+                st.metric(
+                    "Nodes with Categories",
+                    f"{category_stats['nodes_with_categories'].iloc[0]:,}",
+                )
     else:
         st.info(
             "No facets data available yet. Run the facets experiment to generate data."
@@ -161,6 +196,27 @@ def main():
         fig.update_layout(height=400)
         st.plotly_chart(fig, use_container_width=True)
 
+    # Category analysis
+    if not top_categories.empty:
+        st.subheader("Test Categories")
+
+        col1, = st.columns(1)
+
+        with col1:
+            # Show category table
+            st.markdown("**All Categories**")
+            st.dataframe(
+                top_categories,
+                column_config={
+                    "category": "Category",
+                    "count": st.column_config.NumberColumn("Tests", format="%d"),
+                    "unique_tests": st.column_config.NumberColumn("Unique Tests", format="%d"),
+                },
+                hide_index=True,
+                width="stretch",
+                height=468,
+            )
+
     # Repository selector for detailed view
     st.subheader("Browse Summaries")
 
@@ -176,6 +232,7 @@ def main():
             summaries = pd.read_sql_query(
                 """
                 SELECT
+                    n.id as node_db_id,
                     n.node_id as test_name,
                     n.file_path,
                     n.class_name,
@@ -187,6 +244,7 @@ def main():
                 JOIN nodes n ON s.node_id = n.id
                 JOIN repositories r ON n.repo_id = r.id
                 WHERE r.owner || '/' || r.name = ?
+                    AND s.type = 'summary'
                 ORDER BY n.node_id
                 """,
                 conn,
@@ -195,10 +253,22 @@ def main():
 
             if not summaries.empty:
                 # Display summary count for selected repo
-                st.write(f"**{len(summaries)}** summaries found")
+                st.write(f"**{len(summaries)}** tests found")
 
                 # Show each summary in an expandable section
                 for idx, row in summaries.iterrows():
+                    # Get categories for this test
+                    categories = pd.read_sql_query(
+                        """
+                        SELECT facet as category
+                        FROM facets
+                        WHERE node_id = ? AND type = 'category'
+                        ORDER BY id
+                        """,
+                        conn,
+                        params=[row['node_db_id']],
+                    )
+
                     with st.expander(f"📝 {row['test_name']}", expanded=False):
                         col1, col2 = st.columns([3, 1])
 
@@ -206,12 +276,19 @@ def main():
                             st.markdown("**Summary:**")
                             st.write(row["summary"])
 
+                            if not categories.empty:
+                                st.markdown("**Categories:**")
+                                for cat_row in categories.iterrows():
+                                    st.markdown(f"- {cat_row[1]['category']}")
+
                         with col2:
                             st.markdown("**Details:**")
                             st.write(f"File: `{row['file_path']}`")
                             if row["class_name"]:
                                 st.write(f"Class: `{row['class_name']}`")
                             st.write(f"Length: {row['summary_length']} chars")
+                            if not categories.empty:
+                                st.write(f"Categories: {len(categories)}")
                             if row["created_at"]:
                                 st.write(f"Created: {row['created_at']}")
             else:
