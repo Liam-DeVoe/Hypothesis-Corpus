@@ -1,3 +1,4 @@
+import importlib
 import json
 import sys
 import traceback
@@ -34,13 +35,19 @@ def main():
             print("ERROR: Failed to setup dependencies", flush=True)
             sys.exit(1)
 
-        # Import experiments
-        from experiment import Experiment
+        import experiment
 
-        # Get the experiment class
+        sys.modules["experiment"] = experiment
+        Experiment = experiment.Experiment
+        importlib.import_module(experiment_name)
+
         experiment_class = Experiment.experiments.get(experiment_name)
         if not experiment_class:
             print(f"ERROR: Unknown experiment: {experiment_name}", flush=True)
+            print(
+                f"Available experiments: {list(Experiment.experiments.keys())}",
+                flush=True,
+            )
             sys.exit(1)
 
         # Process all test nodes
@@ -71,7 +78,9 @@ def main():
                 node_results[experiment_name] = exp_data
             except Exception as e:
                 print(f"ERROR: Experiment failed: {e}", flush=True)
+                print(f"Traceback: {traceback.format_exc()}", flush=True)
                 node_results["error"] = str(e)
+                node_results["traceback"] = traceback.format_exc()
 
             results[node_id] = node_results
 

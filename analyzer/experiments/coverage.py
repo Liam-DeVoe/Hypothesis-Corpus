@@ -6,7 +6,8 @@ from typing import Any
 try:
     from .experiment import Experiment
 except ImportError:
-    Experiment = object
+    # When running as standalone module in container
+    from experiment import Experiment
 
 
 class CoverageExperiment(Experiment):

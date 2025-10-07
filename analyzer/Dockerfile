@@ -1,15 +1,14 @@
 FROM python:3.13
 
-# Install git
 RUN apt-get update && apt-get install -y \
     git \
     python3-dev \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+RUN npm install -g @anthropic-ai/claude-code
 WORKDIR /app
-
-# Copy analysis scripts
 COPY analyzer/ /app/analyzer/
 
 # Default command

@@ -96,8 +96,16 @@ class TestRunner:
                 work_dir / "runner.py",
             )
 
-            # Copy coverage experiment module
-            shutil.copy(experiments_dir / "coverage.py", work_dir / "coverage.py")
+            # Always copy base experiment module
+            shutil.copy(
+                experiments_dir / "experiment.py",
+                work_dir / "experiment.py",
+            )
+
+            # Copy the specific experiment module
+            experiment_file = experiments_dir / f"{experiment_name}.py"
+            assert experiment_file.exists()
+            shutil.copy(experiment_file, work_dir / f"{experiment_name}.py")
 
             # Write configuration for the container
             config = {
@@ -134,13 +142,17 @@ class TestRunner:
             f"[w{self.worker_id}][{repo_name}] Created tar archive in {tar_time:.3f}s"
         )
 
-        # Create container WITHOUT volumes (no Mac penalty!)
+        from analyzer.config import CLAUDE_CODE_OAUTH_TOKEN
+
+        environment = {
+            "HYPOTHESIS_EXPERIMENTAL_OBSERVABILITY": "1",
+            "CLAUDE_CODE_OAUTH_TOKEN": CLAUDE_CODE_OAUTH_TOKEN,
+        }
+
         container = self.docker_client.containers.create(
             self.docker_image,
             command=["python", "/app/runner.py"],
-            environment={
-                "HYPOTHESIS_EXPERIMENTAL_OBSERVABILITY": "1",
-            },
+            environment=environment,
             mem_limit="2g",
             security_opt=["no-new-privileges"],
         )

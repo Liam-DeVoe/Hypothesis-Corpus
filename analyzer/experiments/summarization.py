@@ -6,7 +6,8 @@ from typing import Any
 try:
     from .experiment import Experiment
 except ImportError:
-    Experiment = object
+    # When running as standalone module in container
+    from experiment import Experiment
 
 
 PROMPT = """Your job is to determine what this property-based test is testing. Be clear and concise and get to the point in at most two sentences (don't say "Based on the code..."), and avoid mentioning Claude/the chatbot or using bulleted lists. For example:
@@ -47,23 +48,20 @@ class SummarizationExperiment(Experiment):
         )
 
         if result.returncode != 0:
-            return {
-                "error": f"Claude Code failed with exit code {result.returncode}: {result.stderr}",
-                "summary": None,
-            }
+            raise RuntimeError(
+                f"Claude Code failed with exit code {result.returncode}: {result.stderr}"
+            )
 
         response_text = result.stdout
         match = re.search(r"<answer>(.*?)</answer>", response_text, re.DOTALL)
 
         if not match:
-            return {
-                "error": f"No <answer> tags found in response: {response_text[:200]}...",
-                "summary": None,
-            }
+            raise ValueError(
+                f"No <answer> tags found in response: {response_text[:200]}..."
+            )
 
         return {
             "summary": match.group(1).strip(),
-            "error": None,
         }
 
     @staticmethod

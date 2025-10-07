@@ -31,8 +31,8 @@ class Worker(Process):
         task_queue: Queue,
         result_queue: Queue,
         db_path: str,
-        docker_image: str = "pbt-analyzer:latest",
-        experiment_name: str = "coverage",
+        docker_image: str,
+        experiments: list[str],
     ):
         """Initialize worker process."""
         super().__init__()
@@ -41,7 +41,7 @@ class Worker(Process):
         self.result_queue = result_queue
         self.db_path = db_path
         self.docker_image = docker_image
-        self.experiment_name = experiment_name
+        self.experiments = experiments
         self.daemon = True
 
     def run(self):
@@ -52,11 +52,13 @@ class Worker(Process):
         db = Database(self.db_path)
         test_runner = TestRunner(self.docker_image, worker_id=self.worker_id)
 
-        # Load experiment
+        # Load experiments
         from .experiments import Experiment
 
-        experiment = Experiment.experiments[self.experiment_name]
-        logger.info(f"[w{self.worker_id}] Loaded experiment: {experiment.name}")
+        experiments = [Experiment.experiments[name] for name in self.experiments]
+        logger.info(
+            f"[w{self.worker_id}] Loaded experiments: {[e.name for e in experiments]}"
+        )
 
         while True:
             try:
@@ -71,18 +73,21 @@ class Worker(Process):
 
                 # Process the repository
                 result = self._process_repository(
-                    work_item, db, test_runner, experiment
+                    work_item, db, test_runner, experiments
                 )
 
                 # Send result back
-                self.result_queue.put(
-                    {
-                        "worker_id": self.worker_id,
-                        "repo_name": work_item.repo_name,
-                        "success": result.get("success", False),
-                        "data": result,
-                    }
-                )
+                result_to_send = {
+                    "worker_id": self.worker_id,
+                    "repo_name": work_item.repo_name,
+                    "success": result.get("success", False),
+                    "data": result,
+                }
+                # Flatten error to top level if present
+                if "error" in result:
+                    result_to_send["error"] = result["error"]
+
+                self.result_queue.put(result_to_send)
 
             except mp.queues.Empty:
                 continue  # No work available, keep waiting
@@ -109,7 +114,7 @@ class Worker(Process):
         work_item: WorkItem,
         db: Database,
         test_runner: TestRunner,
-        experiment,
+        experiments: list,
     ) -> dict:
         """Process a single repository."""
         owner, name = work_item.repo_name.split("/")
@@ -133,7 +138,8 @@ class Worker(Process):
                 return {"success": False, "error": error_msg}
 
             # Delete any existing data for this repository before processing
-            experiment.delete_data(db, owner, name)
+            for experiment in experiments:
+                experiment.delete_data(db, owner, name)
 
             # Add repository to database
             with db.connection() as conn:
@@ -148,119 +154,126 @@ class Worker(Process):
                 ).fetchone()
                 work_item.repo_id = result["id"]
 
-            # Run tests in container with experiment name
-            results = test_runner.process_repository(
-                work_item.repo_name,
-                work_item.node_ids,
-                work_item.requirements,
-                experiment_name=experiment.name,
-            )
+            # Run all experiments for this repository
+            all_nodes_processed = 0
+            all_nodes_failed = 0
 
-            if results is None:
-                error_msg = "No results returned from test runner"
-                with db.connection() as conn:
-                    conn.execute(
-                        "UPDATE repositories SET clone_status = ?, error_message = ? WHERE id = ?",
-                        ("failed", error_msg, work_item.repo_id),
+            for experiment in experiments:
+                logger.info(
+                    f"[w{self.worker_id}][{work_item.repo_name}] Running experiment: {experiment.name}"
+                )
+
+                # Run tests in container with experiment name
+                results = test_runner.process_repository(
+                    work_item.repo_name,
+                    work_item.node_ids,
+                    work_item.requirements,
+                    experiment_name=experiment.name,
+                )
+
+                if results is None:
+                    error_msg = f"No results returned from test runner for experiment {experiment.name}"
+                    logger.error(
+                        f"[w{self.worker_id}][{work_item.repo_name}] {error_msg}"
                     )
-                    conn.commit()
-                return {"success": False, "error": error_msg}
-
-            if "error" in results:
-                with db.connection() as conn:
-                    conn.execute(
-                        "UPDATE repositories SET clone_status = ?, error_message = ? WHERE id = ?",
-                        ("failed", results["error"], work_item.repo_id),
-                    )
-                    conn.commit()
-                return {"success": False, "error": results["error"]}
-
-            # Process each node result using the experiment
-            nodes_processed = 0
-            nodes_failed = 0
-
-            for node_id, test_results in results.items():
-                if node_id == "error":
                     continue
 
-                # Parse node_id
-                parts = node_id.split("::")
-                file_path = parts[0]
-                class_name = parts[1] if len(parts) > 1 else None
-                node_name = parts[2] if len(parts) > 2 else parts[-1]
-
-                # Add node to database
-                with db.connection() as conn:
-                    conn.execute(
-                        """
-                        INSERT OR IGNORE INTO nodes (repo_id, node_id, file_path, class_name, node_name)
-                        VALUES (?, ?, ?, ?, ?)
-                        """,
-                        (
-                            work_item.repo_id,
-                            node_id,
-                            file_path,
-                            class_name,
-                            node_name,
-                        ),
+                if "error" in results:
+                    error_msg = (
+                        f"Experiment {experiment.name} failed: {results['error']}"
                     )
-                    conn.commit()
-                    result = conn.execute(
-                        "SELECT id FROM nodes WHERE repo_id = ? AND node_id = ?",
-                        (work_item.repo_id, node_id),
-                    ).fetchone()
-                    node_db_id = result["id"]
+                    logger.error(
+                        f"[w{self.worker_id}][{work_item.repo_name}] {error_msg}"
+                    )
+                    continue
 
-                if "error" in test_results:
+                # Process each node result using the experiment
+                nodes_processed = 0
+                nodes_failed = 0
+
+                for node_id, test_results in results.items():
+                    if node_id == "error":
+                        continue
+
+                    # Parse node_id
+                    parts = node_id.split("::")
+                    file_path = parts[0]
+                    class_name = parts[1] if len(parts) > 1 else None
+                    node_name = parts[2] if len(parts) > 2 else parts[-1]
+
+                    # Add node to database
                     with db.connection() as conn:
                         conn.execute(
-                            "UPDATE nodes SET status = ?, error_message = ? WHERE id = ?",
-                            ("failed", test_results["error"], node_db_id),
+                            """
+                            INSERT OR IGNORE INTO nodes (repo_id, node_id, file_path, class_name, node_name)
+                            VALUES (?, ?, ?, ?, ?)
+                            """,
+                            (
+                                work_item.repo_id,
+                                node_id,
+                                file_path,
+                                class_name,
+                                node_name,
+                            ),
                         )
                         conn.commit()
-                    nodes_failed += 1
-                    continue
+                        result = conn.execute(
+                            "SELECT id FROM nodes WHERE repo_id = ? AND node_id = ?",
+                            (work_item.repo_id, node_id),
+                        ).fetchone()
+                        node_db_id = result["id"]
 
-                try:
-                    # Extract experiment data (now just a dict)
-                    # For coverage experiment, the data is under the "coverage" key
-                    experiment_data = test_results.get("coverage", {})
+                    if "error" in test_results:
+                        error_msg = test_results["error"]
+                        if "traceback" in test_results:
+                            error_msg = f"{error_msg}\n\nTraceback:\n{test_results['traceback']}"
 
-                    if not experiment_data:
+                        logger.error(
+                            f"[w{self.worker_id}][{work_item.repo_name}] Node {node_id} failed: {error_msg}"
+                        )
+
                         with db.connection() as conn:
                             conn.execute(
                                 "UPDATE nodes SET status = ?, error_message = ? WHERE id = ?",
-                                ("failed", "No experiment data returned", node_db_id),
+                                ("failed", error_msg, node_db_id),
                             )
                             conn.commit()
                         nodes_failed += 1
                         continue
 
-                    # Store results using experiment
-                    experiment.store_to_database(
-                        db, work_item.repo_id, node_db_id, experiment_data
-                    )
+                    try:
+                        # Extract experiment data using the experiment name as key
+                        experiment_data = test_results.get(experiment.name, {})
 
-                    with db.connection() as conn:
-                        conn.execute(
-                            "UPDATE nodes SET status = ?, error_message = ? WHERE id = ?",
-                            ("success", None, node_db_id),
-                        )
-                        conn.commit()
-                    nodes_processed += 1
+                        if not experiment_data:
+                            logger.warning(
+                                f"[w{self.worker_id}][{work_item.repo_name}] "
+                                f"No data for {node_id} in experiment {experiment.name}"
+                            )
+                            nodes_failed += 1
+                            continue
 
-                except Exception as e:
-                    logger.error(
-                        f"[w{self.worker_id}][{work_item.repo_name}] Error "
-                        f"processing {node_id}: {traceback.format_exception(e)}"
-                    )
-                    with db.connection() as conn:
-                        conn.execute(
-                            "UPDATE nodes SET status = ?, error_message = ? WHERE id = ?",
-                            ("failed", str(e), node_db_id),
+                        # Store results using experiment
+                        experiment.store_to_database(
+                            db, work_item.repo_id, node_db_id, experiment_data
                         )
-                        conn.commit()
-                    nodes_failed += 1
+
+                        nodes_processed += 1
+
+                    except Exception as e:
+                        logger.error(
+                            f"[w{self.worker_id}][{work_item.repo_name}] Error "
+                            f"processing {node_id} for {experiment.name}: {traceback.format_exception(e)}"
+                        )
+                        nodes_failed += 1
+
+                # Track totals across experiments
+                all_nodes_processed += nodes_processed
+                all_nodes_failed += nodes_failed
+                logger.info(
+                    f"[w{self.worker_id}][{work_item.repo_name}] Experiment {experiment.name}: "
+                    f"{nodes_processed} processed, {nodes_failed} failed"
+                )
 
             # Update repository status
             with db.connection() as conn:
@@ -272,9 +285,8 @@ class Worker(Process):
 
             return {
                 "success": True,
-                "nodes_processed": nodes_processed,
-                "nodes_failed": nodes_failed,
-                "results": results,
+                "nodes_processed": all_nodes_processed,
+                "nodes_failed": all_nodes_failed,
             }
 
         except Exception as e:
@@ -299,13 +311,14 @@ class WorkerPool:
         num_workers: int = 4,
         db_path: str = "data/analysis.db",
         docker_image: str = "pbt-analyzer:latest",
-        experiment_name: str = "coverage",
+        *,
+        experiments: list[str],
     ):
         """Initialize worker pool."""
         self.num_workers = num_workers
         self.db_path = db_path
         self.docker_image = docker_image
-        self.experiment_name = experiment_name
+        self.experiments = experiments
         self.task_queue = mp.Queue(maxsize=100)
         self.result_queue = mp.Queue()
         self.workers = []
@@ -322,7 +335,7 @@ class WorkerPool:
                 self.result_queue,
                 self.db_path,
                 self.docker_image,
-                self.experiment_name,
+                self.experiments,
             )
             worker.start()
             self.workers.append(worker)

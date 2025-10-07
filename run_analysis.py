@@ -89,9 +89,8 @@ def prepare_work_items(dataset: dict[str, Any]) -> list[WorkItem]:
 @click.option(
     "--experiment",
     "-e",
-    type=str,
-    default="coverage",
-    help="Experiment to run (coverage)",
+    multiple=True,
+    help="Experiments to run (default: all)",
 )
 def main(
     dataset: str,
@@ -100,14 +99,16 @@ def main(
     sample: bool,
     limit: int,
     docker_image: str,
-    experiment: str,
+    experiment: tuple[str, ...],
 ):
     """Run PBT corpus analysis."""
 
     console.print()
 
-    exp = Experiment.experiments[experiment]
-    console.print(f"[bold]Experiment:[/bold] [green]{exp.name}[/green]")
+    experiments = (
+        list(experiment) if experiment else list(Experiment.experiments.keys())
+    )
+    console.print(f"[bold]Experiments:[/bold] [green]{', '.join(experiments)}[/green]")
     console.print()
 
     # Load configuration
@@ -128,6 +129,7 @@ def main(
                 "requirements.txt": "attrs==24.2.0\nexceptiongroup==1.2.2\nhypothesis==6.112.5\niniconfig==2.0.0\npackaging==24.1\npillow==11.0.0\npluggy==1.5.0\npytest==8.2.2\nsortedcontainers==2.4.0\ntomli==2.0.2",
             }
         }
+        workers = 1
     elif dataset:
         dataset_data = load_dataset(dataset)
     else:
@@ -156,7 +158,7 @@ def main(
             INSERT INTO analysis_runs (configuration, total_repos, experiment_name)
             VALUES (?, ?, ?)
         """,
-            (json.dumps(cfg), len(work_items), experiment),
+            (json.dumps(cfg), len(work_items), ",".join(experiments)),
         )
         run_id = cursor.lastrowid
         conn.commit()
@@ -168,7 +170,7 @@ def main(
         num_workers=cfg["workers"]["max_workers"],
         db_path=cfg["database"]["path"],
         docker_image=cfg["docker"]["image"],
-        experiment_name=experiment,
+        experiments=experiments,
     ) as pool:
         for item in work_items:
             pool.submit(item)
@@ -186,9 +188,8 @@ def main(
                     )
                 else:
                     failed += 1
-                    error = result.get("error", "Unknown error")
                     console.print(
-                        f"[w{result['worker_id']}] {result['repo_name']}: [red]{error}[/red]"
+                        f"[w{result['worker_id']}] {result['repo_name']}: [red]{result['error']}[/red]"
                     )
 
                 console.print(
