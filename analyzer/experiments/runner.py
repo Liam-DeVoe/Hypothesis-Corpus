@@ -34,8 +34,14 @@ def main():
             print("ERROR: Failed to setup dependencies", flush=True)
             sys.exit(1)
 
-        # Import coverage experiment
-        from coverage import CoverageExperiment
+        # Import experiments
+        from experiment import Experiment
+
+        # Get the experiment class
+        experiment_class = Experiment.experiments.get(experiment_name)
+        if not experiment_class:
+            print(f"ERROR: Unknown experiment: {experiment_name}", flush=True)
+            sys.exit(1)
 
         # Process all test nodes
         results = {}
@@ -57,12 +63,12 @@ def main():
 
             node_results = {"file_path": str(file_path)}
 
-            # Run coverage experiment
+            # Run experiment
             print(f"Running {experiment_name} experiment...", flush=True)
 
             try:
-                exp_data = CoverageExperiment.run(file_path, node_id)
-                node_results["coverage"] = exp_data
+                exp_data = experiment_class.run(file_path, node_id)
+                node_results[experiment_name] = exp_data
             except Exception as e:
                 print(f"ERROR: Experiment failed: {e}", flush=True)
                 node_results["error"] = str(e)

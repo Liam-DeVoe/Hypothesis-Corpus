@@ -35,12 +35,5 @@ class Experiment(ABC):
     @staticmethod
     @abstractmethod
     def store_to_database(db: Any, repo_id: int, node_id: int, data: dict[str, Any]):
-        """Store experiment results to the database.
-
-        Args:
-            db: Database instance
-            repo_id: Repository ID
-            test_id: Test ID
-            data: Dictionary containing experiment data
-        """
+        """Store experiment results to the database."""
         pass

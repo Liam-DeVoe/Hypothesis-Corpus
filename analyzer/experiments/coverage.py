@@ -15,7 +15,6 @@ class CoverageExperiment(Experiment):
     @staticmethod
     def get_schema_sql() -> str:
         return """
-            -- Coverage information for tests
             CREATE TABLE IF NOT EXISTS node_coverage (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 node_id INTEGER NOT NULL,
@@ -26,7 +25,6 @@ class CoverageExperiment(Experiment):
                 FOREIGN KEY (node_id) REFERENCES nodes(id)
             );
 
-            -- Test execution results
             CREATE TABLE IF NOT EXISTS node_executions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 node_id INTEGER NOT NULL,
@@ -40,7 +38,6 @@ class CoverageExperiment(Experiment):
                 FOREIGN KEY (node_id) REFERENCES nodes(id)
             );
 
-            -- Observability metadata
             CREATE TABLE IF NOT EXISTS observability_data (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 node_id INTEGER NOT NULL,
@@ -50,7 +47,6 @@ class CoverageExperiment(Experiment):
                 FOREIGN KEY (node_id) REFERENCES nodes(id)
             );
 
-            -- Per-test-case coverage tracking for cumulative analysis
             CREATE TABLE IF NOT EXISTS case_coverage (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 node_id INTEGER NOT NULL,
@@ -63,7 +59,6 @@ class CoverageExperiment(Experiment):
                 FOREIGN KEY (node_id) REFERENCES nodes(id)
             );
 
-            -- Create indexes for better query performance
             CREATE INDEX IF NOT EXISTS idx_coverage_test ON node_coverage(node_id);
             CREATE INDEX IF NOT EXISTS idx_executions_test ON node_executions(node_id);
             CREATE INDEX IF NOT EXISTS idx_observability_test ON observability_data(node_id);
@@ -196,32 +191,21 @@ class CoverageExperiment(Experiment):
 
     @staticmethod
     def delete_data(db: Any, owner: str, name: str):
-        """Delete coverage data."""
-        import logging
-
-        logger = logging.getLogger(__name__)
-
         with db.connection() as conn:
-            # Get repository ID
             result = conn.execute(
                 "SELECT id FROM repositories WHERE owner = ? AND name = ?",
                 (owner, name),
             ).fetchone()
-
             if not result:
-                logger.debug(f"No existing data found for {owner}/{name}")
                 return
 
             repo_id = result["id"]
-
-            # Get all node IDs for this repository
             node_ids = conn.execute(
                 "SELECT id FROM nodes WHERE repo_id = ?", (repo_id,)
             ).fetchall()
             node_id_list = [row["id"] for row in node_ids]
 
             if node_id_list:
-                # Delete from coverage tables
                 placeholders = ",".join("?" * len(node_id_list))
                 tables = [
                     "node_executions",
@@ -237,4 +221,3 @@ class CoverageExperiment(Experiment):
                     )
 
             conn.commit()
-            logger.info(f"[{owner}/{name}] deleted coverage data")
