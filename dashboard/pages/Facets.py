@@ -13,7 +13,7 @@ from analyzer.database import Database
 
 # Page configuration
 st.set_page_config(
-    page_title="Summarization Analysis",
+    page_title="Facets Analysis",
     page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded",
@@ -27,7 +27,7 @@ def get_database():
 
 
 def main():
-    """Summarization analysis page."""
+    """Facets analysis page."""
     # Sidebar
     with st.sidebar:
         # Refresh button
@@ -39,11 +39,11 @@ def main():
         st.markdown("---")
         st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-    st.header("Test Summarization")
+    st.header("Test Facets")
 
     db = get_database()
 
-    # Get overall summarization statistics
+    # Get overall facets statistics
     with db.connection() as conn:
         # Overall stats
         overall_stats = pd.read_sql_query(
@@ -54,7 +54,7 @@ def main():
                 AVG(LENGTH(s.summary)) as avg_summary_length,
                 MIN(LENGTH(s.summary)) as min_summary_length,
                 MAX(LENGTH(s.summary)) as max_summary_length
-            FROM summarization s
+            FROM facets s
             JOIN nodes n ON s.node_id = n.id
             JOIN repositories r ON n.repo_id = r.id
             """,
@@ -71,7 +71,7 @@ def main():
                 AVG(LENGTH(s.summary)) as avg_summary_length
             FROM repositories r
             LEFT JOIN nodes n ON r.id = n.repo_id
-            LEFT JOIN summarization s ON n.id = s.node_id
+            LEFT JOIN facets s ON n.id = s.node_id
             WHERE r.clone_status = 'success'
             GROUP BY r.id
             HAVING nodes_with_summaries > 0
@@ -88,7 +88,7 @@ def main():
                 DATE(s.created_at) as date,
                 COUNT(*) as summaries_created,
                 AVG(LENGTH(s.summary)) as avg_length
-            FROM summarization s
+            FROM facets s
             GROUP BY DATE(s.created_at)
             ORDER BY date
             """,
@@ -101,7 +101,7 @@ def main():
 
         with col1:
             st.metric(
-                "Nodes Summarized",
+                "Nodes Analyzed",
                 f"{overall_stats['nodes_with_summaries'].iloc[0]:,}",
             )
         with col2:
@@ -122,7 +122,9 @@ def main():
                 f"{max_length:.0f} chars" if max_length else "0",
             )
     else:
-        st.info("No summarization data available yet. Run the summarization experiment to generate data.")
+        st.info(
+            "No facets data available yet. Run the facets experiment to generate data."
+        )
         return
 
     if not repo_summaries.empty:
@@ -181,7 +183,7 @@ def main():
                     s.summary,
                     LENGTH(s.summary) as summary_length,
                     s.created_at
-                FROM summarization s
+                FROM facets s
                 JOIN nodes n ON s.node_id = n.id
                 JOIN repositories r ON n.repo_id = r.id
                 WHERE r.owner || '/' || r.name = ?

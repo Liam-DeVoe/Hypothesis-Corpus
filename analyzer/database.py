@@ -13,8 +13,13 @@ class Database:
         """Initialize database connection."""
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._run_migrations()
         self._init_core_schema()
         self._init_experiment_schemas()
+
+    def _run_migrations(self):
+        """Run any database migrations."""
+        pass
 
     def _init_core_schema(self):
         """Create core database schema shared by all experiments."""
