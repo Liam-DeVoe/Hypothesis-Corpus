@@ -28,7 +28,8 @@ class FacetsExperiment(Experiment):
             CREATE TABLE IF NOT EXISTS facets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 node_id INTEGER NOT NULL,
-                summary TEXT NOT NULL,
+                type TEXT NOT NULL,
+                facet TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (node_id) REFERENCES nodes(id)
             );
@@ -70,11 +71,12 @@ class FacetsExperiment(Experiment):
         with db.connection() as conn:
             conn.execute(
                 """
-                INSERT INTO facets (node_id, summary)
-                VALUES (?, ?)
+                INSERT INTO facets (node_id, type, facet)
+                VALUES (?, ?, ?)
                 """,
                 (
                     node_id,
+                    "summary",
                     data.get("summary"),
                 ),
             )
@@ -82,28 +84,4 @@ class FacetsExperiment(Experiment):
 
     @staticmethod
     def delete_data(db: Any, owner: str, name: str):
-        """Delete facets data."""
-        with db.connection() as conn:
-            result = conn.execute(
-                "SELECT id FROM repositories WHERE owner = ? AND name = ?",
-                (owner, name),
-            ).fetchone()
-
-            if not result:
-                return
-
-            repo_id = result["id"]
-
-            node_ids = conn.execute(
-                "SELECT id FROM nodes WHERE repo_id = ?", (repo_id,)
-            ).fetchall()
-            node_id_list = [row["id"] for row in node_ids]
-
-            if node_id_list:
-                placeholders = ",".join("?" * len(node_id_list))
-                conn.execute(
-                    f"DELETE FROM facets WHERE node_id IN ({placeholders})",
-                    node_id_list,
-                )
-
-            conn.commit()
+        db.delete_experiment_data(owner, name, ["facets"])

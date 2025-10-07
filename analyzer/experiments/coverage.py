@@ -192,33 +192,8 @@ class CoverageExperiment(Experiment):
 
     @staticmethod
     def delete_data(db: Any, owner: str, name: str):
-        with db.connection() as conn:
-            result = conn.execute(
-                "SELECT id FROM repositories WHERE owner = ? AND name = ?",
-                (owner, name),
-            ).fetchone()
-            if not result:
-                return
-
-            repo_id = result["id"]
-            node_ids = conn.execute(
-                "SELECT id FROM nodes WHERE repo_id = ?", (repo_id,)
-            ).fetchall()
-            node_id_list = [row["id"] for row in node_ids]
-
-            if node_id_list:
-                placeholders = ",".join("?" * len(node_id_list))
-                tables = [
-                    "node_executions",
-                    "node_coverage",
-                    "case_coverage",
-                    "observability_data",
-                ]
-
-                for table in tables:
-                    conn.execute(
-                        f"DELETE FROM {table} WHERE node_id IN ({placeholders})",
-                        node_id_list,
-                    )
-
-            conn.commit()
+        db.delete_experiment_data(
+            owner,
+            name,
+            ["node_executions", "node_coverage", "case_coverage", "observability_data"],
+        )

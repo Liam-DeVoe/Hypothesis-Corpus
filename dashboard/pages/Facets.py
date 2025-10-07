@@ -51,9 +51,9 @@ def main():
             SELECT
                 COUNT(DISTINCT s.node_id) as nodes_with_summaries,
                 COUNT(DISTINCT r.id) as repos_with_summaries,
-                AVG(LENGTH(s.summary)) as avg_summary_length,
-                MIN(LENGTH(s.summary)) as min_summary_length,
-                MAX(LENGTH(s.summary)) as max_summary_length
+                AVG(LENGTH(s.facet)) as avg_summary_length,
+                MIN(LENGTH(s.facet)) as min_summary_length,
+                MAX(LENGTH(s.facet)) as max_summary_length
             FROM facets s
             JOIN nodes n ON s.node_id = n.id
             JOIN repositories r ON n.repo_id = r.id
@@ -68,7 +68,7 @@ def main():
                 r.owner || '/' || r.name as repository,
                 COUNT(DISTINCT n.id) as total_nodes,
                 COUNT(DISTINCT s.node_id) as nodes_with_summaries,
-                AVG(LENGTH(s.summary)) as avg_summary_length
+                AVG(LENGTH(s.facet)) as avg_summary_length
             FROM repositories r
             LEFT JOIN nodes n ON r.id = n.repo_id
             LEFT JOIN facets s ON n.id = s.node_id
@@ -87,7 +87,7 @@ def main():
             SELECT
                 DATE(s.created_at) as date,
                 COUNT(*) as summaries_created,
-                AVG(LENGTH(s.summary)) as avg_length
+                AVG(LENGTH(s.facet)) as avg_length
             FROM facets s
             GROUP BY DATE(s.created_at)
             ORDER BY date
@@ -180,8 +180,8 @@ def main():
                     n.file_path,
                     n.class_name,
                     n.node_name,
-                    s.summary,
-                    LENGTH(s.summary) as summary_length,
+                    s.facet as summary,
+                    LENGTH(s.facet) as summary_length,
                     s.created_at
                 FROM facets s
                 JOIN nodes n ON s.node_id = n.id

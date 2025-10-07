@@ -18,7 +18,6 @@ class Database:
         self._init_experiment_schemas()
 
     def _run_migrations(self):
-        """Run any database migrations."""
         pass
 
     def _init_core_schema(self):
@@ -90,3 +89,29 @@ class Database:
             yield conn
         finally:
             conn.close()
+
+    def delete_experiment_data(self, owner: str, name: str, tables: list[str]):
+        with self.connection() as conn:
+            result = conn.execute(
+                "SELECT id FROM repositories WHERE owner = ? AND name = ?",
+                (owner, name),
+            ).fetchone()
+
+            if not result:
+                return
+
+            repo_id = result["id"]
+            node_ids = conn.execute(
+                "SELECT id FROM nodes WHERE repo_id = ?", (repo_id,)
+            ).fetchall()
+            node_id_list = [row["id"] for row in node_ids]
+
+            if node_id_list:
+                placeholders = ",".join("?" * len(node_id_list))
+                for table in tables:
+                    conn.execute(
+                        f"DELETE FROM {table} WHERE node_id IN ({placeholders})",
+                        node_id_list,
+                    )
+
+            conn.commit()
