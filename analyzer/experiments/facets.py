@@ -10,21 +10,46 @@ except ImportError:
     from experiment import Experiment
 
 
-SUMMARY_PROMPT = """Your job is to determine what this property-based test is testing. Be clear, concise, get to the point in at most two sentences (don't say "Based on the code..."), and avoid mentioning Claude/the chatbot or using bulleted lists. For example:
+SUMMARY_PROMPT = """Your job is to summarize what this property-based test is testing. Describe both the testing pattern/relationship being verified and the domain/technology being tested. Be clear, concise, and get to the point in at most two sentences. Focus on what is being tested and how, not on implementation details.
+
 <examples>
-* This test verifies that a DFA with a maximum accepted string length of n returns at least 1 for count_strings on length n.
-* This test verifies that reversing the bits of an integer twice (with a specified bit width n) returns the original integer, ensuring the bit reversal operation is its own inverse.
-* This test verifies that the BytestringProvider correctly implements the provider contract by ensuring all drawn values satisfy their constraints and that forcing a choice to a specific value (the zeroth index value) produces the expected result when re-drawn.
+* This test verifies that a DFA correctly counts accepted strings at the maximum length boundary by checking that count_strings returns at least 1 for strings of length n when the maximum is n.
+* This test verifies that bit reversal operations are inverses by checking that reversing the bits of an integer twice (with a specified bit width) returns the original integer.
+* This test verifies that BytestringProvider implements the provider contract correctly by checking that drawn values satisfy constraints and that forcing a choice produces the expected result when re-drawn.
+* This test verifies that JSON serialization and deserialization are inverses by checking that parsing the serialized output of an object returns an equivalent object.
 </examples>
+
 If necessary, explore the context of the test and codebase before answering. The test is located at {nodeid}. Output your answer in English inside <answer> tags."""
 
-CATEGORY_PROMPT = """Your job is to determine a general category for a summary description of a property-based test. Be clear, concise, and get to the point in exactly one phrase. The categories should be general, without references to specifics of the codebase. Wrap each category in <category> tags. A summary might have multiple categories.
+PATTERN_PROMPT = """Your job is to determine the kind of property being tested based on a summary description of a property-based test. Focus on the general testing pattern or relationship being verified, not on the specific domain or technologies involved. Be clear, concise, and get to the point in exactly one phrase. Avoid referencing specifics of the codebase or domain. Avoid overly general descriptions like "tests that behavior is correct". Wrap each pattern in <property_pattern> tags. A summary might have multiple patterns.
 
 <examples>
-* <category>This test checks that two functions are inverses</category>
-* <category>This test compares a reference implementation to the implementation in the code</category>
-* <category>This test checks that a function correctly returns False where appropriate</category>
-* <category>This test checks that two functions are inverses</category><category>This test checks that an error is raised when the input is modified</category>
+* <property_pattern>inverse relationship between two functions</property_pattern>
+* <property_pattern>equivalence with reference implementation</property_pattern>
+* <property_pattern>correct boolean return value for specific conditions</property_pattern>
+* <property_pattern>inverse relationship between two functions</property_pattern><property_pattern>error raised on invalid input</property_pattern>
+* <property_pattern>idempotence of repeated operations</property_pattern>
+* <property_pattern>invariant preservation across transformations</property_pattern>
+</examples>
+
+Here is the summary:
+<summary>
+{summary}
+</summary>
+
+Now output your answer in English inside <answer> tags:"""
+
+
+DOMAIN_PROMPT = """Your job is to determine the technical domain or subject matter being tested based on a summary description of a property-based test. Focus on the technology, system, or problem area being tested, not on the testing strategy itself. Be clear, concise, and get to the point in exactly one phrase. Wrap each domain in <domain> tags. A summary might involve multiple domains.
+
+<examples>
+* <domain>file format serialization</domain>
+* <domain>cryptographic operations</domain>
+* <domain>stateful REST API interactions</domain>
+* <domain>file system operations</domain>
+* <domain>datetime arithmetic</domain><domain>timezone handling</domain>
+* <domain>JSON schema validation</domain>
+* <domain>concurrent data structures</domain>
 </examples>
 
 Here is the summary:
@@ -83,23 +108,37 @@ class FacetsExperiment(Experiment):
         return FacetsExperiment._run_claude(prompt)
 
     @staticmethod
-    def _run_category(summary: str) -> list[str]:
-        """Generate category facet from a summary."""
-        prompt = CATEGORY_PROMPT.format(summary=summary)
+    def _run_pattern(summary: str) -> list[str]:
+        """Generate pattern facets from a summary."""
+        prompt = PATTERN_PROMPT.format(summary=summary)
         answer = FacetsExperiment._run_claude(prompt)
-        categories = re.findall(r"<category>(.*?)</category>", answer, re.DOTALL)
-        return [cat.strip() for cat in categories]
+        patterns = re.findall(
+            r"<property_pattern>(.*?)</property_pattern>", answer, re.DOTALL
+        )
+        return [pattern.strip() for pattern in patterns]
+
+    @staticmethod
+    def _run_domain(summary: str) -> list[str]:
+        """Generate domain facets from a summary."""
+        prompt = DOMAIN_PROMPT.format(summary=summary)
+        answer = FacetsExperiment._run_claude(prompt)
+        domains = re.findall(r"<domain>(.*?)</domain>", answer, re.DOTALL)
+        return [domain.strip() for domain in domains]
 
     @staticmethod
     def run(file_path: Path, node_id: str) -> dict[str, Any]:
-        """Run the facets experiment - generates both summary and category facets."""
+        """Run the facets experiment - generates summary, pattern, and domain facets."""
         # First, generate the summary
         summary = FacetsExperiment._run_summary(node_id)
-        categories = FacetsExperiment._run_category(summary)
+
+        # Then, generate patterns and domains from the summary
+        patterns = FacetsExperiment._run_pattern(summary)
+        domains = FacetsExperiment._run_domain(summary)
 
         return {
             "summary": summary,
-            "categories": categories,
+            "patterns": patterns,
+            "domains": domains,
         }
 
     @staticmethod
@@ -117,7 +156,7 @@ class FacetsExperiment(Experiment):
                 ),
             )
 
-            for category in data["categories"]:
+            for pattern in data["patterns"]:
                 conn.execute(
                     """
                     INSERT INTO facets (node_id, type, facet)
@@ -125,8 +164,21 @@ class FacetsExperiment(Experiment):
                     """,
                     (
                         node_id,
-                        "category",
-                        category,
+                        "pattern",
+                        pattern,
+                    ),
+                )
+
+            for domain in data["domains"]:
+                conn.execute(
+                    """
+                    INSERT INTO facets (node_id, type, facet)
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        node_id,
+                        "domain",
+                        domain,
                     ),
                 )
 

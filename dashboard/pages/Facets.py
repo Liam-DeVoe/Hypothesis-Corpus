@@ -62,30 +62,54 @@ def main():
             conn,
         )
 
-        # Category stats
-        category_stats = pd.read_sql_query(
+        # Pattern stats
+        pattern_stats = pd.read_sql_query(
             """
             SELECT
-                COUNT(DISTINCT node_id) as nodes_with_categories,
-                COUNT(*) as total_categories
+                COUNT(DISTINCT node_id) as nodes_with_patterns,
+                COUNT(*) as total_patterns
             FROM facets
-            WHERE type = 'category'
+            WHERE type = 'pattern'
             """,
             conn,
         )
 
-        # Top categories
-        top_categories = pd.read_sql_query(
+        patterns = pd.read_sql_query(
             """
             SELECT
-                facet as category,
+                facet as pattern,
                 COUNT(*) as count,
                 COUNT(DISTINCT node_id) as unique_tests
             FROM facets
-            WHERE type = 'category'
+            WHERE type = 'pattern'
             GROUP BY facet
             ORDER BY count DESC
-            LIMIT 20
+            """,
+            conn,
+        )
+
+        # Domain stats
+        domain_stats = pd.read_sql_query(
+            """
+            SELECT
+                COUNT(DISTINCT node_id) as nodes_with_domains,
+                COUNT(*) as total_domains
+            FROM facets
+            WHERE type = 'domain'
+            """,
+            conn,
+        )
+
+        domains = pd.read_sql_query(
+            """
+            SELECT
+                facet as domain,
+                COUNT(*) as count,
+                COUNT(DISTINCT node_id) as unique_tests
+            FROM facets
+            WHERE type = 'domain'
+            GROUP BY facet
+            ORDER BY count DESC
             """,
             conn,
         )
@@ -126,7 +150,7 @@ def main():
 
     # Display overall metrics
     if not overall_stats.empty and overall_stats["nodes_with_summaries"].iloc[0] > 0:
-        col1, col2, col3, col4, col5 = st.columns(5)
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
 
         with col1:
             st.metric(
@@ -145,16 +169,22 @@ def main():
                 f"{avg_length:.0f} chars" if avg_length else "0",
             )
         with col4:
-            if not category_stats.empty:
+            if not pattern_stats.empty:
                 st.metric(
-                    "Total Categories",
-                    f"{category_stats['total_categories'].iloc[0]:,}",
+                    "Total Patterns",
+                    f"{pattern_stats['total_patterns'].iloc[0]:,}",
                 )
         with col5:
-            if not category_stats.empty:
+            if not pattern_stats.empty:
                 st.metric(
-                    "Nodes with Categories",
-                    f"{category_stats['nodes_with_categories'].iloc[0]:,}",
+                    "Unique Patterns",
+                    f"{len(patterns):,}",
+                )
+        with col6:
+            if not domain_stats.empty:
+                st.metric(
+                    "Unique Domains",
+                    f"{len(domains):,}",
                 )
     else:
         st.info(
@@ -196,29 +226,89 @@ def main():
         fig.update_layout(height=400)
         st.plotly_chart(fig, use_container_width=True)
 
-    # Category analysis
-    if not top_categories.empty:
-        st.subheader("Test Categories")
+    # Pattern and Domain analysis
+    st.subheader("Property Patterns")
 
-        col1, = st.columns(1)
+    if not patterns.empty:
+        col1, col2 = st.columns(2)
 
         with col1:
-            # Show category table
-            st.markdown("**All Categories**")
+            # Bar chart of top patterns
+            fig = px.bar(
+                patterns.head(15),
+                x="count",
+                y="pattern",
+                orientation="h",
+                title="Top 15 Property Patterns",
+                labels={
+                    "count": "Number of Tests",
+                    "pattern": "Pattern",
+                },
+            )
+            fig.update_layout(height=600, yaxis={"categoryorder": "total ascending"})
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            # Show pattern table
+            st.markdown("**All Patterns**")
             st.dataframe(
-                top_categories,
+                patterns,
                 column_config={
-                    "category": "Category",
+                    "pattern": "Pattern",
                     "count": st.column_config.NumberColumn("Tests", format="%d"),
-                    "unique_tests": st.column_config.NumberColumn("Unique Tests", format="%d"),
+                    "unique_tests": st.column_config.NumberColumn(
+                        "Unique Tests", format="%d"
+                    ),
                 },
                 hide_index=True,
                 width="stretch",
-                height=468,
+                height=568,
             )
+    else:
+        st.info("No pattern data available yet.")
+
+    st.subheader("Domains")
+
+    if not domains.empty:
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Bar chart of top domains
+            fig = px.bar(
+                domains.head(15),
+                x="count",
+                y="domain",
+                orientation="h",
+                title="Top 15 Domains",
+                labels={
+                    "count": "Number of Tests",
+                    "domain": "Domain",
+                },
+            )
+            fig.update_layout(height=600, yaxis={"categoryorder": "total ascending"})
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            # Show domain table
+            st.markdown("**All Domains**")
+            st.dataframe(
+                domains,
+                column_config={
+                    "domain": "Domain",
+                    "count": st.column_config.NumberColumn("Tests", format="%d"),
+                    "unique_tests": st.column_config.NumberColumn(
+                        "Unique Tests", format="%d"
+                    ),
+                },
+                hide_index=True,
+                width="stretch",
+                height=568,
+            )
+    else:
+        st.info("No domain data available yet.")
 
     # Repository selector for detailed view
-    st.subheader("Browse Summaries")
+    st.subheader("Summaries")
 
     selected_repo = st.selectbox(
         "Select repository",
@@ -257,16 +347,28 @@ def main():
 
                 # Show each summary in an expandable section
                 for idx, row in summaries.iterrows():
-                    # Get categories for this test
-                    categories = pd.read_sql_query(
+                    # Get patterns for this test
+                    patterns_for_test = pd.read_sql_query(
                         """
-                        SELECT facet as category
+                        SELECT facet as pattern
                         FROM facets
-                        WHERE node_id = ? AND type = 'category'
+                        WHERE node_id = ? AND type = 'pattern'
                         ORDER BY id
                         """,
                         conn,
-                        params=[row['node_db_id']],
+                        params=[row["node_db_id"]],
+                    )
+
+                    # Get domains for this test
+                    domains_for_test = pd.read_sql_query(
+                        """
+                        SELECT facet as domain
+                        FROM facets
+                        WHERE node_id = ? AND type = 'domain'
+                        ORDER BY id
+                        """,
+                        conn,
+                        params=[row["node_db_id"]],
                     )
 
                     with st.expander(f"📝 {row['test_name']}", expanded=False):
@@ -276,10 +378,15 @@ def main():
                             st.markdown("**Summary:**")
                             st.write(row["summary"])
 
-                            if not categories.empty:
-                                st.markdown("**Categories:**")
-                                for cat_row in categories.iterrows():
-                                    st.markdown(f"- {cat_row[1]['category']}")
+                            if not patterns_for_test.empty:
+                                st.markdown("**Property Patterns:**")
+                                for pat_row in patterns_for_test.iterrows():
+                                    st.markdown(f"- {pat_row[1]['pattern']}")
+
+                            if not domains_for_test.empty:
+                                st.markdown("**Domains:**")
+                                for dom_row in domains_for_test.iterrows():
+                                    st.markdown(f"- {dom_row[1]['domain']}")
 
                         with col2:
                             st.markdown("**Details:**")
@@ -287,8 +394,10 @@ def main():
                             if row["class_name"]:
                                 st.write(f"Class: `{row['class_name']}`")
                             st.write(f"Length: {row['summary_length']} chars")
-                            if not categories.empty:
-                                st.write(f"Categories: {len(categories)}")
+                            if not patterns_for_test.empty:
+                                st.write(f"Patterns: {len(patterns_for_test)}")
+                            if not domains_for_test.empty:
+                                st.write(f"Domains: {len(domains_for_test)}")
                             if row["created_at"]:
                                 st.write(f"Created: {row['created_at']}")
             else:
