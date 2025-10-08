@@ -18,10 +18,12 @@ from datasketch import MinHash
 num_perm = 128
 # skip hashing files with fewer lines than this
 min_file_lines = 25
-# if both 80% of files from repo1 are in repo2, and 80% of files from repo2 are
-# in repo1, count it as a dupliate.
+# if both:
 #
-# The one with the higher start count will be kept.
+# * 80% of files from repo1 are in repo2
+# * 80% of files from repo2 are in repo1
+#
+# then count it as a dupliate. We keep the one with a higher star count.
 duplicate_overlap_threshold = 0.8
 
 
