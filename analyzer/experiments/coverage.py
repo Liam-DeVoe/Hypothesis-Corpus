@@ -12,6 +12,7 @@ except ImportError:
 
 class CoverageExperiment(Experiment):
     name = "coverage"
+    max_examples = 500
 
     @staticmethod
     def get_schema_sql() -> str:
@@ -68,7 +69,9 @@ class CoverageExperiment(Experiment):
         """
 
     @staticmethod
-    def run(file_path, node_id: str, timeout: int = 300) -> dict[str, Any]:
+    def run(
+        file_path, node_id: str, timeout: int = 300, *, debug: bool
+    ) -> dict[str, Any]:
         from utils import parse_observability_data
 
         # Clear any previous observability data
@@ -77,20 +80,35 @@ class CoverageExperiment(Experiment):
             shutil.rmtree(obs_dir)
 
         file_path = node_id.split("::")[0]
+        pytest_args = [
+            "python",
+            "-m",
+            "pytest",
+            file_path,
+            "--experiment-nodeid",
+            node_id,
+            "--pbt-max-examples",
+            str(CoverageExperiment.max_examples),
+        ]
+
+        if debug:
+            pytest_args += ["-s", "-v"]
+
         result = subprocess.run(
-            [
-                "python",
-                "-m",
-                "pytest",
-                file_path,
-                "--experiment-nodeid",
-                node_id,
-            ],
+            pytest_args,
             capture_output=True,
             text=True,
             cwd="/app",
             timeout=timeout,
         )
+
+        if debug:
+            if result.stdout:
+                print("[CoverageExperiment] Pytest stdout:", flush=True)
+                print(result.stdout, flush=True)
+            if result.stderr:
+                print("[CoverageExperiment] Pytest stderr:", flush=True)
+                print(result.stderr, flush=True)
 
         test_result = {
             "exit_code": result.returncode,

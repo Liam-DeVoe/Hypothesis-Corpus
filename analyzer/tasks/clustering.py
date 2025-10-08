@@ -112,9 +112,11 @@ class ClusteringTask(Task):
 
         response = result.stdout
         name = re.search(r"<name>(.*?)</name>", response, re.DOTALL).group(1).strip()
-        description = re.search(
-            r"<description>(.*?)</description>", response, re.DOTALL
-        ).group(1).strip()
+        description = (
+            re.search(r"<description>(.*?)</description>", response, re.DOTALL)
+            .group(1)
+            .strip()
+        )
         return name, description
 
     @staticmethod
@@ -156,8 +158,12 @@ class ClusteringTask(Task):
 
         # Get embedding model and encode all texts in batch for efficiency
         model = ClusteringTask._get_embedding_model()
-        embeddings = model.encode(facet_texts, convert_to_numpy=True, show_progress_bar=True)
-        logger.info(f"Generated {len(embeddings)} embeddings of dimension {embeddings.shape[1]}")
+        embeddings = model.encode(
+            facet_texts, convert_to_numpy=True, show_progress_bar=True
+        )
+        logger.info(
+            f"Generated {len(embeddings)} embeddings of dimension {embeddings.shape[1]}"
+        )
 
         # Determine optimal k
         k = ClusteringTask._determine_optimal_k(len(facets))

@@ -33,6 +33,7 @@ class Worker(Process):
         db_path: str,
         docker_image: str,
         experiments: list[str],
+        debug: bool,
     ):
         """Initialize worker process."""
         super().__init__()
@@ -42,6 +43,7 @@ class Worker(Process):
         self.db_path = db_path
         self.docker_image = docker_image
         self.experiments = experiments
+        self.debug = debug
         self.daemon = True
 
     def run(self):
@@ -169,6 +171,7 @@ class Worker(Process):
                     work_item.node_ids,
                     work_item.requirements,
                     experiment_name=experiment.name,
+                    debug=self.debug,
                 )
 
                 if results is None:
@@ -313,12 +316,14 @@ class WorkerPool:
         docker_image: str = "pbt-analyzer:latest",
         *,
         experiments: list[str],
+        debug: bool,
     ):
         """Initialize worker pool."""
         self.num_workers = num_workers
         self.db_path = db_path
         self.docker_image = docker_image
         self.experiments = experiments
+        self.debug = debug
         self.task_queue = mp.Queue(maxsize=100)
         self.result_queue = mp.Queue()
         self.workers = []
@@ -336,6 +341,7 @@ class WorkerPool:
                 self.db_path,
                 self.docker_image,
                 self.experiments,
+                self.debug,
             )
             worker.start()
             self.workers.append(worker)

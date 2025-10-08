@@ -17,6 +17,7 @@ def main():
         config = json.loads(config_file.read_text())
         node_ids = config.get("node_ids", [])
         experiment_name = config.get("experiment_name", "coverage")
+        debug = config.get("debug", False)
         requirements_file = (
             Path("/app/requirements.txt")
             if Path("/app/requirements.txt").exists()
@@ -74,7 +75,7 @@ def main():
             print(f"Running {experiment_name} experiment...", flush=True)
 
             try:
-                exp_data = experiment_class.run(file_path, node_id)
+                exp_data = experiment_class.run(file_path, node_id, debug=debug)
                 node_results[experiment_name] = exp_data
             except Exception as e:
                 print(f"ERROR: Experiment failed: {e}", flush=True)

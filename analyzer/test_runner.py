@@ -72,6 +72,8 @@ class TestRunner:
         requirements: str,
         node_ids: list[str],
         experiment_name: str = "coverage",
+        *,
+        debug: bool,
     ) -> bool:
         """Set up environment by copying experiment modules and config."""
         try:
@@ -111,6 +113,7 @@ class TestRunner:
                 "node_ids": node_ids,
                 "repo_dir": "/app",
                 "experiment_name": experiment_name,
+                "debug": debug,
             }
             config_file = work_dir / "config.json"
             config_file.write_text(json.dumps(config, indent=2))
@@ -123,7 +126,7 @@ class TestRunner:
             return False
 
     def run_in_container(
-        self, repo_name: str, work_dir: Path, node_ids: list[str]
+        self, repo_name: str, work_dir: Path, node_ids: list[str], debug: bool
     ) -> dict[str, any]:
         """Run tests in container by copying files instead of mounting (avoids Mac penalty)."""
         logger.info(f"[w{self.worker_id}][{repo_name}] Running container analysis")
@@ -154,10 +157,11 @@ class TestRunner:
         container.start()
         result = container.wait(timeout=self.RUNNER_TIMEOUT)
         logs = container.logs(stdout=True, stderr=True).decode("utf-8")
-        logger.debug(f"[w{self.worker_id}][{repo_name}] Container logs:\n{logs}")
-        logger.debug(
-            f"[w{self.worker_id}][{repo_name}] Container exit code: {result.get('StatusCode', 'unknown')}"
-        )
+        if debug:
+            logger.info(f"[w{self.worker_id}][{repo_name}] Container logs:\n{logs}")
+            logger.info(
+                f"[w{self.worker_id}][{repo_name}] Container exit code: {result.get('StatusCode', 'unknown')}"
+            )
 
         bits, _ = container.get_archive("/app/results.json")
         tar_stream = BytesIO()
@@ -185,6 +189,8 @@ class TestRunner:
         node_ids: list[str],
         requirements: str,
         experiment_name: str = "coverage",
+        *,
+        debug: bool,
     ) -> dict[str, any]:
         """Process a complete repository."""
         work_dir = None
@@ -201,11 +207,11 @@ class TestRunner:
             # Setup environment
             repo_dir = work_dir / "repo"
             if not self.setup_environment(
-                repo_dir, requirements, node_ids, experiment_name
+                repo_dir, requirements, node_ids, experiment_name, debug=debug
             ):
                 return {"error": "Failed to setup environment"}
 
-            results = self.run_in_container(repo_name, repo_dir, node_ids)
+            results = self.run_in_container(repo_name, repo_dir, node_ids, debug)
             if results is None:
                 return {"error": "No results returned from container"}
 

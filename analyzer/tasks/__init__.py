@@ -1,7 +1,7 @@
 from .clustering import ClusteringTask
 from .runner import (
-    run_tasks_for_experiment,
     run_task,
+    run_tasks_for_experiment,
 )
 from .task import Task
 

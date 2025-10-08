@@ -92,6 +92,7 @@ def prepare_work_items(dataset: dict[str, Any]) -> list[WorkItem]:
     multiple=True,
     help="Experiments to run (default: all)",
 )
+@click.option("--debug", is_flag=True, help="Enable debug mode with verbose logging")
 def main(
     dataset: str,
     config: str,
@@ -100,6 +101,7 @@ def main(
     limit: int,
     docker_image: str,
     experiment: tuple[str, ...],
+    debug: bool,
 ):
     """Run PBT corpus analysis."""
 
@@ -114,12 +116,6 @@ def main(
     # Load configuration
     cfg = load_config(config)
 
-    # Override with command line options
-    if workers:
-        cfg["workers"]["max_workers"] = workers
-    if docker_image:
-        cfg["docker"]["image"] = docker_image
-
     # Handle sample mode
     if sample:
         console.print("[yellow]Running in sample mode with MarkCBell/bigger[/yellow]")
@@ -130,11 +126,19 @@ def main(
             }
         }
         workers = 1
+        # Only run coverage experiment in sample mode
+        experiments = ["coverage"]
     elif dataset:
         dataset_data = load_dataset(dataset)
     else:
         console.print("[red]Error: Please provide --dataset or use --sample flag[/red]")
         sys.exit(1)
+
+    # Override with command line options
+    if workers:
+        cfg["workers"]["max_workers"] = workers
+    if docker_image:
+        cfg["docker"]["image"] = docker_image
 
     # Prepare work items
     work_items = prepare_work_items(dataset_data)
@@ -171,6 +175,7 @@ def main(
         db_path=cfg["database"]["path"],
         docker_image=cfg["docker"]["image"],
         experiments=experiments,
+        debug=debug,
     ) as pool:
         for item in work_items:
             pool.submit(item)
