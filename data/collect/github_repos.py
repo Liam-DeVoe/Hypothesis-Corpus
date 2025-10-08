@@ -56,9 +56,9 @@ def repos_from_term(term):
             break
 
         # dynamically adjust step size for efficient searches
-        if count_results > max_results / 3:
+        if count_results > max_results / 2:
             step_size //= 2
-        elif count_results < max_results / 4:
+        elif count_results < max_results / 3:
             step_size = int(step_size * 1.75)
 
         min_size = max_size
