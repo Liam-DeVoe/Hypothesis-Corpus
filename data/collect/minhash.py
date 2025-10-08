@@ -1,8 +1,10 @@
 # repository deduplication via minhash.
-
-# We use line-level shingles (word-level is too coarse because all repos share common
-# keywords like "def", "class", etc). Normalize by stripping whitespace.
-
+#
+# We use line-level shingles. word-level is too coarse because all repos share common
+# keywords like "def", "class", etc. We normalize by stripping whitespace.
+# (A "shingle" is an overlapping sliding window, though in the case of 1 line per
+# shingle there is no overlap.)
+#
 # Each .py file in a repo gets a minhash. We compute the number of duplicate files
 # between two repos by looking at bruteforce pairwise-combinations of the minhash
 # jaccard similarity, at a given threshold level.
