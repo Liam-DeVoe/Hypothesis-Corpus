@@ -37,6 +37,11 @@ def setup_dependencies(requirements_file: Path | None = None) -> bool:
 
     print("Starting dependency installation...", flush=True)
 
+    # Install pytest_pbt_analysis plugin (copied at runtime)
+    pbt_analysis_dir = Path("/app/pytest_pbt_analysis")
+    if pbt_analysis_dir.exists():
+        run_pip_install(["-e", str(pbt_analysis_dir)], "pytest_pbt_analysis plugin")
+
     # Install project requirements if they exist
     if requirements_file and requirements_file.exists():
         run_pip_install(

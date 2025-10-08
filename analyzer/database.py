@@ -32,7 +32,7 @@ class Database:
                     owner TEXT NOT NULL,
                     name TEXT NOT NULL,
                     url TEXT NOT NULL,
-                    clone_status TEXT DEFAULT 'pending',
+                    clone_status TEXT,
                     error_message TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(owner, name)
@@ -46,7 +46,7 @@ class Database:
                     file_path TEXT NOT NULL,
                     class_name TEXT,
                     node_name TEXT,
-                    status TEXT DEFAULT 'pending',
+                    status TEXT,
                     error_message TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (repo_id) REFERENCES repositories(id),

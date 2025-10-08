@@ -1,3 +1,4 @@
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -102,13 +103,15 @@ class CoverageExperiment(Experiment):
             timeout=timeout,
         )
 
-        if debug:
+        if debug or result.returncode != 0:
             if result.stdout:
                 print("[CoverageExperiment] Pytest stdout:", flush=True)
                 print(result.stdout, flush=True)
             if result.stderr:
                 print("[CoverageExperiment] Pytest stderr:", flush=True)
                 print(result.stderr, flush=True)
+
+        assert result.returncode == 0
 
         test_result = {
             "exit_code": result.returncode,
@@ -122,11 +125,16 @@ class CoverageExperiment(Experiment):
         if obs_dir.exists():
             observability_data = parse_observability_data(obs_dir)
 
+        timing_file = Path("/app/.hypothesis/execution_time.json")
+        assert timing_file.exists()
+        execution_time = json.loads(timing_file.read_text())["execution_time"]
+
         return {
             "test_passed": test_result.get("passed", False),
             "exit_code": test_result.get("exit_code", -1),
             "stdout": test_result.get("stdout", ""),
             "stderr": test_result.get("stderr", ""),
+            "execution_time": execution_time,
             "coverage": observability_data.get("coverage", {}),
             "test_cases": observability_data.get("test_cases", []),
             "timing": observability_data.get("timing", {}),
@@ -150,7 +158,7 @@ class CoverageExperiment(Experiment):
                     data.get("exit_code", -1),
                     data.get("stdout", ""),
                     data.get("stderr", ""),
-                    None,
+                    data.get("execution_time"),
                     None,
                 ),
             )

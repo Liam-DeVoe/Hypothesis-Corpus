@@ -55,7 +55,6 @@ def load_data():
                 COUNT(*) as total,
                 SUM(CASE WHEN clone_status = 'success' THEN 1 ELSE 0 END) as successful,
                 SUM(CASE WHEN clone_status = 'failed' THEN 1 ELSE 0 END) as failed,
-                SUM(CASE WHEN clone_status = 'pending' THEN 1 ELSE 0 END) as pending
             FROM repositories
             """
         ).fetchone()
@@ -67,7 +66,6 @@ def load_data():
                 COUNT(*) as total,
                 SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful,
                 SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
-                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending
             FROM nodes
             """
         ).fetchone()

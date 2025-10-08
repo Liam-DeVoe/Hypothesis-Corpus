@@ -9,7 +9,4 @@ RUN apt-get update && apt-get install -y \
 
 RUN npm install -g @anthropic-ai/claude-code
 WORKDIR /app
-COPY analyzer/ /app/analyzer/
-
-RUN pip install -e /app/analyzer/pytest_pbt_analysis/
 CMD ["python", "-m", "analyzer.test_runner"]

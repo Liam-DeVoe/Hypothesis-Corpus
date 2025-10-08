@@ -1,3 +1,8 @@
+import json
+import time
+from pathlib import Path
+
+import pytest
 from hypothesis import HealthCheck, Phase, settings
 from hypothesis.internal.detection import is_hypothesis_test
 
@@ -57,3 +62,16 @@ def pytest_collection_modifyitems(session, config, items):
             suppress_health_check=list(HealthCheck),
             phases=[Phase.generate],
         )
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_call(item):
+    start_time = time.time()
+    yield
+    execution_time = time.time() - start_time
+
+    timing_file = Path("/app/.hypothesis/execution_time.json")
+    timing_file.parent.mkdir(parents=True, exist_ok=True)
+    timing_file.write_text(
+        json.dumps({"nodeid": item.nodeid, "execution_time": execution_time})
+    )

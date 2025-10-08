@@ -108,6 +108,12 @@ class TestRunner:
             assert experiment_file.exists()
             shutil.copy(experiment_file, work_dir / f"{experiment_name}.py")
 
+            import analyzer.pytest_pbt_analysis as pbt_package
+
+            pbt_source_dir = Path(pbt_package.__file__).parent
+            pbt_dest_dir = work_dir / "pytest_pbt_analysis"
+            shutil.copytree(pbt_source_dir, pbt_dest_dir)
+
             # Write configuration for the container
             config = {
                 "node_ids": node_ids,
