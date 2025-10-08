@@ -60,42 +60,30 @@ def setup_dependencies(requirements_file: Path | None = None) -> bool:
 
 def parse_observability_data(obs_dir: Path) -> dict[str, Any]:
     """Parse Hypothesis observability JSONL files."""
-    data = {"coverage": {}, "timing": {}, "examples": [], "test_cases": []}
+    data = {"coverage": {}, "test_cases": []}
 
-    try:
-        jsonl_files = list(obs_dir.glob("**/*.jsonl"))
+    for jsonl_file in list(obs_dir.glob("**/*.jsonl")):
+        with open(jsonl_file) as f:
+            for line in f:
+                if not line.strip():
+                    continue
 
-        for jsonl_file in jsonl_files:
-            try:
-                with open(jsonl_file) as f:
-                    for line in f:
-                        if line.strip():
-                            entry = json.loads(line)
+                entry = json.loads(line)
+                if entry["type"] != "test_case":
+                    continue
 
-                            # Process different types of observability data
-                            if "type" in entry:
-                                if entry["type"] == "test_case":
-                                    data["test_cases"].append(entry)
-                                elif entry["type"] == "timing":
-                                    data["timing"][entry.get("phase", "unknown")] = (
-                                        entry.get("duration", 0)
-                                    )
+                data["test_cases"].append(entry)
 
-                            # Extract coverage information
-                            if "coverage" in entry:
-                                for file_path, lines in entry["coverage"].items():
-                                    if file_path not in data["coverage"]:
-                                        data["coverage"][file_path] = set()
-                                    data["coverage"][file_path].update(lines)
-            except Exception:
-                # Skip any problematic JSONL files
-                pass
+                # Aggregate coverage across all test cases
+                coverage = entry["coverage"]
+                if coverage:
+                    for file_path, lines in coverage.items():
+                        if file_path not in data["coverage"]:
+                            data["coverage"][file_path] = set()
+                        data["coverage"][file_path].update(lines)
 
-        # Convert sets to lists for JSON serialization
-        for file_path in data["coverage"]:
-            data["coverage"][file_path] = sorted(data["coverage"][file_path])
-
-    except Exception as e:
-        data["error"] = f"Failed to parse observability data: {e}"
+    # Convert sets to lists for JSON serialization
+    for file_path in data["coverage"]:
+        data["coverage"][file_path] = sorted(data["coverage"][file_path])
 
     return data
