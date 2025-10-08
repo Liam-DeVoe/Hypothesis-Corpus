@@ -5,6 +5,10 @@ from pathlib import Path
 
 from github import Github
 
+# see:
+# https://docs.github.com/en/search-github/searching-on-github/searching-code
+# https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-code
+
 # 100 kb. we'll do a single open interval after this point; bank on there being
 # <1000 matching files over this limit.
 max_file_size = 100_000  # filesize in bytes
@@ -22,7 +26,6 @@ with open(secrets_path) as f:
     secrets = json.load(f)
 github_token = secrets["github_token"]
 
-# https://docs.github.com/en/search-github/searching-on-github/searching-code
 g = Github(github_token, per_page=100)
 
 
