@@ -124,9 +124,18 @@ def main():
             SELECT
                 COUNT(*) as total_executions,
                 SUM(CASE WHEN passed = 1 THEN 1 ELSE 0 END) as passed,
-                SUM(CASE WHEN passed = 0 THEN 1 ELSE 0 END) as failed,
-                AVG(execution_time) as avg_execution_time
+                SUM(CASE WHEN passed = 0 THEN 1 ELSE 0 END) as failed
             FROM node_executions
+            """,
+            conn,
+        )
+
+        # Execution time distribution
+        execution_times = pd.read_sql_query(
+            """
+            SELECT execution_time
+            FROM node_executions
+            WHERE execution_time IS NOT NULL
             """,
             conn,
         )
@@ -149,13 +158,11 @@ def main():
 
     # Coverage by repository chart
     if not repo_coverage.empty:
-        st.subheader("Coverage by Repository")
-
         fig = px.bar(
-            repo_coverage.head(50),
+            repo_coverage,
             x="repository",
             y="total_nodes",
-            title="Top 50 Repositories by Node Count",
+            title="Repositories by Node Count",
             labels={
                 "total_nodes": "Total Nodes",
                 "repository": "Repository",
@@ -230,8 +237,23 @@ def main():
                 "Total Node Executions", f"{test_results['total_executions'].iloc[0]:,}"
             )
             st.metric("Pass Rate", f"{(passed / (passed + failed) * 100):.1f}%")
-            avg_time = test_results["avg_execution_time"].iloc[0]
-            st.metric("Avg Execution Time", f"{avg_time:.2f}s" if avg_time else "N/A")
+
+        # Execution time histogram
+        if not execution_times.empty and len(execution_times) > 0:
+            fig = px.histogram(
+                execution_times,
+                x="execution_time",
+                nbins=50,
+                title="Nodes by execution time",
+                labels={"execution_time": "Execution Time (seconds)", "count": "Frequency"},
+            )
+            fig.update_layout(
+                showlegend=False,
+                height=400,
+                xaxis_title="Execution time (seconds)",
+                yaxis_title="Node count",
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
     # Repository selector for both cumulative coverage and details
     selected_repo = st.selectbox(
