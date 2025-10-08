@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Runner script for collecting GitHub repositories that use Hypothesis.
 """
@@ -6,7 +5,7 @@ Runner script for collecting GitHub repositories that use Hypothesis.
 import sqlite3
 from pathlib import Path
 
-from github_repositories import collect_github_repositories
+from github_repos import collect_github_repositories
 from minhash import minhash_repository, remove_duplicates
 
 db_path = Path(__file__).parent / "data.db"

@@ -6,7 +6,7 @@ from github import Github
 
 # 100 kb. we'll do a single open interval after this point; bank on there being
 # <1000 matching files over this limit.
-max_file_size = 100  # filesize in bytes
+max_file_size = 100_000  # filesize in bytes
 step_size = 100
 limit_gb = 1
 limit_forked_stars = 5
