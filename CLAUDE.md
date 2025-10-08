@@ -106,14 +106,12 @@ Task-specific tables are defined by each task's `get_schema_sql()`:
 
 ### Configuration
 
-The system uses `analyzer/config.yaml` for:
-```yaml
-database:
-  path: "data/analysis.db"
-docker:
-  image: "pbt-analyzer:latest"
-workers:
-  max_workers: 4
+The system uses a top-level `secrets.json` file for API tokens:
+```json
+{
+  "claude_code_oauth_token": "your-token-here",
+  "github_token": "your-token-here"
+}
 ```
 
 ### Dataset Format

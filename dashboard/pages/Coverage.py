@@ -245,7 +245,10 @@ def main():
                 x="execution_time",
                 nbins=50,
                 title="Nodes by execution time",
-                labels={"execution_time": "Execution Time (seconds)", "count": "Frequency"},
+                labels={
+                    "execution_time": "Execution Time (seconds)",
+                    "count": "Frequency",
+                },
             )
             fig.update_layout(
                 showlegend=False,

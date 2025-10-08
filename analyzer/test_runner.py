@@ -144,11 +144,13 @@ class TestRunner:
                 tar.add(item, arcname=f"/app/{item.name}")
         tar_stream.seek(0)
 
-        from analyzer.config import CLAUDE_CODE_OAUTH_TOKEN
+        secrets_path = Path(__file__).parent.parent / "secrets.json"
+        with open(secrets_path) as f:
+            secrets = json.load(f)
 
         environment = {
             "HYPOTHESIS_EXPERIMENTAL_OBSERVABILITY": "1",
-            "CLAUDE_CODE_OAUTH_TOKEN": CLAUDE_CODE_OAUTH_TOKEN,
+            "CLAUDE_CODE_OAUTH_TOKEN": secrets["claude_code_oauth_token"],
         }
 
         container = self.docker_client.containers.create(

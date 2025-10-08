@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 import click
-import yaml
 from rich.console import Console
 
 from analyzer.database import Database
