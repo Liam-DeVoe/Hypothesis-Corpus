@@ -2,3 +2,4 @@
 *.db
 .cursor
 secrets.json
+.claude
