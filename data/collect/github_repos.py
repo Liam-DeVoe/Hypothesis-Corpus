@@ -1,4 +1,5 @@
 import json
+import logging
 import sqlite3
 from pathlib import Path
 
@@ -7,11 +8,14 @@ from github import Github
 # 100 kb. we'll do a single open interval after this point; bank on there being
 # <1000 matching files over this limit.
 max_file_size = 100_000  # filesize in bytes
-step_size = 100
+initial_step_size = 50
+max_results = 1000
 limit_gb = 1
 limit_forked_stars = 5
 terms = ["import hypothesis", "from hypothesis import", "from hypothesis."]
 
+# silence ratelimit / backoff prints.
+logging.getLogger("github").setLevel(logging.WARNING)
 
 secrets_path = Path(__file__).parent.parent.parent / "secrets.json"
 with open(secrets_path) as f:
@@ -22,28 +26,50 @@ github_token = secrets["github_token"]
 g = Github(github_token, per_page=100)
 
 
-def all_repos():
+def repos_from_term(term):
     repos = set()
-    for i in range(max_file_size // step_size):
-        min_size = i * step_size
-        max_size = (i + 1) * step_size
+    step_size = initial_step_size
+    min_size = 0
+
+    while True:
+        max_size = min_size + step_size
         # on the last iteration, do an unbounded upwards search so we have
         # full coverage.
-        if min_size == max_size:
+        if min_size >= max_file_size:
             max_size = "*"
-        for term in terms:
-            q = f'size:{min_size}..{max_size} "{term}"'
-            print(f"{q} ... ", end="", flush=True)
 
-            results = g.search_code(q)
-            count_results = 0
-            for result in results:
-                repos.add(result.repository)
-                count_results += 1
+        q = f'size:{min_size}..{max_size} "{term}"'
+        print(f"{q} ... ", end="", flush=True)
 
-            print(f"{count_results} results ({len(repos)} unique so far)")
-            # make sure we're not missing any results by hitting the cap.
-            assert count_results < 1000
+        results = g.search_code(q)
+        count_results = 0
+        for result in results:
+            repos.add(result.repository)
+            count_results += 1
+
+        print(f"{count_results} results ({len(repos)} unique so far)")
+        # make sure we're not missing any results by hitting the cap.
+        assert count_results < 1000
+
+        # break after the final unbounded search
+        if max_size == "*":
+            break
+
+        # dynamically adjust step size for efficient searches
+        if count_results > max_results / 3:
+            step_size //= 2
+        elif count_results < max_results / 4:
+            step_size = int(step_size * 1.75)
+
+        min_size = max_size
+
+    return repos
+
+
+def repos_from_api():
+    repos = set()
+    for term in terms:
+        repos |= repos_from_term(term)
     return repos
 
 
@@ -68,7 +94,7 @@ def filter_repos(repos):
 
 
 def collect_github_repositories(db_path):
-    repos = all_repos()
+    repos = repos_from_api()
     repos = filter_repos(repos)
 
     conn = sqlite3.connect(db_path)
