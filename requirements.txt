@@ -9,6 +9,7 @@ click>=8.1.0
 rich>=13.0.0
 requests>=2.31.0
 scikit-learn>=1.7.2
-# pinning for compatibility with transformers PreTrainedModel
+datasketch==1.6.5
+# pinning these two for compatibility with transformers PreTrainedModel
 sentence-transformers==4.1.0
 transformers==4.41.0

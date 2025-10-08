@@ -118,7 +118,7 @@ def main():
         repo_summaries = pd.read_sql_query(
             """
             SELECT
-                r.owner || '/' || r.name as repository,
+                r.repo_name as repository,
                 COUNT(DISTINCT n.id) as total_nodes,
                 COUNT(DISTINCT s.node_id) as nodes_with_summaries,
                 AVG(LENGTH(s.facet)) as avg_summary_length
@@ -295,7 +295,7 @@ def main():
                 FROM facets s
                 JOIN nodes n ON s.node_id = n.id
                 JOIN repositories r ON n.repo_id = r.id
-                WHERE r.owner || '/' || r.name = ?
+                WHERE r.repo_name = ?
                     AND s.type = 'summary'
                 ORDER BY n.node_id
                 """,

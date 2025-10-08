@@ -86,7 +86,7 @@ def main():
         repo_coverage = pd.read_sql_query(
             """
             SELECT
-                r.owner || '/' || r.name as repository,
+                r.repo_name as repository,
                 COUNT(DISTINCT t.id) as total_nodes,
                 COUNT(DISTINCT tc.node_id) as nodes_with_coverage,
                 SUM(tc.covered_lines) as total_lines_covered,
@@ -278,11 +278,11 @@ def main():
                     tcc.case_number,
                     tcc.file_path,
                     tcc.cumulative_count,
-                    r.owner || '/' || r.name as repository
+                    r.repo_name as repository
                 FROM case_coverage tcc
                 JOIN nodes t ON tcc.node_id = t.id
                 JOIN repositories r ON t.repo_id = r.id
-                WHERE r.owner || '/' || r.name = ?
+                WHERE r.repo_name = ?
                 ORDER BY t.id, tcc.file_path, tcc.case_number
                 """,
                 conn,
@@ -346,7 +346,7 @@ def main():
                 JOIN repositories r ON t.repo_id = r.id
                 LEFT JOIN node_coverage tc ON t.id = tc.node_id
                 LEFT JOIN node_executions te ON t.id = te.node_id
-                WHERE r.owner || '/' || r.name = ?
+                WHERE r.repo_name = ?
                 AND tc.covered_lines IS NOT NULL
                 ORDER BY tc.covered_lines DESC
                 """,

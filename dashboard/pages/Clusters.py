@@ -189,7 +189,7 @@ def display_clusters(db: Database, facet_type: str):
                             """
                             SELECT DISTINCT
                                 n.node_id,
-                                r.owner || '/' || r.name as repository
+                                r.repo_name as repository
                             FROM facets f
                             JOIN nodes n ON f.node_id = n.id
                             JOIN repositories r ON n.repo_id = r.id

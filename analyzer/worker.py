@@ -119,7 +119,6 @@ class Worker(Process):
         experiments: list,
     ) -> dict:
         """Process a single repository."""
-        owner, name = work_item.repo_name.split("/")
         try:
             try:
                 response = requests.get(
@@ -141,18 +140,18 @@ class Worker(Process):
 
             # Delete any existing data for this repository before processing
             for experiment in experiments:
-                experiment.delete_data(db, owner, name)
+                experiment.delete_data(db, work_item.repo_name)
 
             # Add repository to database
             with db.connection() as conn:
                 conn.execute(
-                    "INSERT OR IGNORE INTO repositories (owner, name, url) VALUES (?, ?, ?)",
-                    (owner, name, f"https://github.com/{work_item.repo_name}"),
+                    "INSERT OR IGNORE INTO repositories (repo_name, url) VALUES (?, ?)",
+                    (work_item.repo_name, f"https://github.com/{work_item.repo_name}"),
                 )
                 conn.commit()
                 result = conn.execute(
-                    "SELECT id FROM repositories WHERE owner = ? AND name = ?",
-                    (owner, name),
+                    "SELECT id FROM repositories WHERE repo_name = ?",
+                    (work_item.repo_name,),
                 ).fetchone()
                 work_item.repo_id = result["id"]
 

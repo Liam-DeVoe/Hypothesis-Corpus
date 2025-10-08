@@ -225,9 +225,8 @@ class CoverageExperiment(Experiment):
             conn.commit()
 
     @staticmethod
-    def delete_data(db: Any, owner: str, name: str):
+    def delete_data(db: Any, repo_name: str):
         db.delete_experiment_data(
-            owner,
-            name,
+            repo_name,
             ["node_executions", "node_coverage", "case_coverage", "observability_data"],
         )

@@ -47,7 +47,7 @@ def main():
         repos = pd.read_sql_query(
             """
             SELECT
-                r.owner || '/' || r.name as repository,
+                r.repo_name as repository,
                 r.clone_status as status,
                 COUNT(DISTINCT t.id) as node_count,
                 r.created_at
@@ -99,7 +99,7 @@ def main():
                         t.status
                     FROM nodes t
                     JOIN repositories r ON t.repo_id = r.id
-                    WHERE r.owner || '/' || r.name = ?
+                    WHERE r.repo_name = ?
                     GROUP BY t.id
                 """,
                     conn,

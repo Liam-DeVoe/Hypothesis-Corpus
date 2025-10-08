@@ -185,5 +185,5 @@ class FacetsExperiment(Experiment):
             conn.commit()
 
     @staticmethod
-    def delete_data(db: Any, owner: str, name: str):
-        db.delete_experiment_data(owner, name, ["facets"])
+    def delete_data(db: Any, repo_name: str):
+        db.delete_experiment_data(repo_name, ["facets"])

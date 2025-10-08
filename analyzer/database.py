@@ -29,13 +29,11 @@ class Database:
                 -- Repository information
                 CREATE TABLE IF NOT EXISTS repositories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    owner TEXT NOT NULL,
-                    name TEXT NOT NULL,
+                    repo_name TEXT NOT NULL UNIQUE,
                     url TEXT NOT NULL,
                     clone_status TEXT,
                     error_message TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(owner, name)
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
 
                 -- Node information
@@ -101,11 +99,11 @@ class Database:
         finally:
             conn.close()
 
-    def delete_experiment_data(self, owner: str, name: str, tables: list[str]):
+    def delete_experiment_data(self, repo_name: str, tables: list[str]):
         with self.connection() as conn:
             result = conn.execute(
-                "SELECT id FROM repositories WHERE owner = ? AND name = ?",
-                (owner, name),
+                "SELECT id FROM repositories WHERE repo_name = ?",
+                (repo_name,),
             ).fetchone()
 
             if not result:
