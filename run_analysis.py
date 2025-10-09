@@ -2,14 +2,12 @@
 Main script to run the PBT corpus analysis.
 """
 
-import json
 import logging
 import sys
 from pathlib import Path
 from typing import Any
 
 import click
-import yaml
 from rich.console import Console
 
 from analysis.database import Database
@@ -33,31 +31,33 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
-def load_dataset(dataset_path: str) -> dict[str, Any]:
-    """Load dataset from JSON file."""
-    path = Path(dataset_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Dataset file not found: {dataset_path}")
+def load_dataset_from_db(db_path: str, limit: int | None = None) -> dict[str, Any]:
+    """Load dataset from database."""
+    import sqlite3
 
-    with open(path) as f:
-        return json.load(f)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
 
+    query = "SELECT full_name, requirements FROM core_repositories"
+    if limit:
+        query += f" LIMIT {limit}"
 
-def load_config(config_path: str = "analysis/config.yaml") -> dict[str, Any]:
-    """Load configuration from YAML file."""
-    path = Path(config_path)
-    if not path.exists():
-        console.print(
-            f"[yellow]Warning: Config file not found at {config_path}, using defaults[/yellow]"
-        )
-        return {
-            "database": {"path": "data/data.db"},
-            "docker": {"image": "pbt-analysis:latest"},
-            "workers": {"max_workers": 4},
+    repos = conn.execute(query).fetchall()
+    conn.close()
+
+    # Convert to dataset format
+    dataset = {}
+    for repo in repos:
+        # TODO: We need to get node_ids from somewhere. For now, use empty list
+        # which will trigger test discovery
+        dataset[repo["full_name"]] = {
+            "node_ids": [],
+            "requirements.txt": repo["requirements"] or "",
         }
 
-    with open(path) as f:
-        return yaml.safe_load(f)
+    return dataset
+
+
 
 
 def prepare_work_items(dataset: dict[str, Any]) -> list[WorkItem]:
@@ -76,16 +76,15 @@ def prepare_work_items(dataset: dict[str, Any]) -> list[WorkItem]:
 
 
 @click.command()
-@click.option("--dataset", "-d", type=str, help="Path to dataset JSON file")
 @click.option(
-    "--config", "-c", default="analysis/config.yaml", help="Path to configuration file"
+    "--db-path", default="analysis/data.db", help="Path to database file"
 )
-@click.option("--workers", "-w", type=int, help="Number of worker processes")
+@click.option("--workers", "-w", type=int, default=4, help="Number of worker processes")
 @click.option(
     "--sample", "-s", is_flag=True, help="Run sample test with MarkCBell/bigger"
 )
 @click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
-@click.option("--docker-image", type=str, help="Docker image to use")
+@click.option("--docker-image", default="pbt-analysis:latest", help="Docker image to use")
 @click.option(
     "--experiment",
     "-e",
@@ -94,8 +93,7 @@ def prepare_work_items(dataset: dict[str, Any]) -> list[WorkItem]:
 )
 @click.option("--debug", is_flag=True, help="Enable debug mode with verbose logging")
 def main(
-    dataset: str,
-    config: str,
+    db_path: str,
     workers: int,
     sample: bool,
     limit: int,
@@ -109,9 +107,6 @@ def main(
     console.print(f"[bold]Experiments:[/bold] [green]{', '.join(experiments)}[/green]")
     console.print()
 
-    # Load configuration
-    cfg = load_config(config)
-
     # Handle sample mode
     if sample:
         console.print("[yellow]Running in sample mode with MarkCBell/bigger[/yellow]")
@@ -122,42 +117,30 @@ def main(
             }
         }
         workers = 1
-        # Only run coverage experiment in sample mode
-        experiments = ["coverage"]
-    elif dataset:
-        dataset_data = load_dataset(dataset)
+        # Only run runtime experiment in sample mode
+        experiments = ["runtime"]
     else:
-        console.print("[red]Error: Please provide --dataset or use --sample flag[/red]")
-        sys.exit(1)
-
-    # Override with command line options
-    if workers:
-        cfg["workers"]["max_workers"] = workers
-    if docker_image:
-        cfg["docker"]["image"] = docker_image
+        # Load from database
+        dataset_data = load_dataset_from_db(db_path, limit=limit)
 
     # Prepare work items
     work_items = prepare_work_items(dataset_data)
 
-    if limit and limit < len(work_items):
-        work_items = work_items[:limit]
-        console.print(f"[yellow]Limited to {limit} repositories[/yellow]")
-
     console.print(f"Dataset loaded: [green]{len(work_items)} repositories[/green]")
-    console.print(f"Workers: [green]{cfg['workers']['max_workers']}[/green]")
-    console.print(f"Docker image: [green]{cfg['docker']['image']}[/green]")
+    console.print(f"Workers: [green]{workers}[/green]")
+    console.print(f"Docker image: [green]{docker_image}[/green]")
     console.print()
 
     # Initialize database
-    Database(cfg["database"]["path"])
+    Database(db_path=db_path)
 
     # Create worker pool
     console.print("[bold]Starting analysis...[/bold]")
 
     with WorkerPool(
-        num_workers=cfg["workers"]["max_workers"],
-        db_path=cfg["database"]["path"],
-        docker_image=cfg["docker"]["image"],
+        num_workers=workers,
+        db_path=db_path,
+        docker_image=docker_image,
         experiments=experiments,
         debug=debug,
     ) as pool:

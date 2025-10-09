@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 
 def run_task(
     task_name: str,
-    db_path: str = "data/data.db",
+    *,
+    db_path: str,
 ) -> dict[str, Any]:
     """Run a specific task.
 
@@ -32,7 +33,7 @@ def run_task(
     logger.info(f"Running task: {task_name}")
 
     task_class = Task.tasks[task_name]
-    db = Database(db_path)
+    db = Database(db_path=db_path)
 
     # Check dependencies
     for dep in task_class.follows:
@@ -52,7 +53,8 @@ def run_task(
 
 def run_tasks_for_experiment(
     experiment_name: str,
-    db_path: str = "data/data.db",
+    *,
+    db_path: str,
 ) -> list[dict[str, Any]]:
     """Run all tasks that follow a given experiment.
 
@@ -71,7 +73,7 @@ def run_tasks_for_experiment(
                 f"Running followup task '{task_name}' for experiment '{experiment_name}'"
             )
             try:
-                result = run_task(task_name, db_path)
+                result = run_task(task_name, db_path=db_path)
                 results.append(
                     {
                         "task": task_name,

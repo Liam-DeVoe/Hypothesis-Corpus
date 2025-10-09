@@ -13,7 +13,7 @@ from analysis.database import Database
 
 @st.cache_resource
 def get_database():
-    return Database("data/data.db")
+    return Database(db_path="analysis/data.db")
 
 
 def render_sidebar():

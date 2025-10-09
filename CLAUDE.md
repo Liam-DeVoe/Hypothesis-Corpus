@@ -10,14 +10,14 @@ This is a Property-Based Testing (PBT) Corpus Analysis system that analyzes Hypo
 
 ### Running Analysis
 ```bash
-# run analysis
-python run_analysis.py --dataset data/dataset.json --workers 4
+# Run analysis (pulls from database)
+python run_analysis.py --workers 4
 
 # Run sample test with MarkCBell/bigger repository
 python run_analysis.py --sample
 
 # Run with limited repositories
-python run_analysis.py --dataset data/dataset.json --limit 10 --workers 2
+python run_analysis.py --limit 10 --workers 2
 
 # Start visualization dashboard
 streamlit run dashboard/Overview.py
@@ -41,23 +41,24 @@ python run_tasks.py clear --task clustering
 ### Development & Debugging
 ```bash
 # Check database contents
-sqlite3 data/data.db ".tables"
-sqlite3 data/data.db "SELECT * FROM core_repositories LIMIT 5;"
+sqlite3 analysis/data.db ".tables"
+sqlite3 analysis/data.db "SELECT * FROM core_repositories LIMIT 5;"
 ```
 
 ## Architecture
 
 ### Core Flow
-1. **run_analysis.py** orchestrates the entire analysis pipeline
-2. **WorkerPool** (analysis/worker.py) distributes repositories across multiple processes
-3. Each worker uses **TestRunner** (analysis/test_runner.py) to:
+1. **analysis/collect/run.py** collects repositories from GitHub and stores in `core_repositories` table
+2. **run_analysis.py** reads from database and orchestrates the analysis pipeline
+3. **WorkerPool** (analysis/worker.py) distributes repositories across multiple processes
+4. Each worker uses **TestRunner** (analysis/test_runner.py) to:
    - Clone repository into temporary directory
    - Copy experiment modules into repo directory
    - Create config.json with node_ids and experiment configuration
    - Execute runner.py in Docker container with network access
    - Parse results.json output
-4. Results stored in SQLite database (analysis/database.py)
-5. **dashboard/Overview.py** provides real-time Streamlit visualization
+5. Results stored in SQLite database (analysis/database.py)
+6. **dashboard/Overview.py** provides real-time Streamlit visualization
 
 ### Critical Implementation Details
 
@@ -98,10 +99,10 @@ Clustering implementation:
 - Model is cached at class level to avoid reloading
 
 #### Database Schema
-The unified database (`data/data.db`) contains collection and analysis tables:
+The unified database (`analysis/data.db`) contains collection and analysis tables:
 
 **Collection tables** (for GitHub repository discovery):
-- `core_repositories`: Collected repositories from GitHub search
+- `core_repositories`: Collected repositories from GitHub search (includes `full_name`, `requirements`, metadata)
 - `core_minhashes`: MinHash data for deduplication
 
 **Analysis tables** (for test analysis):
@@ -116,6 +117,11 @@ Task-specific tables are defined by each task's `get_schema_sql()`:
 
 ### Configuration
 
+The system uses **CLI arguments** for configuration (no config files):
+- `--db-path` (default: `analysis/data.db`): Database path
+- `--workers` (default: `4`): Number of worker processes
+- `--docker-image` (default: `pbt-analysis:latest`): Docker image for analysis
+
 The system uses a top-level `secrets.json` file for API tokens:
 ```json
 {
@@ -124,17 +130,13 @@ The system uses a top-level `secrets.json` file for API tokens:
 }
 ```
 
-### Dataset Format
+### Database-Driven Workflow
 
-Input datasets must follow this JSON structure:
-```json
-{
-  "owner/repo": {
-    "node_ids": ["tests/file.py::TestClass::test_method"],
-    "requirements.txt": "package==version\n..."
-  }
-}
-```
+The analysis system pulls repositories directly from the `core_repositories` table in `analysis/data.db`:
+- Repositories are collected via `analysis/collect/run.py` and stored in `core_repositories`
+- The `requirements` column stores package dependencies for each repository
+- `run_analysis.py` reads from the database (no JSON dataset files needed)
+- Test discovery happens automatically if `node_ids` are not pre-specified
 
 ## Common Issues & Solutions
 

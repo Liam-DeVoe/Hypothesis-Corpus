@@ -51,7 +51,7 @@ class Worker(Process):
         logger.info(f"[w{self.worker_id}] Worker started")
 
         # Initialize components in the worker process
-        db = Database(self.db_path)
+        db = Database(db_path=self.db_path)
         test_runner = TestRunner(self.docker_image, worker_id=self.worker_id)
 
         # Load experiments
@@ -291,14 +291,13 @@ class WorkerPool:
 
     def __init__(
         self,
-        num_workers: int = 4,
-        db_path: str = "data/data.db",
-        docker_image: str = "pbt-analysis:latest",
         *,
+        num_workers: int,
+        db_path: str,
+        docker_image: str,
         experiments: list[str],
         debug: bool,
     ):
-        """Initialize worker pool."""
         self.num_workers = num_workers
         self.db_path = db_path
         self.docker_image = docker_image

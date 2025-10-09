@@ -9,8 +9,7 @@ logger = logging.getLogger(__name__)
 class Database:
     """SQLite database for storing PBT analysis results."""
 
-    def __init__(self, db_path: str = "data/data.db"):
-        """Initialize database connection."""
+    def __init__(self, *, db_path: str):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._run_migrations()

@@ -22,6 +22,7 @@ def init_db():
             size_bytes INTEGER NOT NULL,
             stargazers_count INTEGER NOT NULL,
             is_fork BOOLEAN NOT NULL,
+            requirements TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """

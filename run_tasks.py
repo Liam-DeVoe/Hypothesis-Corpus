@@ -31,7 +31,7 @@ def cli():
 
 @cli.command()
 @click.argument("task")
-@click.option("--db-path", default="data/data.db", help="Path to database")
+@click.option("--db-path", default="analysis/data.db", help="Path to database")
 def run(task: str, db_path: str):
     """Run a specific task.
 
@@ -40,7 +40,7 @@ def run(task: str, db_path: str):
     console.print(f"\n[bold]Running task: {task}[/bold]\n")
 
     try:
-        results = run_task(task, db_path)
+        results = run_task(task, db_path=db_path)
 
         console.print("\n[green]Task completed successfully![/green]\n")
 
@@ -62,13 +62,13 @@ def run(task: str, db_path: str):
 
 
 @cli.command()
-@click.option("--db-path", default="data/data.db", help="Path to database")
+@click.option("--db-path", default="analysis/data.db", help="Path to database")
 @click.option("--task", help="Specific task to clear (default: all)")
 def clear(db_path: str, task: str):
     """Clear task data from the database."""
     from analysis.tasks import Task
 
-    db = Database(db_path)
+    db = Database(db_path=db_path)
 
     if task:
         if task not in Task.tasks:
