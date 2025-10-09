@@ -80,12 +80,13 @@ def parse_observability_data(obs_dir: Path) -> dict[str, Any]:
                 data["test_cases"].append(entry)
 
                 # Aggregate coverage across all test cases
+                if entry["coverage"] is None:
+                    entry["coverage"] = {}
                 coverage = entry["coverage"]
-                if coverage:
-                    for file_path, lines in coverage.items():
-                        if file_path not in data["coverage"]:
-                            data["coverage"][file_path] = set()
-                        data["coverage"][file_path].update(lines)
+                for file_path, lines in coverage.items():
+                    if file_path not in data["coverage"]:
+                        data["coverage"][file_path] = set()
+                    data["coverage"][file_path].update(lines)
 
     # Convert sets to lists for JSON serialization
     for file_path in data["coverage"]:

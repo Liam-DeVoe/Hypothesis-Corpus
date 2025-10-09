@@ -330,6 +330,79 @@ def main():
 
             st.plotly_chart(fig, use_container_width=True)
 
+        # Line execution frequency histograms
+        st.subheader("Line execution frequency distribution")
+
+        with db.connection() as conn:
+            line_execution_data = pd.read_sql_query(
+                """
+                SELECT
+                    t.node_id,
+                    tc.line_execution_counts,
+                    ne.examples_count
+                FROM node_coverage tc
+                JOIN nodes t ON tc.node_id = t.id
+                JOIN repositories r ON t.repo_id = r.id
+                LEFT JOIN node_executions ne ON t.id = ne.node_id
+                WHERE r.repo_name = ?
+                AND tc.line_execution_counts IS NOT NULL
+                """,
+                conn,
+                params=[selected_repo],
+            )
+
+        if not line_execution_data.empty:
+            import json
+
+            fig = go.Figure()
+
+            node_ids = line_execution_data["node_id"].unique()
+            common_prefix = shared_prefix(node_ids.tolist())
+
+            for _, row in line_execution_data.iterrows():
+                node_id = row["node_id"]
+                line_counts = json.loads(row["line_execution_counts"])
+
+                if not line_counts:
+                    continue
+
+                # Get total examples for this node (use max line execution count as proxy if examples_count not available)
+                total_examples = (
+                    row["examples_count"]
+                    if pd.notna(row["examples_count"])
+                    else max(line_counts.values())
+                )
+
+                # Calculate execution frequencies as percentages
+                frequencies = [
+                    count / total_examples * 100 for count in line_counts.values()
+                ]
+
+                test_name = node_id.lstrip(common_prefix)
+
+                fig.add_trace(
+                    go.Histogram(
+                        x=frequencies,
+                        name=test_name,
+                        opacity=0.6,
+                        nbinsx=50,
+                    )
+                )
+
+            fig.update_layout(
+                title=f"{selected_repo}",
+                xaxis_title="Line execution frequency (% of total test cases)",
+                yaxis_title="Line count",
+                barmode="overlay",
+                hovermode="x unified",
+                height=600,
+                showlegend=True,
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No line execution frequency data available for this repository.")
+
         # Detailed test coverage view
         st.subheader("Details")
         with db.connection() as conn:

@@ -1,6 +1,7 @@
 import json
 import shutil
 import subprocess
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,7 @@ class CoverageExperiment(Experiment):
                 file_path TEXT NOT NULL,
                 lines_covered TEXT,  -- JSON array of line numbers
                 covered_lines INTEGER,
+                line_execution_counts TEXT,  -- JSON mapping: {"line_num": execution_count, ...}
                 collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (node_id) REFERENCES nodes(id)
             );
@@ -56,7 +58,6 @@ class CoverageExperiment(Experiment):
                 case_number INTEGER NOT NULL,  -- Order of test case execution
                 file_path TEXT NOT NULL,
                 lines_covered TEXT,  -- JSON array of line numbers for this test case
-                cumulative_lines TEXT,  -- JSON array of all unique lines seen so far
                 cumulative_count INTEGER,  -- Count of unique lines seen so far
                 collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (node_id) REFERENCES nodes(id)
@@ -165,51 +166,63 @@ class CoverageExperiment(Experiment):
 
             # Store aggregate coverage data
             coverage = data.get("coverage", {})
+            test_cases = data.get("test_cases", [])
+
             if coverage:
+                # Calculate line execution counts from test cases
+                line_counts_per_file = defaultdict(lambda: defaultdict(int))
+                for test_case in test_cases:
+                    for file_path, lines in test_case["coverage"].items():
+                        for line in lines:
+                            line_counts_per_file[file_path][str(line)] += 1
+
                 for file_path, lines in coverage.items():
-                    lines_list = lines if isinstance(lines, list) else list(lines)
+                    lines = list(lines)
+                    line_counts = dict(line_counts_per_file[file_path])
+
                     conn.execute(
                         """
-                        INSERT INTO node_coverage (node_id, file_path, lines_covered, covered_lines)
-                        VALUES (?, ?, ?, ?)
+                        INSERT INTO node_coverage (node_id, file_path, lines_covered, covered_lines, line_execution_counts)
+                        VALUES (?, ?, ?, ?, ?)
                         """,
-                        (node_id, file_path, json.dumps(lines_list), len(lines_list)),
+                        (
+                            node_id,
+                            file_path,
+                            json.dumps(lines),
+                            len(lines),
+                            json.dumps(line_counts),
+                        ),
                     )
 
             # Store per-test-case coverage
-            test_cases = data.get("test_cases", [])
             if test_cases:
                 cumulative_coverage = {}
 
                 for case_num, test_case in enumerate(test_cases):
-                    if "coverage" in test_case and test_case["coverage"] is not None:
-                        # Update cumulative coverage with lines from this test case
-                        for file_path, lines in test_case["coverage"].items():
-                            if file_path not in cumulative_coverage:
-                                cumulative_coverage[file_path] = set()
-                            cumulative_coverage[file_path].update(lines)
+                    # Update cumulative coverage with lines from this test case
+                    for file_path, lines in test_case["coverage"].items():
+                        if file_path not in cumulative_coverage:
+                            cumulative_coverage[file_path] = set()
+                        cumulative_coverage[file_path].update(lines)
 
-                        for file_path in cumulative_coverage:
-                            cumulative_list = sorted(cumulative_coverage[file_path])
-                            lines_this_case = test_case["coverage"].get(file_path, [])
+                    for file_path, cumulative_list in cumulative_coverage.items():
+                        lines_this_case = test_case["coverage"].get(file_path, [])
 
-                            conn.execute(
-                                """
-                                INSERT INTO case_coverage (
-                                    node_id, case_number, file_path, lines_covered,
-                                    cumulative_lines, cumulative_count
-                                )
-                                VALUES (?, ?, ?, ?, ?, ?)
-                                """,
-                                (
-                                    node_id,
-                                    case_num,
-                                    file_path,
-                                    json.dumps(lines_this_case),
-                                    json.dumps(cumulative_list),
-                                    len(cumulative_list),
-                                ),
+                        conn.execute(
+                            """
+                            INSERT INTO case_coverage (
+                                node_id, case_number, file_path, lines_covered, cumulative_count
                             )
+                            VALUES (?, ?, ?, ?, ?)
+                            """,
+                            (
+                                node_id,
+                                case_num,
+                                file_path,
+                                json.dumps(lines_this_case),
+                                len(cumulative_list),
+                            ),
+                        )
 
             # Store observability metadata
             timing = data.get("timing", {})

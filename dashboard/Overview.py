@@ -54,7 +54,7 @@ def load_data():
             SELECT
                 COUNT(*) as total,
                 SUM(CASE WHEN clone_status = 'success' THEN 1 ELSE 0 END) as successful,
-                SUM(CASE WHEN clone_status = 'failed' THEN 1 ELSE 0 END) as failed,
+                SUM(CASE WHEN clone_status = 'failed' THEN 1 ELSE 0 END) as failed
             FROM repositories
             """
         ).fetchone()
@@ -65,7 +65,7 @@ def load_data():
             SELECT
                 COUNT(*) as total,
                 SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
             FROM nodes
             """
         ).fetchone()

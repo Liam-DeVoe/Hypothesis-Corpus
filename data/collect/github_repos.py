@@ -9,9 +9,10 @@ from github import Github
 # https://docs.github.com/en/search-github/searching-on-github/searching-code
 # https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-code
 
-# 100 kb. we'll do a single open interval after this point; bank on there being
-# <1000 matching files over this limit.
-max_file_size = 100_000  # filesize in bytes
+# 300 kb. we'll do a single open interval after this point; bank on there being
+# <1000 matching files over this limit. Github claims to only index files up
+# to 384kb in size, though I haven't verified this.
+max_file_size = 300_000  # filesize in bytes
 initial_step_size = 50
 max_results = 1000
 limit_gb = 1
@@ -27,6 +28,10 @@ with open(secrets_path) as f:
 github_token = secrets["github_token"]
 
 g = Github(github_token, per_page=100)
+
+
+def clamp(lower, value, upper):
+    return max(lower, min(value, upper))
 
 
 def repos_from_term(term):
@@ -59,11 +64,12 @@ def repos_from_term(term):
             break
 
         # dynamically adjust step size for efficient searches
-        if count_results > max_results / 2:
+        if count_results > max_results / 2.5:
             step_size //= 2
         elif count_results < max_results / 3:
             step_size = int(step_size * 1.75)
 
+        step_size = clamp(5, step_size, 8_000)
         min_size = max_size
 
     return repos

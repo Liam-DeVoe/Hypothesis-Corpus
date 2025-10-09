@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import click
+import yaml
 from rich.console import Console
 
 from analyzer.database import Database
@@ -102,10 +103,6 @@ def main(
     experiment: tuple[str, ...],
     debug: bool,
 ):
-    """Run PBT corpus analysis."""
-
-    console.print()
-
     experiments = (
         list(experiment) if experiment else list(Experiment.experiments.keys())
     )
