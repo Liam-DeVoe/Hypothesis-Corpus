@@ -12,6 +12,8 @@ except ImportError:
     from experiment import Experiment
     from utils import filepath_from_node, subprocess_run
 
+# experiment for things that have to be collected at property runtime, like timing,
+# coverage, observability, etc.
 
 class RuntimeExperiment(Experiment):
     name = "runtime"

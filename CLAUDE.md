@@ -8,34 +8,39 @@ This is a Property-Based Testing (PBT) Corpus Analysis system that analyzes Hypo
 
 ## Commands
 
+### Collecting Repositories
+```bash
+# Collect repositories from GitHub
+python run.py collect
+```
+
 ### Running Analysis
 ```bash
 # Run analysis (pulls from database)
-python run_analysis.py --workers 4
+python run.py analysis --workers 4
 
 # Run sample test with MarkCBell/bigger repository
-python run_analysis.py --sample
+python run.py analysis --sample
 
 # Run with limited repositories
-python run_analysis.py --limit 10 --workers 2
+python run.py analysis --limit 10 --workers 2
 
 # Start visualization dashboard
 streamlit run dashboard/Overview.py
 ```
 
-### Rebuilding docker
-
-```
-docker build -f analysis/Dockerfile -t pbt-analysis .
-```
-
 ### Running Tasks
 ```bash
 # Run clustering task (Clio-style analysis of patterns/domains)
-python run_tasks.py run clustering
+python run.py task run clustering
 
 # Clear task data
-python run_tasks.py clear --task clustering
+python run.py task clear --task-name clustering
+```
+
+### Rebuilding Docker
+```bash
+docker build -f analysis/Dockerfile -t pbt-analysis .
 ```
 
 ### Development & Debugging
@@ -48,8 +53,8 @@ sqlite3 analysis/data.db "SELECT * FROM core_repositories LIMIT 5;"
 ## Architecture
 
 ### Core Flow
-1. **analysis/collect/run.py** collects repositories from GitHub and stores in `core_repositories` table
-2. **run_analysis.py** reads from database and orchestrates the analysis pipeline
+1. **python run.py collect** collects repositories from GitHub and stores in `core_repositories` table
+2. **python run.py analysis** reads from database and orchestrates the analysis pipeline
 3. **WorkerPool** (analysis/worker.py) distributes repositories across multiple processes
 4. Each worker uses **TestRunner** (analysis/test_runner.py) to:
    - Clone repository into temporary directory
@@ -122,7 +127,7 @@ The system uses **CLI arguments** for configuration (no config files):
 - `--workers` (default: `4`): Number of worker processes
 - `--docker-image` (default: `pbt-analysis:latest`): Docker image for analysis
 
-The system uses a top-level `secrets.json` file for API tokens:
+The system uses `analysis/secrets.json` for API tokens:
 ```json
 {
   "claude_code_oauth_token": "your-token-here",
@@ -130,12 +135,14 @@ The system uses a top-level `secrets.json` file for API tokens:
 }
 ```
 
+See `analysis/secrets.json.example` for a template.
+
 ### Database-Driven Workflow
 
 The analysis system pulls repositories directly from the `core_repositories` table in `analysis/data.db`:
-- Repositories are collected via `analysis/collect/run.py` and stored in `core_repositories`
+- Repositories are collected via `python run.py collect` and stored in `core_repositories`
 - The `requirements` column stores package dependencies for each repository
-- `run_analysis.py` reads from the database (no JSON dataset files needed)
+- `python run.py analysis` reads from the database (no JSON dataset files needed)
 - Test discovery happens automatically if `node_ids` are not pre-specified
 
 ## Common Issues & Solutions
@@ -171,13 +178,13 @@ with db.connection() as conn:
 
 ## Key Files to Understand
 
+- **run.py**: Unified CLI interface with collect/analysis/task subcommands
 - **analysis/test_runner.py**: Orchestrates cloning, environment setup, and Docker execution
 - **analysis/worker.py**: Multiprocessing orchestration and error handling
 - **analysis/experiments/runner.py**: Entry point that runs inside Docker containers
 - **analysis/database.py**: Schema definition and data persistence
-- **run_analysis.py**: CLI interface and main orchestration
 
 ### Experiments & Tasks
 - **analysis/experiments/**: Experiment implementations (runtime, facets)
 - **analysis/tasks/**: Task implementations (clustering) and runner logic
-- **run_tasks.py**: CLI for manually running tasks
+- **analysis/collect/**: GitHub repository collection scripts

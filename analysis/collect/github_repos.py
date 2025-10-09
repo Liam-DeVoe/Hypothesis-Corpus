@@ -23,7 +23,7 @@ terms = ["import hypothesis", "from hypothesis import", "from hypothesis."]
 # silence ratelimit / backoff prints.
 logging.getLogger("github").setLevel(logging.WARNING)
 
-secrets_path = Path(__file__).parent.parent.parent / "secrets.json"
+secrets_path = Path(__file__).parent.parent / "secrets.json"
 with open(secrets_path) as f:
     secrets = json.load(f)
 github_token = secrets["github_token"]

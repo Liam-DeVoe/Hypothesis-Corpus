@@ -21,12 +21,31 @@ class Database:
         pass
 
     def _init_core_schema(self):
-        """Create core database schema shared by all experiments."""
         with self.connection() as conn:
             conn.executescript(
                 """
-                -- Node information
-                CREATE TABLE core_nodes (
+                -- Repository information (populated by collection)
+                CREATE TABLE IF NOT EXISTS core_repositories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    full_name TEXT UNIQUE NOT NULL,
+                    size_bytes INTEGER NOT NULL,
+                    stargazers_count INTEGER NOT NULL,
+                    is_fork BOOLEAN NOT NULL,
+                    requirements TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- MinHash data for deduplication (populated by collection)
+                CREATE TABLE IF NOT EXISTS core_minhashes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    repo_id INTEGER NOT NULL,
+                    minhash_data BLOB NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (repo_id) REFERENCES core_repositories(id)
+                );
+
+                -- Node information (populated by analysis)
+                CREATE TABLE IF NOT EXISTS core_nodes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     repo_id INTEGER NOT NULL,
                     node_id TEXT NOT NULL,
@@ -41,6 +60,7 @@ class Database:
                 );
 
                 -- Create indexes for better query performance
+                CREATE INDEX IF NOT EXISTS idx_minhashes_repo ON core_minhashes(repo_id);
                 CREATE INDEX IF NOT EXISTS idx_nodes_repo ON core_nodes(repo_id);
                 CREATE INDEX IF NOT EXISTS idx_nodes_status ON core_nodes(status);
             """

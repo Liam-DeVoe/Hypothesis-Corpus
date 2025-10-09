@@ -281,7 +281,8 @@ class Worker(Process):
 
         except Exception as e:
             logger.error(
-                f"[w{self.worker_id}][{work_item.repo_name}] Error processing: {e}"
+                f"[w{self.worker_id}][{work_item.repo_name}] Error processing: "
+                f"{traceback.format_exception(e)}"
             )
             return {"success": False, "error": str(e)}
 

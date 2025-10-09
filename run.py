@@ -1,25 +1,20 @@
 """
-Main script to run the PBT corpus analysis.
+Unified CLI for PBT corpus analysis system.
 """
 
 import logging
 import sys
-from pathlib import Path
 from typing import Any
 
 import click
 from rich.console import Console
-
-from analysis.database import Database
-from analysis.experiments import Experiment
-from analysis.worker import WorkerPool, WorkItem
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(message)s",
     datefmt="",
     handlers=[logging.StreamHandler()],
-    force=True,  # Override any existing configuration
+    force=True,
 )
 
 # Ensure all loggers use the same format
@@ -31,39 +26,35 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
-def load_dataset_from_db(db_path: str, limit: int | None = None) -> dict[str, Any]:
-    """Load dataset from database."""
-    import sqlite3
-
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-
-    query = "SELECT full_name, requirements FROM core_repositories"
-    if limit:
-        query += f" LIMIT {limit}"
-
-    repos = conn.execute(query).fetchall()
-    conn.close()
-
-    # Convert to dataset format
-    dataset = {}
-    for repo in repos:
-        # TODO: We need to get node_ids from somewhere. For now, use empty list
-        # which will trigger test discovery
-        dataset[repo["full_name"]] = {
-            "node_ids": [],
-            "requirements.txt": repo["requirements"] or "",
-        }
-
-    return dataset
+@click.group()
+def cli():
+    pass
 
 
+# ==============================================================================
+# COLLECT COMMAND
+# ==============================================================================
 
 
-def prepare_work_items(dataset: dict[str, Any]) -> list[WorkItem]:
+@cli.command()
+@click.option("--db-path", default="analysis/data.db", help="Path to database file")
+def collect(db_path: str):
+    """Collect repositories from GitHub and store in database."""
+    from analysis.collect.run import run_collection
+
+    run_collection(db_path)
+
+
+# ==============================================================================
+# ANALYSIS COMMAND
+# ==============================================================================
+
+
+def prepare_work_items(dataset: dict[str, Any]):
     """Convert dataset to work items."""
-    work_items = []
+    from analysis.worker import WorkItem
 
+    work_items = []
     for repo_name, repo_data in dataset.items():
         work_item = WorkItem(
             repo_name=repo_name,
@@ -75,24 +66,21 @@ def prepare_work_items(dataset: dict[str, Any]) -> list[WorkItem]:
     return work_items
 
 
-@click.command()
-@click.option(
-    "--db-path", default="analysis/data.db", help="Path to database file"
-)
+@cli.command()
+@click.option("--db-path", default="analysis/data.db", help="Path to database file")
 @click.option("--workers", "-w", type=int, default=4, help="Number of worker processes")
 @click.option(
     "--sample", "-s", is_flag=True, help="Run sample test with MarkCBell/bigger"
 )
 @click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
-@click.option("--docker-image", default="pbt-analysis:latest", help="Docker image to use")
 @click.option(
-    "--experiment",
-    "-e",
-    multiple=True,
-    help="Experiments to run (default: all)",
+    "--docker-image", default="pbt-analysis:latest", help="Docker image to use"
+)
+@click.option(
+    "--experiment", "-e", multiple=True, help="Experiments to run (default: all)"
 )
 @click.option("--debug", is_flag=True, help="Enable debug mode with verbose logging")
-def main(
+def analysis(
     db_path: str,
     workers: int,
     sample: bool,
@@ -101,6 +89,11 @@ def main(
     experiment: tuple[str, ...],
     debug: bool,
 ):
+    """Run analysis on repositories in the database."""
+    from analysis.database import Database
+    from analysis.experiments import Experiment
+    from analysis.worker import WorkerPool
+
     experiments = (
         list(experiment) if experiment else list(Experiment.experiments.keys())
     )
@@ -117,10 +110,8 @@ def main(
             }
         }
         workers = 1
-        # Only run runtime experiment in sample mode
         experiments = ["runtime"]
     else:
-        # Load from database
         dataset_data = load_dataset_from_db(db_path, limit=limit)
 
     # Prepare work items
@@ -177,5 +168,51 @@ def main(
     )
 
 
+# ==============================================================================
+# TASK COMMANDS
+# ==============================================================================
+
+
+@cli.group()
+def task():
+    """Task management commands."""
+    pass
+
+
+@task.command()
+@click.argument("task_name")
+@click.option("--db-path", default="analysis/data.db", help="Path to database")
+def run(task_name: str, db_path: str):
+    from analysis.tasks import run_task
+
+    run_task(task_name, db_path=db_path)
+
+
+@task.command()
+@click.option("--db-path", default="analysis/data.db", help="Path to database")
+@click.option("--task-name", help="Specific task to clear (default: all)")
+def clear(db_path: str, task_name: str):
+    """Clear task data from the database."""
+    from analysis.database import Database
+    from analysis.tasks import Task
+
+    db = Database(db_path=db_path)
+
+    if task_name:
+        if task_name not in Task.tasks:
+            console.print(f"[red]Task '{task_name}' not found[/red]")
+            sys.exit(1)
+
+        console.print(f"Clearing data for task: [yellow]{task_name}[/yellow]")
+        Task.tasks[task_name].delete_data(db)
+        console.print("[green]Data cleared successfully[/green]")
+    else:
+        console.print("[yellow]Clearing data for all tasks...[/yellow]")
+        for name, task_class in Task.tasks.items():
+            console.print(f"  Clearing {name}...")
+            task_class.delete_data(db)
+        console.print("[green]All task data cleared[/green]")
+
+
 if __name__ == "__main__":
-    main()
+    cli()
