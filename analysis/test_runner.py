@@ -196,7 +196,9 @@ class TestRunner:
             repo_dir = work_dir / "repo"
 
             self.clone_repository(repo_name, work_dir / "repo")
-            self.setup_environment(repo_dir, requirements, node_ids, experiment_name, debug=debug)
+            self.setup_environment(
+                repo_dir, requirements, node_ids, experiment_name, debug=debug
+            )
             results = self.run_in_container(repo_name, repo_dir, node_ids, debug)
             assert results is not None
             return results

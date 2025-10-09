@@ -128,14 +128,16 @@ def overview_page():
 
 def main():
     """Main dashboard application with custom navigation."""
-    pg = st.navigation([
-        st.Page(overview_page, title="Overview"),
-        st.Page("pages/Summary.py", title="Summary"),
-        st.Page("pages/Coverage.py", title="Coverage"),
-        st.Page("pages/Facets.py", title="Facets"),
-        st.Page("pages/Clusters.py", title="Clusters"),
-        st.Page("pages/History.py", title="History"),
-    ])
+    pg = st.navigation(
+        [
+            st.Page(overview_page, title="Overview"),
+            st.Page("pages/Summary.py", title="Summary"),
+            st.Page("pages/Coverage.py", title="Coverage"),
+            st.Page("pages/Facets.py", title="Facets"),
+            st.Page("pages/Clusters.py", title="Clusters"),
+            st.Page("pages/History.py", title="History"),
+        ]
+    )
     pg.run()
 
 
