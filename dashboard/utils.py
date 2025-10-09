@@ -111,7 +111,7 @@ def execution_frequency_histogram():
             SELECT
                 tc.line_execution_counts,
                 ne.examples_count
-            FROM node_coverage tc
+            FROM runtime_coverage_summary tc
             LEFT JOIN node_executions ne ON tc.node_id = ne.node_id
             WHERE tc.line_execution_counts IS NOT NULL
             """,

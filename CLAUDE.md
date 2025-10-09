@@ -77,7 +77,7 @@ sqlite3 data/analysis.db "SELECT * FROM repositories LIMIT 5;"
 - Returns results as dict which are stored in results.json
 
 Built-in experiments:
-- `coverage`: Detects Hypothesis strategies, features, and execution data
+- `runtime`: Detects Hypothesis strategies, features, and execution data
 - `facets`: Uses Claude to generate summaries, property patterns, and technical domains
 
 #### Tasks System
@@ -104,7 +104,7 @@ Core tables track repository analysis:
 - `analysis_runs`: Metadata about analysis runs
 
 Experiment-specific tables are defined by each experiment's `get_schema_sql()`:
-- `coverage` experiment: `node_coverage`, `node_executions`, `observability_data`
+- `runtime` experiment: `node_coverage`, `node_executions`, `observability_data`
 - `facets` experiment: `facets` table with summaries, property patterns, and technical domains
 
 Task-specific tables are defined by each task's `get_schema_sql()`:
@@ -172,6 +172,6 @@ with db.connection() as conn:
 - **run_analysis.py**: CLI interface and main orchestration
 
 ### Experiments & Tasks
-- **analysis/experiments/**: Experiment implementations (coverage, facets)
+- **analysis/experiments/**: Experiment implementations (runtime, facets)
 - **analysis/tasks/**: Task implementations (clustering) and runner logic
 - **run_tasks.py**: CLI for manually running tasks

@@ -44,7 +44,7 @@ def main():
                 COUNT(DISTINCT tc.file_path) as files_covered,
                 SUM(tc.covered_lines) as total_lines_covered,
                 AVG(tc.covered_lines) as avg_lines_per_file
-            FROM node_coverage tc
+            FROM runtime_coverage_summary tc
             """,
             conn,
         )
@@ -60,7 +60,7 @@ def main():
                 COUNT(DISTINCT tc.file_path) as files_covered
             FROM repositories r
             LEFT JOIN nodes t ON r.id = t.repo_id
-            LEFT JOIN node_coverage tc ON t.id = tc.node_id
+            LEFT JOIN runtime_coverage_summary tc ON t.id = tc.node_id
             WHERE r.clone_status = 'success'
             GROUP BY r.id
             HAVING nodes_with_coverage > 0
@@ -78,7 +78,7 @@ def main():
                 COUNT(DISTINCT tc.node_id) as nodes_count,
                 SUM(tc.covered_lines) as lines_covered,
                 COUNT(DISTINCT tc.file_path) as files_covered
-            FROM node_coverage tc
+            FROM runtime_coverage_summary tc
             GROUP BY DATE(tc.collected_at)
             ORDER BY date
             """,
@@ -247,15 +247,15 @@ def main():
                 """
                 SELECT
                     t.node_id,
-                    tcc.case_number,
+                    tcc.testcase_number,
                     tcc.file_path,
                     tcc.cumulative_count,
                     r.repo_name as repository
-                FROM case_coverage tcc
+                FROM runtime_coverage tcc
                 JOIN nodes t ON tcc.node_id = t.id
                 JOIN repositories r ON t.repo_id = r.id
                 WHERE r.repo_name = ?
-                ORDER BY t.id, tcc.file_path, tcc.case_number
+                ORDER BY t.id, tcc.file_path, tcc.testcase_number
                 """,
                 conn,
                 params=[selected_repo],
@@ -274,7 +274,7 @@ def main():
 
                 # Aggregate coverage across all files for each case
                 aggregated_data = (
-                    test_data.groupby("case_number")
+                    test_data.groupby("testcase_number")
                     .agg({"cumulative_count": "sum"})
                     .reset_index()
                 )
@@ -283,7 +283,7 @@ def main():
 
                 fig.add_trace(
                     go.Scatter(
-                        x=aggregated_data["case_number"],
+                        x=aggregated_data["testcase_number"],
                         y=aggregated_data["cumulative_count"],
                         mode="lines",
                         name=test_name,
@@ -312,7 +312,7 @@ def main():
                     t.node_id,
                     tc.line_execution_counts,
                     ne.examples_count
-                FROM node_coverage tc
+                FROM runtime_coverage_summary tc
                 JOIN nodes t ON tc.node_id = t.id
                 JOIN repositories r ON t.repo_id = r.id
                 LEFT JOIN node_executions ne ON t.id = ne.node_id
@@ -379,7 +379,7 @@ def main():
         st.subheader("Details")
         with db.connection() as conn:
             # Get test coverage details for selected repository
-            node_coverage_details = pd.read_sql_query(
+            runtime_coverage_summary_details = pd.read_sql_query(
                 """
                 SELECT
                     t.node_id,
@@ -389,7 +389,7 @@ def main():
                     te.execution_time
                 FROM nodes t
                 JOIN repositories r ON t.repo_id = r.id
-                LEFT JOIN node_coverage tc ON t.id = tc.node_id
+                LEFT JOIN runtime_coverage_summary tc ON t.id = tc.node_id
                 LEFT JOIN node_executions te ON t.id = te.node_id
                 WHERE r.repo_name = ?
                 AND tc.covered_lines IS NOT NULL
@@ -399,9 +399,9 @@ def main():
                 params=[selected_repo],
             )
 
-            if not node_coverage_details.empty:
+            if not runtime_coverage_summary_details.empty:
                 st.dataframe(
-                    node_coverage_details,
+                    runtime_coverage_summary_details,
                     width="stretch",
                     hide_index=True,
                     column_config={

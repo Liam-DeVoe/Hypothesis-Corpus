@@ -48,17 +48,11 @@ def process_minhashes():
     conn.row_factory = sqlite3.Row
     repos = conn.execute("SELECT id, full_name FROM repositories").fetchall()
 
-    print(f"\nProcessing minhashes for {len(repos)} repositories...")
-
+    print(f"Processing minhashes for {len(repos)} repositories...")
     for i, repo in enumerate(repos, 1):
         repo_name = repo["full_name"]
         print(f"[{i}/{len(repos)}] {repo_name} ... ", end="", flush=True)
-
-        try:
-            minhash_repository(conn, repo_name)
-            print("done")
-        except Exception as e:
-            print(f"failed: {e}")
+        minhash_repository(conn, repo_name)
 
     conn.close()
 

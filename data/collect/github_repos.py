@@ -1,6 +1,7 @@
 import json
 import logging
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
 
 from github import Github
@@ -30,12 +31,20 @@ github_token = secrets["github_token"]
 g = Github(github_token, per_page=100)
 
 
+@dataclass
+class RepoData:
+    full_name: str
+    size_bytes: int
+    stargazers_count: int
+    is_fork: bool
+
+
 def clamp(lower, value, upper):
     return max(lower, min(value, upper))
 
 
 def repos_from_term(term):
-    repos = set()
+    repos = {}
     step_size = initial_step_size
     min_size = 0
 
@@ -52,7 +61,18 @@ def repos_from_term(term):
         results = g.search_code(q)
         count_results = 0
         for result in results:
-            repos.add(result.repository)
+            repo = result.repository
+            # I think some of these attr accesses cost an api call, so don't
+            # perform it unless we need to.
+            if repo.full_name in repos:
+                continue
+            repo_data = RepoData(
+                full_name=repo.full_name,
+                size_bytes=repo.size,
+                stargazers_count=repo.stargazers_count,
+                is_fork=repo.fork,
+            )
+            repos[repo_data.full_name] = repo_data
             count_results += 1
 
         print(f"{count_results} results ({len(repos)} unique so far)")
@@ -79,19 +99,13 @@ def repos_from_term(term):
 
 
 def repos_from_api():
-    repos = set()
+    repos = {}
     for term in terms:
-        repos |= repos_from_term(term)
+        repos.update(repos_from_term(term))
     return repos
 
 
 def filter_repos(db_path):
-    """
-    Filter repositories in the database, deleting those that don't match criteria.
-    Criteria:
-    - Size must be <= limit_gb
-    - If forked, must have >= limit_forked_stars stars
-    """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute(
@@ -125,7 +139,7 @@ def filter_repos(db_path):
     remaining_count = cursor.execute("SELECT COUNT(*) FROM repositories").fetchone()[0]
     conn.close()
     print(
-        f"\nDeleted {len(repos_to_delete)} repositories, {remaining_count} remaining in {db_path}"
+        f"Deleted {len(repos_to_delete)} repositories, {remaining_count} remaining in {db_path}"
     )
 
 
@@ -137,17 +151,17 @@ def collect_repos(db_path):
     cursor.execute("DELETE FROM repositories")
     conn.commit()
 
-    for repo in repos:
+    for repo in repos.values():
         cursor.execute(
             """
             INSERT OR REPLACE INTO repositories (full_name, size_bytes, stargazers_count, is_fork)
             VALUES (?, ?, ?, ?)
         """,
-            (repo.full_name, repo.size, repo.stargazers_count, repo.fork),
+            (repo.full_name, repo.size_bytes, repo.stargazers_count, repo.is_fork),
         )
 
     conn.commit()
     count = cursor.execute("SELECT COUNT(*) FROM repositories").fetchone()[0]
     conn.close()
 
-    print(f"\nStored {count} repositories in {db_path}")
+    print(f"Stored {count} repositories in {db_path}")

@@ -132,7 +132,7 @@ def main():
         [
             st.Page(overview_page, title="Overview"),
             st.Page("pages/Summary.py", title="Summary"),
-            st.Page("pages/Coverage.py", title="Coverage"),
+            st.Page("pages/Runtime.py", title="Runtime"),
             st.Page("pages/Facets.py", title="Facets"),
             st.Page("pages/Clusters.py", title="Clusters"),
             st.Page("pages/History.py", title="History"),

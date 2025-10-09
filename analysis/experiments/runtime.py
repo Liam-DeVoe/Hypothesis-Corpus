@@ -13,14 +13,14 @@ except ImportError:
     from utils import filepath_from_node, subprocess_run
 
 
-class CoverageExperiment(Experiment):
-    name = "coverage"
+class RuntimeExperiment(Experiment):
+    name = "runtime"
     max_examples = 500
 
     @staticmethod
     def get_schema_sql() -> str:
         return """
-            CREATE TABLE IF NOT EXISTS node_coverage (
+            CREATE TABLE IF NOT EXISTS runtime_coverage_summary (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 node_id INTEGER NOT NULL,
                 file_path TEXT NOT NULL,
@@ -44,19 +44,10 @@ class CoverageExperiment(Experiment):
                 FOREIGN KEY (node_id) REFERENCES nodes(id)
             );
 
-            CREATE TABLE IF NOT EXISTS observability_data (
+            CREATE TABLE IF NOT EXISTS runtime_coverage (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 node_id INTEGER NOT NULL,
-                timing_data TEXT,  -- JSON timing information
-                example_data TEXT,  -- JSON examples data
-                metadata TEXT,  -- JSON additional metadata
-                FOREIGN KEY (node_id) REFERENCES nodes(id)
-            );
-
-            CREATE TABLE IF NOT EXISTS case_coverage (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                node_id INTEGER NOT NULL,
-                case_number INTEGER NOT NULL,  -- Order of test case execution
+                testcase_number INTEGER NOT NULL,  -- Order of test case execution
                 file_path TEXT NOT NULL,
                 lines_covered TEXT,  -- JSON array of line numbers for this test case
                 cumulative_count INTEGER,  -- Count of unique lines seen so far
@@ -64,11 +55,10 @@ class CoverageExperiment(Experiment):
                 FOREIGN KEY (node_id) REFERENCES nodes(id)
             );
 
-            CREATE INDEX IF NOT EXISTS idx_coverage_test ON node_coverage(node_id);
+            CREATE INDEX IF NOT EXISTS idx_coverage_test ON runtime_coverage_summary(node_id);
             CREATE INDEX IF NOT EXISTS idx_executions_test ON node_executions(node_id);
-            CREATE INDEX IF NOT EXISTS idx_observability_test ON observability_data(node_id);
-            CREATE INDEX IF NOT EXISTS idx_case_coverage ON case_coverage(node_id, case_number);
-            CREATE INDEX IF NOT EXISTS idx_test_case_file ON case_coverage(node_id, file_path);
+            CREATE INDEX IF NOT EXISTS idx_runtime_coverage ON runtime_coverage(node_id, testcase_number);
+            CREATE INDEX IF NOT EXISTS idx_test_case_file ON runtime_coverage(node_id, file_path);
         """
 
     @staticmethod
@@ -91,7 +81,7 @@ class CoverageExperiment(Experiment):
             "--experiment-nodeid",
             node_id,
             "--pbt-max-examples",
-            CoverageExperiment.max_examples,
+            RuntimeExperiment.max_examples,
         ]
 
         if debug:
@@ -105,10 +95,10 @@ class CoverageExperiment(Experiment):
 
         if debug or result.returncode != 0:
             if result.stdout:
-                print("[CoverageExperiment] Pytest stdout:", flush=True)
+                print("[RuntimeExperiment] Pytest stdout:", flush=True)
                 print(result.stdout, flush=True)
             if result.stderr:
-                print("[CoverageExperiment] Pytest stderr:", flush=True)
+                print("[RuntimeExperiment] Pytest stderr:", flush=True)
                 print(result.stderr, flush=True)
 
         assert result.returncode == 0
@@ -137,7 +127,6 @@ class CoverageExperiment(Experiment):
             "execution_time": execution_time,
             "coverage": observability_data.get("coverage", {}),
             "test_cases": observability_data.get("test_cases", []),
-            "timing": observability_data.get("timing", {}),
         }
 
     @staticmethod
@@ -181,7 +170,7 @@ class CoverageExperiment(Experiment):
 
                     conn.execute(
                         """
-                        INSERT INTO node_coverage (node_id, file_path, lines_covered, covered_lines, line_execution_counts)
+                        INSERT INTO runtime_coverage_summary (node_id, file_path, lines_covered, covered_lines, line_execution_counts)
                         VALUES (?, ?, ?, ?, ?)
                         """,
                         (
@@ -209,8 +198,8 @@ class CoverageExperiment(Experiment):
 
                         conn.execute(
                             """
-                            INSERT INTO case_coverage (
-                                node_id, case_number, file_path, lines_covered, cumulative_count
+                            INSERT INTO runtime_coverage (
+                                node_id, testcase_number, file_path, lines_covered, cumulative_count
                             )
                             VALUES (?, ?, ?, ?, ?)
                             """,
@@ -223,22 +212,16 @@ class CoverageExperiment(Experiment):
                             ),
                         )
 
-            # Store observability metadata
-            timing = data.get("timing", {})
-            if timing:
-                conn.execute(
-                    """
-                    INSERT INTO observability_data (node_id, timing_data, example_data, metadata)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (node_id, json.dumps(timing), None, None),
-                )
-
             conn.commit()
 
     @staticmethod
     def delete_data(db: Any, repo_name: str):
         db.delete_experiment_data(
             repo_name,
-            ["node_executions", "node_coverage", "case_coverage", "observability_data"],
+            [
+                "node_executions",
+                "runtime_coverage_summary",
+                "runtime_coverage",
+                "observability_data",
+            ],
         )

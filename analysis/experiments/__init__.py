@@ -1,9 +1,9 @@
-from .coverage import CoverageExperiment
 from .experiment import Experiment
 from .facets import FacetsExperiment
+from .runtime import RuntimeExperiment
 
 __all__ = [
     "Experiment",
-    "CoverageExperiment",
+    "RuntimeExperiment",
     "FacetsExperiment",
 ]
