@@ -1,5 +1,4 @@
 import sys
-from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -9,7 +8,7 @@ import streamlit as st
 # Add parent directory to path so we can import analyzer
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from analyzer.database import Database
+from dashboard.utils import get_database, render_sidebar
 
 # Page configuration
 st.set_page_config(
@@ -20,24 +19,10 @@ st.set_page_config(
 )
 
 
-@st.cache_resource
-def get_database():
-    """Get database connection."""
-    return Database("data/analysis.db")
-
-
 def main():
     """Facets analysis page."""
     # Sidebar
-    with st.sidebar:
-        # Refresh button
-        if st.button("Refresh Data"):
-            st.cache_resource.clear()
-            st.rerun()
-
-        # Last update time
-        st.markdown("---")
-        st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    render_sidebar()
 
     st.header("Test Facets")
 

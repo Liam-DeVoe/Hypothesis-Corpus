@@ -1,5 +1,4 @@
 import sys
-from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -10,7 +9,12 @@ import streamlit as st
 # Add parent directory to path so we can import analyzer
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from analyzer.database import Database
+from dashboard.utils import (
+    common_prefix,
+    execution_frequency_histogram,
+    get_database,
+    render_sidebar,
+)
 
 # Page configuration
 st.set_page_config(
@@ -21,47 +25,10 @@ st.set_page_config(
 )
 
 
-@st.cache_resource
-def get_database():
-    """Get database connection."""
-    return Database("data/analysis.db")
-
-
-def shared_prefix(strings: list[str]) -> str:
-    if not strings:
-        return ""
-    if len(strings) == 1:
-        return ""
-
-    # Find the shortest string length
-    min_len = min(len(s) for s in strings)
-    if min_len == 0:
-        return ""
-
-    # Find common prefix
-    prefix = ""
-    for i in range(min_len):
-        char = strings[0][i]
-        if all(s[i] == char for s in strings):
-            prefix += char
-        else:
-            break
-
-    return prefix
-
-
 def main():
     """Coverage analysis page."""
     # Sidebar
-    with st.sidebar:
-        # Refresh button
-        if st.button("Refresh Data"):
-            st.cache_resource.clear()
-            st.rerun()
-
-        # Last update time
-        st.markdown("---")
-        st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    render_sidebar()
 
     st.header("Coverage")
 
@@ -214,8 +181,6 @@ def main():
 
     # Test execution results
     if not test_results.empty and test_results["total_executions"].iloc[0] > 0:
-        st.subheader("Test Execution Results")
-
         col1, col2 = st.columns(2)
 
         with col1:
@@ -240,6 +205,7 @@ def main():
 
         # Execution time histogram
         if not execution_times.empty and len(execution_times) > 0:
+            # Create histogram directly since we already have the data
             fig = px.histogram(
                 execution_times,
                 x="execution_time",
@@ -257,6 +223,12 @@ def main():
                 yaxis_title="Node count",
             )
             st.plotly_chart(fig, use_container_width=True)
+
+    fig = execution_frequency_histogram()
+    if fig:
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No line execution frequency data available.")
 
     # Repository selector for both cumulative coverage and details
     selected_repo = st.selectbox(
@@ -295,7 +267,7 @@ def main():
 
             # Get all unique tests for this repository
             node_ids = cumulative_data["node_id"].unique()
-            common_prefix = shared_prefix(node_ids.tolist())
+            prefix = common_prefix(node_ids.tolist())
 
             for node_id in node_ids:
                 test_data = cumulative_data[cumulative_data["node_id"] == node_id]
@@ -307,7 +279,7 @@ def main():
                     .reset_index()
                 )
 
-                test_name = node_id.lstrip(common_prefix)
+                test_name = node_id.lstrip(prefix)
 
                 fig.add_trace(
                     go.Scatter(
@@ -357,7 +329,7 @@ def main():
             fig = go.Figure()
 
             node_ids = line_execution_data["node_id"].unique()
-            common_prefix = shared_prefix(node_ids.tolist())
+            prefix = common_prefix(node_ids.tolist())
 
             for _, row in line_execution_data.iterrows():
                 node_id = row["node_id"]
@@ -378,7 +350,7 @@ def main():
                     count / total_examples * 100 for count in line_counts.values()
                 ]
 
-                test_name = node_id.lstrip(common_prefix)
+                test_name = node_id.lstrip(prefix)
 
                 fig.add_trace(
                     go.Histogram(

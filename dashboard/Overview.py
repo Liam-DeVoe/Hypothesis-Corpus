@@ -1,5 +1,4 @@
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -8,7 +7,7 @@ import streamlit as st
 # Add parent directory to path so we can import analyzer
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from analyzer.database import Database
+from dashboard.utils import get_database, render_sidebar
 
 # Page configuration
 st.set_page_config(
@@ -35,12 +34,6 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
-
-
-@st.cache_resource
-def get_database():
-    """Get database connection."""
-    return Database("data/analysis.db")
 
 
 def load_data():
@@ -119,15 +112,7 @@ def render_overview_metrics(stats: dict[str, Any]):
 def main():
     """Main dashboard application."""
     # Sidebar
-    with st.sidebar:
-        # Refresh button
-        if st.button("Refresh Data"):
-            st.cache_resource.clear()
-            st.rerun()
-
-        # Last update time
-        st.markdown("---")
-        st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    render_sidebar()
 
     # Load data
     try:
