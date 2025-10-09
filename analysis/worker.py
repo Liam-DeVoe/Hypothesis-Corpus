@@ -313,7 +313,7 @@ class WorkerPool:
         self,
         num_workers: int = 4,
         db_path: str = "data/analysis.db",
-        docker_image: str = "pbt-analyzer:latest",
+        docker_image: str = "pbt-analysis:latest",
         *,
         experiments: list[str],
         debug: bool,

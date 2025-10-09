@@ -7,3 +7,4 @@ sandbox.py
 .hypothesis
 build
 *.egg-info
+todo.txt

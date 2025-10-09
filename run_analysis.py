@@ -12,9 +12,9 @@ import click
 import yaml
 from rich.console import Console
 
-from analyzer.database import Database
-from analyzer.experiments import Experiment
-from analyzer.worker import WorkerPool, WorkItem
+from analysis.database import Database
+from analysis.experiments import Experiment
+from analysis.worker import WorkerPool, WorkItem
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,7 +25,7 @@ logging.basicConfig(
 )
 
 # Ensure all loggers use the same format
-for name in ["analyzer.test_runner", "analyzer.worker", "analyzer.database"]:
+for name in ["analysis.test_runner", "analysis.worker", "analysis.database"]:
     logging.getLogger(name).handlers = []
     logging.getLogger(name).propagate = True
 
@@ -43,7 +43,7 @@ def load_dataset(dataset_path: str) -> dict[str, Any]:
         return json.load(f)
 
 
-def load_config(config_path: str = "analyzer/config.yaml") -> dict[str, Any]:
+def load_config(config_path: str = "analysis/config.yaml") -> dict[str, Any]:
     """Load configuration from YAML file."""
     path = Path(config_path)
     if not path.exists():
@@ -52,7 +52,7 @@ def load_config(config_path: str = "analyzer/config.yaml") -> dict[str, Any]:
         )
         return {
             "database": {"path": "data/analysis.db"},
-            "docker": {"image": "pbt-analyzer:latest"},
+            "docker": {"image": "pbt-analysis:latest"},
             "workers": {"max_workers": 4},
         }
 
@@ -78,7 +78,7 @@ def prepare_work_items(dataset: dict[str, Any]) -> list[WorkItem]:
 @click.command()
 @click.option("--dataset", "-d", type=str, help="Path to dataset JSON file")
 @click.option(
-    "--config", "-c", default="analyzer/config.yaml", help="Path to configuration file"
+    "--config", "-c", default="analysis/config.yaml", help="Path to configuration file"
 )
 @click.option("--workers", "-w", type=int, help="Number of worker processes")
 @click.option(

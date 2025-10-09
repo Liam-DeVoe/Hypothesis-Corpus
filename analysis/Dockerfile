@@ -9,4 +9,4 @@ RUN apt-get update && apt-get install -y \
 
 RUN npm install -g @anthropic-ai/claude-code
 WORKDIR /app
-CMD ["python", "-m", "analyzer.test_runner"]
+CMD ["python", "-m", "analysis.test_runner"]

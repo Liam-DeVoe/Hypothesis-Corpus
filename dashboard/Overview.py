@@ -4,7 +4,7 @@ from typing import Any
 
 import streamlit as st
 
-# Add parent directory to path so we can import analyzer
+# Add parent directory to path so we can import analysis
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dashboard.utils import get_database, render_sidebar
@@ -109,8 +109,8 @@ def render_overview_metrics(stats: dict[str, Any]):
         st.progress(progress, text=f"Analysis Progress: {progress*100:.1f}%")
 
 
-def main():
-    """Main dashboard application."""
+def overview_page():
+    """Overview page content."""
     # Sidebar
     render_sidebar()
 
@@ -124,6 +124,19 @@ def main():
 
     # Render overview page
     render_overview_metrics(stats)
+
+
+def main():
+    """Main dashboard application with custom navigation."""
+    pg = st.navigation([
+        st.Page(overview_page, title="Overview"),
+        st.Page("pages/Summary.py", title="Summary"),
+        st.Page("pages/Coverage.py", title="Coverage"),
+        st.Page("pages/Facets.py", title="Facets"),
+        st.Page("pages/Clusters.py", title="Clusters"),
+        st.Page("pages/History.py", title="History"),
+    ])
+    pg.run()
 
 
 if __name__ == "__main__":

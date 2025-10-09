@@ -18,7 +18,7 @@ class TestRunner:
     RUNNER_TIMEOUT = 60 * 60  # 1 hour timeout
 
     def __init__(
-        self, docker_image: str = "pbt-analyzer:latest", worker_id: int | None = None
+        self, docker_image: str = "pbt-analysis:latest", worker_id: int | None = None
     ):
         """Initialize the test runner."""
         self.docker_client = docker.from_env()
@@ -83,7 +83,7 @@ class TestRunner:
                 req_file.write_text(requirements)
 
             # Copy experiment modules that will run in the container
-            import analyzer.experiments as experiments_package
+            import analysis.experiments as experiments_package
 
             experiments_dir = Path(experiments_package.__file__).parent
 
@@ -108,7 +108,7 @@ class TestRunner:
             assert experiment_file.exists()
             shutil.copy(experiment_file, work_dir / f"{experiment_name}.py")
 
-            import analyzer.pytest_pbt_analysis as pbt_package
+            import analysis.pytest_pbt_analysis as pbt_package
 
             pbt_source_dir = Path(pbt_package.__file__).parent
             pbt_dest_dir = work_dir / "pytest_pbt_analysis"

@@ -43,7 +43,7 @@ This system analyzes property-based tests from GitHub repositories to understand
 Run the analysis:
 
 ```bash
-docker build -f analyzer/Dockerfile -t pbt-analyzer --no-cache . && python run_analysis.py --dataset data/dataset.json --workers 6
+docker build -f analysis/Dockerfile -t pbt-analysis --no-cache . && python run_analysis.py --dataset data/dataset.json --workers 6
 ```
 
 View dashboard:

@@ -6,8 +6,8 @@ import sys
 import click
 from rich.console import Console
 
-from analyzer.database import Database
-from analyzer.tasks import (
+from analysis.database import Database
+from analysis.tasks import (
     run_task,
 )
 
@@ -66,7 +66,7 @@ def run(task: str, db_path: str):
 @click.option("--task", help="Specific task to clear (default: all)")
 def clear(db_path: str, task: str):
     """Clear task data from the database."""
-    from analyzer.tasks import Task
+    from analysis.tasks import Task
 
     db = Database(db_path)
 

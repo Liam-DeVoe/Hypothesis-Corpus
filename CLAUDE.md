@@ -26,7 +26,7 @@ streamlit run dashboard/Overview.py
 ### Rebuilding docker
 
 ```
-docker build -f analyzer/Dockerfile -t pbt-analyzer .
+docker build -f analysis/Dockerfile -t pbt-analysis .
 ```
 
 ### Running Tasks
@@ -49,14 +49,14 @@ sqlite3 data/analysis.db "SELECT * FROM repositories LIMIT 5;"
 
 ### Core Flow
 1. **run_analysis.py** orchestrates the entire analysis pipeline
-2. **WorkerPool** (analyzer/worker.py) distributes repositories across multiple processes
-3. Each worker uses **TestRunner** (analyzer/test_runner.py) to:
+2. **WorkerPool** (analysis/worker.py) distributes repositories across multiple processes
+3. Each worker uses **TestRunner** (analysis/test_runner.py) to:
    - Clone repository into temporary directory
    - Copy experiment modules into repo directory
    - Create config.json with node_ids and experiment configuration
    - Execute runner.py in Docker container with network access
    - Parse results.json output
-4. Results stored in SQLite database (analyzer/database.py)
+4. Results stored in SQLite database (analysis/database.py)
 5. **dashboard/Overview.py** provides real-time Streamlit visualization
 
 ### Critical Implementation Details
@@ -70,10 +70,10 @@ sqlite3 data/analysis.db "SELECT * FROM repositories LIMIT 5;"
 
 #### Experiment System
 **Experiments** run in Docker containers to analyze tests. Each experiment:
-- Inherits from `Experiment` base class (analyzer/experiments/experiment.py)
+- Inherits from `Experiment` base class (analysis/experiments/experiment.py)
 - Auto-registers via `__init_subclass__` using the `name` class attribute
 - Implements `get_schema_sql()`, `run()`, `delete_data()`, `store_to_database()`
-- Runs inside container via runner.py (analyzer/experiments/runner.py)
+- Runs inside container via runner.py (analysis/experiments/runner.py)
 - Returns results as dict which are stored in results.json
 
 Built-in experiments:
@@ -82,7 +82,7 @@ Built-in experiments:
 
 #### Tasks System
 **Tasks** run after experiments to analyze their results:
-- Inherit from `Task` base class (analyzer/tasks/task.py)
+- Inherit from `Task` base class (analysis/tasks/task.py)
 - Auto-register via `__init_subclass__` using the `name` class attribute
 - Declare `follows = ["experiment_name"]` to automatically run after experiments
 - Implement `get_schema_sql()`, `run()`, `store_to_database()`, `delete_data()`
@@ -141,7 +141,7 @@ Input datasets must follow this JSON structure:
 4. Check that experiment modules are being copied correctly
 
 ### Adding New Experiments
-1. Create class inheriting from `Experiment` in analyzer/experiments/
+1. Create class inheriting from `Experiment` in analysis/experiments/
 2. Set `name` class attribute for auto-registration
 3. Implement `get_schema_sql()`, `run()`, `store_to_database()`, `delete_data()`
 4. Ensure imports work both as package and standalone (use try/except pattern)
@@ -149,11 +149,11 @@ Input datasets must follow this JSON structure:
 6. Rebuild Docker image if adding system dependencies
 
 ### Creating New Tasks
-1. Create class inheriting from `Task` in analyzer/tasks/
+1. Create class inheriting from `Task` in analysis/tasks/
 2. Set `name` class attribute for auto-registration
 3. Implement `get_schema_sql()`, `run()`, `store_to_database()`, `delete_data()`
 4. Set `follows = ["experiment_name"]` to declare dependencies
-5. Export from analyzer/tasks/__init__.py
+5. Export from analysis/tasks/__init__.py
 
 ### Database Operations
 The database uses context managers for all operations:
@@ -165,13 +165,13 @@ with db.connection() as conn:
 
 ## Key Files to Understand
 
-- **analyzer/test_runner.py**: Orchestrates cloning, environment setup, and Docker execution
-- **analyzer/worker.py**: Multiprocessing orchestration and error handling
-- **analyzer/experiments/runner.py**: Entry point that runs inside Docker containers
-- **analyzer/database.py**: Schema definition and data persistence
+- **analysis/test_runner.py**: Orchestrates cloning, environment setup, and Docker execution
+- **analysis/worker.py**: Multiprocessing orchestration and error handling
+- **analysis/experiments/runner.py**: Entry point that runs inside Docker containers
+- **analysis/database.py**: Schema definition and data persistence
 - **run_analysis.py**: CLI interface and main orchestration
 
 ### Experiments & Tasks
-- **analyzer/experiments/**: Experiment implementations (coverage, facets)
-- **analyzer/tasks/**: Task implementations (clustering) and runner logic
+- **analysis/experiments/**: Experiment implementations (coverage, facets)
+- **analysis/tasks/**: Task implementations (clustering) and runner logic
 - **run_tasks.py**: CLI for manually running tasks

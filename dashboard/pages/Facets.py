@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-# Add parent directory to path so we can import analyzer
+# Add parent directory to path so we can import analysis
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dashboard.utils import get_database, render_sidebar

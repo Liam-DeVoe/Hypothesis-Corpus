@@ -8,7 +8,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from analyzer.database import Database
+from analysis.database import Database
 
 
 @st.cache_resource

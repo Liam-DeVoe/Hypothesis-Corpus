@@ -4,7 +4,7 @@ database:
   path: "data/analysis.db"
 
 docker:
-  image: "pbt-analyzer:latest"
+  image: "pbt-analysis:latest"
   timeout: 300  # seconds per test
   memory_limit: "2g"
 
