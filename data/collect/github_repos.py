@@ -85,29 +85,52 @@ def repos_from_api():
     return repos
 
 
-def filter_repos(repos):
-    filtered_repos = []
+def filter_repos(db_path):
+    """
+    Filter repositories in the database, deleting those that don't match criteria.
+    Criteria:
+    - Size must be <= limit_gb
+    - If forked, must have >= limit_forked_stars stars
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT full_name, size_bytes, stargazers_count, is_fork
+        FROM repositories
+        """
+    )
+    repos = cursor.fetchall()
+    repos_to_delete = []
 
-    for repo in repos:
-        size_gb = repo.size / 1_000_000
+    for full_name, size_bytes, stargazers_count, is_fork in repos:
+        size_gb = size_bytes / 1_000_000
+
         if size_gb > limit_gb:
-            print(f"  Rejected {repo.full_name}: too large ({size_gb:.2f}gb)")
+            print(f"  Rejected {full_name}: too large ({size_gb:.2f}gb)")
+            repos_to_delete.append(full_name)
             continue
 
-        if repo.fork and repo.stargazers_count < limit_forked_stars:
+        if is_fork and stargazers_count < limit_forked_stars:
             print(
-                f"  Rejected {repo.full_name}: fork with {repo.stargazers_count} < {limit_forked_stars} stars"
+                f"  Rejected {full_name}: fork with {stargazers_count} < {limit_forked_stars} stars"
             )
+            repos_to_delete.append(full_name)
             continue
 
-        filtered_repos.append(repo)
+    for full_name in repos_to_delete:
+        cursor.execute("DELETE FROM repositories WHERE full_name = ?", (full_name,))
+    conn.commit()
 
-    return filtered_repos
+    remaining_count = cursor.execute("SELECT COUNT(*) FROM repositories").fetchone()[0]
+    conn.close()
+    print(
+        f"\nDeleted {len(repos_to_delete)} repositories, {remaining_count} remaining in {db_path}"
+    )
 
 
-def collect_github_repositories(db_path):
+def collect_repos(db_path):
     repos = repos_from_api()
-    repos = filter_repos(repos)
 
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()

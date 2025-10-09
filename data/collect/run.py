@@ -5,7 +5,7 @@ Runner script for collecting GitHub repositories that use Hypothesis.
 import sqlite3
 from pathlib import Path
 
-from github_repos import collect_github_repositories
+from github_repos import collect_repos, filter_repos
 from minhash import minhash_repository, remove_duplicates
 
 db_path = Path(__file__).parent / "data.db"
@@ -65,6 +65,7 @@ def process_minhashes():
 
 if __name__ == "__main__":
     init_db()
-    collect_github_repositories(db_path)
+    collect_repos(db_path)
+    filter_repos(db_path)
     process_minhashes()
     remove_duplicates(db_path)
