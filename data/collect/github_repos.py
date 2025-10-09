@@ -56,8 +56,11 @@ def repos_from_term(term):
             count_results += 1
 
         print(f"{count_results} results ({len(repos)} unique so far)")
-        # make sure we're not missing any results by hitting the cap.
-        assert count_results < 1000
+
+        # if we hit the cap, halve the step size and retry
+        if count_results >= 1000:
+            step_size //= 2
+            continue
 
         # break after the final unbounded search
         if max_size == "*":
