@@ -2,9 +2,10 @@
 Unified CLI for PBT corpus analysis system.
 """
 
+import json
 import logging
 import sys
-from typing import Any
+import traceback
 
 import click
 from rich.console import Console
@@ -50,28 +51,9 @@ def collect(db_path: str):
 # ==============================================================================
 
 
-def prepare_work_items(dataset: dict[str, Any]):
-    """Convert dataset to work items."""
-    from analysis.worker import WorkItem
-
-    work_items = []
-    for repo_name, repo_data in dataset.items():
-        work_item = WorkItem(
-            repo_name=repo_name,
-            node_ids=repo_data.get("node_ids", []),
-            requirements=repo_data.get("requirements.txt", ""),
-        )
-        work_items.append(work_item)
-
-    return work_items
-
-
 @cli.command()
 @click.option("--db-path", default="analysis/data.db", help="Path to database file")
 @click.option("--workers", "-w", type=int, default=4, help="Number of worker processes")
-@click.option(
-    "--sample", "-s", is_flag=True, help="Run sample test with MarkCBell/bigger"
-)
 @click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
 @click.option(
     "--docker-image", default="pbt-analysis:latest", help="Docker image to use"
@@ -83,7 +65,6 @@ def prepare_work_items(dataset: dict[str, Any]):
 def analysis(
     db_path: str,
     workers: int,
-    sample: bool,
     limit: int,
     docker_image: str,
     experiment: tuple[str, ...],
@@ -92,7 +73,7 @@ def analysis(
     """Run analysis on repositories in the database."""
     from analysis.database import Database
     from analysis.experiments import Experiment
-    from analysis.worker import WorkerPool
+    from analysis.worker import WorkerPool, WorkItem
 
     experiments = (
         list(experiment) if experiment else list(Experiment.experiments.keys())
@@ -100,30 +81,28 @@ def analysis(
     console.print(f"[bold]Experiments:[/bold] [green]{', '.join(experiments)}[/green]")
     console.print()
 
-    # Handle sample mode
-    if sample:
-        console.print("[yellow]Running in sample mode with MarkCBell/bigger[/yellow]")
-        dataset_data = {
-            "MarkCBell/bigger": {
-                "node_ids": ["tests/structures.py::TestUnionFind::runTest"],
-                "requirements.txt": "attrs==24.2.0\nexceptiongroup==1.2.2\nhypothesis==6.112.5\niniconfig==2.0.0\npackaging==24.1\npillow==11.0.0\npluggy==1.5.0\npytest==8.2.2\nsortedcontainers==2.4.0\ntomli==2.0.2",
-            }
-        }
-        workers = 1
-        experiments = ["runtime"]
-    else:
-        dataset_data = load_dataset_from_db(db_path, limit=limit)
+    db = Database(db_path=db_path)
 
-    # Prepare work items
-    work_items = prepare_work_items(dataset_data)
+    # Load work items directly from database
+    query = "SELECT full_name, requirements FROM core_repositories"
+    if limit:
+        query += f" LIMIT {limit}"
 
-    console.print(f"Dataset loaded: [green]{len(work_items)} repositories[/green]")
+    repos = db.fetchall(query)
+
+    work_items = []
+    for repo in repos:
+        work_item = WorkItem(
+            repo_name=repo["full_name"],
+            node_ids=[],  # Empty means test discovery will run
+            requirements=repo["requirements"] or "",
+        )
+        work_items.append(work_item)
+
+    console.print(f"Repositories loaded: [green]{len(work_items)}[/green]")
     console.print(f"Workers: [green]{workers}[/green]")
     console.print(f"Docker image: [green]{docker_image}[/green]")
     console.print()
-
-    # Initialize database
-    Database(db_path=db_path)
 
     # Create worker pool
     console.print("[bold]Starting analysis...[/bold]")
@@ -166,6 +145,62 @@ def analysis(
     console.print(
         "[green]To view results in the dashboard: streamlit run dashboard/Overview.py[/green]"
     )
+
+
+# ==============================================================================
+# INSTALL COMMAND
+# ==============================================================================
+
+
+@cli.command()
+@click.option("--db-path", default="analysis/data.db", help="Path to database file")
+@click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
+def install(db_path: str, limit: int):
+    """Install repositories and collect test node IDs."""
+    from analysis.collect.install_repos import install_repository
+    from analysis.database import Database
+
+    db = Database(db_path=db_path)
+
+    # Get repositories that need processing (no requirements yet)
+    query = "SELECT full_name FROM core_repositories WHERE requirements IS NULL"
+    if limit:
+        query += f" LIMIT {limit}"
+
+    repos = db.fetchall(query)
+
+    console.print(f"Found [green]{len(repos)}[/green] repositories to process\n")
+
+    successful = 0
+    failed = 0
+
+    for i, repo in enumerate(repos, 1):
+        repo_name = repo["full_name"]
+        console.print(f"[{i}/{len(repos)}] Processing [cyan]{repo_name}[/cyan]...")
+
+        try:
+            result = install_repository(repo_name)
+        except Exception as e:
+            console.print(f"  ✗ Failed: [red]{traceback.format_exception(e)}[/red]\n")
+            failed += 1
+            continue
+
+        db.execute(
+            "UPDATE core_repositories SET requirements = ?, node_ids = ? WHERE full_name = ?",
+            (result["requirements"], json.dumps(result["node_ids"]), repo_name),
+        )
+        db.commit()
+
+        console.print(
+            f"  ✓ Successfully processed ([green]{len(result['node_ids'])} test nodes[/green])\n"
+        )
+        successful += 1
+
+    # Print summary
+    console.print("\n[bold]Installation Complete![/bold]")
+    console.print(f"Successful: [green]{successful}[/green]")
+    console.print(f"Failed: [red]{failed}[/red]")
+    console.print(f"Total: {len(repos)}")
 
 
 # ==============================================================================

@@ -1,0 +1,100 @@
+import json
+import shutil
+import subprocess
+import tarfile
+import tempfile
+from io import BytesIO
+from pathlib import Path
+
+import docker
+
+PRE_INSTALL = [
+    "setuptools==78.1.0",
+]
+
+POST_INSTALL = [
+    "pytest==8.4.2",
+    "hypothesis==6.140.3",
+]
+
+
+def install_repository(
+    repo_name: str, docker_image: str = "pbt-analysis:latest"
+) -> dict:
+    """Process a single repository: install and collect tests using Docker."""
+    container = None
+    work_dir = Path(tempfile.mkdtemp(prefix=f"install_{repo_name.replace('/', '_')}_"))
+    repo_dir = work_dir / "repo"
+    docker_client = docker.from_env()
+
+    try:
+        subprocess.run(
+            [
+                "git",
+                "clone",
+                "--depth",
+                "1",
+                f"https://github.com/{repo_name}.git",
+                str(repo_dir),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=True,
+        )
+
+        # Copy installation script into repository
+        install_script_source = Path(__file__).parent / "_install.py"
+        install_script_dest = repo_dir / "_install.py"
+        shutil.copy(install_script_source, install_script_dest)
+
+        # Create config file for the installation script
+        config = {
+            "pre_install": PRE_INSTALL,
+            "post_install": POST_INSTALL,
+        }
+        config_path = repo_dir / "_install_config.json"
+        config_path.write_text(json.dumps(config))
+
+        # Create tar archive of repository
+        tar_stream = BytesIO()
+        with tarfile.open(fileobj=tar_stream, mode="w") as tar:
+            for item in repo_dir.iterdir():
+                tar.add(item, arcname=f"/app/{item.name}")
+        tar_stream.seek(0)
+
+        # Create and run container
+        container = docker_client.containers.create(
+            docker_image,
+            command=["python", "/app/_install.py"],
+            mem_limit="2g",
+            security_opt=["no-new-privileges"],
+        )
+
+        container.put_archive("/", tar_stream.read())
+        container.start()
+
+        # Wait for completion (30 minute timeout)
+        result = container.wait(timeout=30 * 60)
+
+        logs = container.logs(stdout=True, stderr=True).decode("utf-8")
+        assert result.get("StatusCode") == 0, logs
+
+        # Extract results
+        bits, _ = container.get_archive("/app/_install_results.json")
+        tar_stream = BytesIO()
+        for chunk in bits:
+            tar_stream.write(chunk)
+        tar_stream.seek(0)
+
+        with tarfile.open(fileobj=tar_stream) as tar:
+            results_file = tar.extractfile("_install_results.json")
+            results = json.loads(results_file.read().decode("utf-8"))
+
+        return results
+    finally:
+        # Clean up
+        if work_dir and work_dir.exists():
+            shutil.rmtree(work_dir, ignore_errors=True)
+        if container:
+            container.remove(force=True)

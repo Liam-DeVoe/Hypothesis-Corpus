@@ -10,7 +10,6 @@
 # jaccard similarity, at a given threshold level.
 
 import pickle
-import sqlite3
 import subprocess
 import tempfile
 from pathlib import Path
@@ -75,40 +74,40 @@ def compute_minhashes(repo_name: str) -> list[MinHash]:
     return minhashes
 
 
-def load_minhashes(conn, repo_name: str) -> list[MinHash] | None:
-    result = conn.execute(
+def load_minhashes(db, repo_name: str) -> list[MinHash] | None:
+    result = db.fetchone(
         "SELECT id FROM core_repositories WHERE full_name = ?",
         (repo_name,),
-    ).fetchone()
+    )
     assert result
 
     repo_id = result["id"]
-    rows = conn.execute(
+    rows = db.fetchall(
         "SELECT minhash_data FROM core_minhashes WHERE repo_id = ?",
         (repo_id,),
-    ).fetchall()
+    )
     return [pickle.loads(row["minhash_data"]) for row in rows]
 
 
-def minhash_repository(conn, repo_name: str):
+def minhash_repository(db, repo_name: str):
     minhashes = compute_minhashes(repo_name)
 
-    result = conn.execute(
+    result = db.fetchone(
         "SELECT id FROM core_repositories WHERE full_name = ?",
         (repo_name,),
-    ).fetchone()
+    )
     assert result, f"Repository {repo_name} not found"
     repo_id = result["id"]
 
-    conn.execute("DELETE FROM core_minhashes WHERE repo_id = ?", (repo_id,))
+    db.execute("DELETE FROM core_minhashes WHERE repo_id = ?", (repo_id,))
     for minhash in minhashes:
         minhash_blob = pickle.dumps(minhash)
-        conn.execute(
+        db.execute(
             "INSERT INTO core_minhashes (repo_id, minhash_data) VALUES (?, ?)",
             (repo_id, minhash_blob),
         )
 
-    conn.commit()
+    db.commit()
 
 
 def count_duplicates(
@@ -136,11 +135,10 @@ def count_duplicates(
 
 def remove_duplicates(db_path):
     """Identify and remove duplicate repositories based on minhash similarity."""
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    repos = conn.execute(
-        "SELECT id, full_name, stargazers_count FROM core_repositories"
-    ).fetchall()
+    from analysis.database import Database
+
+    db = Database(db_path=db_path)
+    repos = db.fetchall("SELECT id, full_name, stargazers_count FROM core_repositories")
     print(f"Removing duplicates among {len(repos)} repositories...")
 
     to_remove = set()
@@ -150,7 +148,7 @@ def remove_duplicates(db_path):
             continue
 
         repo1_name = repo1["full_name"]
-        mh1 = load_minhashes(conn, repo1_name)
+        mh1 = load_minhashes(db, repo1_name)
         if not mh1:
             continue
 
@@ -159,7 +157,7 @@ def remove_duplicates(db_path):
                 continue
 
             repo2_name = repo2["full_name"]
-            mh2 = load_minhashes(conn, repo2_name)
+            mh2 = load_minhashes(db, repo2_name)
             if not mh2:
                 continue
 
@@ -184,10 +182,6 @@ def remove_duplicates(db_path):
 
     print(f"\nRemoving {len(to_remove)} duplicate repositories...")
     for repo_name in to_remove:
-        conn.execute(
-            "DELETE FROM core_repositories WHERE full_name = ?", (repo_name,)
-        )
-    conn.commit()
+        db.execute("DELETE FROM core_repositories WHERE full_name = ?", (repo_name,))
+    db.commit()
     print(f"Kept {len(repos) - len(to_remove)} unique repositories")
-
-    conn.close()

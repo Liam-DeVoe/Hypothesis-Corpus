@@ -1,123 +1,159 @@
 import logging
 import sqlite3
-from contextlib import contextmanager
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 
 class Database:
-    """SQLite database for storing PBT analysis results."""
+    """SQLite database for storing PBT analysis results.
+
+    Maintains a single connection and provides execute methods for all database operations.
+    Consumer code should use db.execute() methods rather than creating their own connections.
+    """
+
+    # Class-level cache for singleton instances per db_path
+    _instances = {}
+
+    def __new__(cls, *, db_path: str):
+        """Return singleton instance for each db_path."""
+        db_path = str(Path(db_path).resolve())
+        if db_path not in cls._instances:
+            instance = super().__new__(cls)
+            cls._instances[db_path] = instance
+        return cls._instances[db_path]
 
     def __init__(self, *, db_path: str):
+        # Only initialize once per instance
+        db_path = str(Path(db_path).resolve())
+        if hasattr(self, "_initialized"):
+            return
+
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._run_migrations()
+
+        # Create single persistent connection
+        self._conn = sqlite3.connect(
+            self.db_path, timeout=30.0, check_same_thread=False
+        )
+        self._conn.row_factory = sqlite3.Row
+
         self._init_core_schema()
         self._init_experiment_schemas()
         self._init_task_schemas()
 
-    def _run_migrations(self):
-        pass
+        self._initialized = True
 
     def _init_core_schema(self):
-        with self.connection() as conn:
-            conn.executescript(
-                """
-                -- Repository information (populated by collection)
-                CREATE TABLE IF NOT EXISTS core_repositories (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    full_name TEXT UNIQUE NOT NULL,
-                    size_bytes INTEGER NOT NULL,
-                    stargazers_count INTEGER NOT NULL,
-                    is_fork BOOLEAN NOT NULL,
-                    requirements TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-
-                -- MinHash data for deduplication (populated by collection)
-                CREATE TABLE IF NOT EXISTS core_minhashes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    repo_id INTEGER NOT NULL,
-                    minhash_data BLOB NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (repo_id) REFERENCES core_repositories(id)
-                );
-
-                -- Node information (populated by analysis)
-                CREATE TABLE IF NOT EXISTS core_nodes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    repo_id INTEGER NOT NULL,
-                    node_id TEXT NOT NULL,
-                    file_path TEXT NOT NULL,
-                    class_name TEXT,
-                    node_name TEXT,
-                    status TEXT,
-                    error_message TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (repo_id) REFERENCES core_repositories(id),
-                    UNIQUE(repo_id, node_id)
-                );
-
-                -- Create indexes for better query performance
-                CREATE INDEX IF NOT EXISTS idx_minhashes_repo ON core_minhashes(repo_id);
-                CREATE INDEX IF NOT EXISTS idx_nodes_repo ON core_nodes(repo_id);
-                CREATE INDEX IF NOT EXISTS idx_nodes_status ON core_nodes(status);
+        self._conn.executescript(
             """
-            )
+            -- Repository information (populated by collection)
+            CREATE TABLE IF NOT EXISTS core_repositories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                full_name TEXT UNIQUE NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                stargazers_count INTEGER NOT NULL,
+                is_fork BOOLEAN NOT NULL,
+                requirements TEXT,
+                node_ids TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- MinHash data for deduplication (populated by collection)
+            CREATE TABLE IF NOT EXISTS core_minhashes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repo_id INTEGER NOT NULL,
+                minhash_data BLOB NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (repo_id) REFERENCES core_repositories(id)
+            );
+
+            -- Node information (populated by analysis)
+            CREATE TABLE IF NOT EXISTS core_nodes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repo_id INTEGER NOT NULL,
+                node_id TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                class_name TEXT,
+                node_name TEXT,
+                status TEXT,
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (repo_id) REFERENCES core_repositories(id),
+                UNIQUE(repo_id, node_id)
+            );
+
+            -- Create indexes for better query performance
+            CREATE INDEX IF NOT EXISTS idx_minhashes_repo ON core_minhashes(repo_id);
+            CREATE INDEX IF NOT EXISTS idx_nodes_repo ON core_nodes(repo_id);
+            CREATE INDEX IF NOT EXISTS idx_nodes_status ON core_nodes(status);
+        """
+        )
+        self._conn.commit()
 
     def _init_experiment_schemas(self):
         """Initialize database schemas for all registered experiments."""
         from .experiments import Experiment
 
-        with self.connection() as conn:
-            for experiment_name, experiment_class in Experiment.experiments.items():
-                logger.debug(f"Initializing schema for experiment: {experiment_name}")
-                schema_sql = experiment_class.get_schema_sql()
-                conn.executescript(schema_sql)
+        for experiment_name, experiment_class in Experiment.experiments.items():
+            logger.debug(f"Initializing schema for experiment: {experiment_name}")
+            schema_sql = experiment_class.get_schema_sql()
+            self._conn.executescript(schema_sql)
+        self._conn.commit()
 
     def _init_task_schemas(self):
         """Initialize database schemas for all registered tasks."""
         from .tasks import Task
 
-        with self.connection() as conn:
-            for task_name, task_class in Task.tasks.items():
-                logger.debug(f"Initializing schema for task: {task_name}")
-                schema_sql = task_class.get_schema_sql()
-                conn.executescript(schema_sql)
+        for task_name, task_class in Task.tasks.items():
+            logger.debug(f"Initializing schema for task: {task_name}")
+            schema_sql = task_class.get_schema_sql()
+            self._conn.executescript(schema_sql)
+        self._conn.commit()
 
-    @contextmanager
-    def connection(self):
-        """Context manager for database connections."""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-        finally:
-            conn.close()
+    def execute(self, query: str, parameters=None):
+        if parameters is None:
+            return self._conn.execute(query)
+        return self._conn.execute(query, parameters)
+
+    def executemany(self, query: str, parameters):
+        return self._conn.executemany(query, parameters)
+
+    def executescript(self, script: str):
+        return self._conn.executescript(script)
+
+    def commit(self):
+        self._conn.commit()
+
+    def fetchone(self, query: str, parameters=None):
+        cursor = self.execute(query, parameters)
+        return cursor.fetchone()
+
+    def fetchall(self, query: str, parameters=None):
+        cursor = self.execute(query, parameters)
+        return cursor.fetchall()
 
     def delete_experiment_data(self, repo_name: str, tables: list[str]):
-        with self.connection() as conn:
-            result = conn.execute(
-                "SELECT id FROM core_repositories WHERE full_name = ?",
-                (repo_name,),
-            ).fetchone()
+        result = self.fetchone(
+            "SELECT id FROM core_repositories WHERE full_name = ?",
+            (repo_name,),
+        )
 
-            if not result:
-                return
+        if not result:
+            return
 
-            repo_id = result["id"]
-            node_ids = conn.execute(
-                "SELECT id FROM core_nodes WHERE repo_id = ?", (repo_id,)
-            ).fetchall()
-            node_id_list = [row["id"] for row in node_ids]
+        repo_id = result["id"]
+        node_ids = self.fetchall(
+            "SELECT id FROM core_nodes WHERE repo_id = ?", (repo_id,)
+        )
+        node_id_list = [row["id"] for row in node_ids]
 
-            if node_id_list:
-                placeholders = ",".join("?" * len(node_id_list))
-                for table in tables:
-                    conn.execute(
-                        f"DELETE FROM {table} WHERE node_id IN ({placeholders})",
-                        node_id_list,
-                    )
+        if node_id_list:
+            placeholders = ",".join("?" * len(node_id_list))
+            for table in tables:
+                self.execute(
+                    f"DELETE FROM {table} WHERE node_id IN ({placeholders})",
+                    node_id_list,
+                )
 
-            conn.commit()
+        self.commit()

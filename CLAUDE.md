@@ -10,8 +10,11 @@ This is a Property-Based Testing (PBT) Corpus Analysis system that analyzes Hypo
 
 ### Collecting Repositories
 ```bash
-# Collect repositories from GitHub
+# Step 1: Collect repositories from GitHub
 python run.py collect
+
+# Step 2: Install repositories and collect test node IDs from a limit number of repos
+python run.py install --limit 10
 ```
 
 ### Running Analysis
@@ -54,16 +57,17 @@ sqlite3 analysis/data.db "SELECT * FROM core_repositories LIMIT 5;"
 
 ### Core Flow
 1. **python run.py collect** collects repositories from GitHub and stores in `core_repositories` table
-2. **python run.py analysis** reads from database and orchestrates the analysis pipeline
-3. **WorkerPool** (analysis/worker.py) distributes repositories across multiple processes
-4. Each worker uses **TestRunner** (analysis/test_runner.py) to:
+2. **python run.py install** clones repos, installs dependencies, collects test nodes, updates database
+3. **python run.py analysis** reads from database and orchestrates the analysis pipeline
+4. **WorkerPool** (analysis/worker.py) distributes repositories across multiple processes
+5. Each worker uses **TestRunner** (analysis/test_runner.py) to:
    - Clone repository into temporary directory
    - Copy experiment modules into repo directory
    - Create config.json with node_ids and experiment configuration
    - Execute runner.py in Docker container with network access
    - Parse results.json output
-5. Results stored in SQLite database (analysis/database.py)
-6. **dashboard/Overview.py** provides real-time Streamlit visualization
+6. Results stored in SQLite database (analysis/database.py)
+7. **dashboard/Overview.py** provides real-time Streamlit visualization
 
 ### Critical Implementation Details
 
@@ -140,9 +144,14 @@ See `analysis/secrets.json.example` for a template.
 ### Database-Driven Workflow
 
 The analysis system pulls repositories directly from the `core_repositories` table in `analysis/data.db`:
-- Repositories are collected via `python run.py collect` and stored in `core_repositories`
-- The `requirements` column stores package dependencies for each repository
-- `python run.py analysis` reads from the database (no JSON dataset files needed)
+- **Step 1**: Repositories are collected via `python run.py collect` and stored in `core_repositories`
+- **Step 2**: `python run.py install` processes each repo:
+  - Clones the repository
+  - Runs installation in Docker container (isolated, reproducible)
+  - Installs dependencies (guessing at common extras and requirements files)
+  - Collects pytest node IDs via `pytest --collect-only`
+  - Updates `requirements` and `node_ids` columns in database
+- **Step 3**: `python run.py analysis` reads from the database and runs experiments
 - Test discovery happens automatically if `node_ids` are not pre-specified
 
 ## Common Issues & Solutions

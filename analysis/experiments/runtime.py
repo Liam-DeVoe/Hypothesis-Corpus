@@ -15,6 +15,7 @@ except ImportError:
 # experiment for things that have to be collected at property runtime, like timing,
 # coverage, observability, etc.
 
+
 class RuntimeExperiment(Experiment):
     name = "runtime"
     max_examples = 500
@@ -121,90 +122,89 @@ class RuntimeExperiment(Experiment):
         """Store coverage results to database."""
         import json
 
-        with db.connection() as conn:
-            coverage = data.get("coverage", {})
-            test_cases = data.get("test_cases", [])
+        coverage = data.get("coverage", {})
+        test_cases = data.get("test_cases", [])
 
-            # Calculate line execution counts from test cases
-            line_counts_per_file = defaultdict(lambda: defaultdict(int))
-            for test_case in test_cases:
-                for file_path, lines in test_case["coverage"].items():
-                    for line in lines:
-                        line_counts_per_file[file_path][str(line)] += 1
+        # Calculate line execution counts from test cases
+        line_counts_per_file = defaultdict(lambda: defaultdict(int))
+        for test_case in test_cases:
+            for file_path, lines in test_case["coverage"].items():
+                for line in lines:
+                    line_counts_per_file[file_path][str(line)] += 1
 
-            # Convert coverage to serializable format (sets to lists)
-            coverage_json = {
-                file_path: list(lines) for file_path, lines in coverage.items()
-            }
+        # Convert coverage to serializable format (sets to lists)
+        coverage_json = {
+            file_path: list(lines) for file_path, lines in coverage.items()
+        }
 
-            # Convert line_counts_per_file to nested dict
-            line_execution_counts_json = {
-                file_path: dict(counts)
-                for file_path, counts in line_counts_per_file.items()
-            }
+        # Convert line_counts_per_file to nested dict
+        line_execution_counts_json = {
+            file_path: dict(counts)
+            for file_path, counts in line_counts_per_file.items()
+        }
 
-            # Calculate aggregate stats
-            total_lines = sum(len(lines) for lines in coverage.values())
+        # Calculate aggregate stats
+        total_lines = sum(len(lines) for lines in coverage.values())
 
-            # Store runtime summary with execution metadata and coverage
-            conn.execute(
-                """
-                INSERT INTO runtime_summary (
-                    node_id, passed, execution_time,
-                    examples_count, coverage, line_execution_counts,
-                    total_lines_covered
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    node_id,
-                    data.get("test_passed", False),
-                    data.get("execution_time"),
-                    None,
-                    json.dumps(coverage_json),
-                    json.dumps(line_execution_counts_json),
-                    total_lines,
-                ),
+        # Store runtime summary with execution metadata and coverage
+        db.execute(
+            """
+            INSERT INTO runtime_summary (
+                node_id, passed, execution_time,
+                examples_count, coverage, line_execution_counts,
+                total_lines_covered
             )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                node_id,
+                data.get("test_passed", False),
+                data.get("execution_time"),
+                None,
+                json.dumps(coverage_json),
+                json.dumps(line_execution_counts_json),
+                total_lines,
+            ),
+        )
 
-            # Store per-test-case coverage
-            if test_cases:
-                cumulative_coverage = {}
+        # Store per-test-case coverage
+        if test_cases:
+            cumulative_coverage = {}
 
-                for case_num, test_case in enumerate(test_cases):
-                    # Update cumulative coverage with lines from this test case
-                    for file_path, lines in test_case["coverage"].items():
-                        if file_path not in cumulative_coverage:
-                            cumulative_coverage[file_path] = set()
-                        cumulative_coverage[file_path].update(lines)
+            for case_num, test_case in enumerate(test_cases):
+                # Update cumulative coverage with lines from this test case
+                for file_path, lines in test_case["coverage"].items():
+                    if file_path not in cumulative_coverage:
+                        cumulative_coverage[file_path] = set()
+                    cumulative_coverage[file_path].update(lines)
 
-                    # Convert test case coverage to JSON (sets to lists)
-                    testcase_coverage_json = {
-                        file_path: list(lines)
-                        for file_path, lines in test_case["coverage"].items()
-                    }
+                # Convert test case coverage to JSON (sets to lists)
+                testcase_coverage_json = {
+                    file_path: list(lines)
+                    for file_path, lines in test_case["coverage"].items()
+                }
 
-                    # Calculate total cumulative lines across all files
-                    cumulative_lines = sum(
-                        len(lines) for lines in cumulative_coverage.values()
+                # Calculate total cumulative lines across all files
+                cumulative_lines = sum(
+                    len(lines) for lines in cumulative_coverage.values()
+                )
+
+                db.execute(
+                    """
+                    INSERT INTO runtime_testcase (
+                        node_id, testcase_number, coverage, cumulative_lines
                     )
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        node_id,
+                        case_num,
+                        json.dumps(testcase_coverage_json),
+                        cumulative_lines,
+                    ),
+                )
 
-                    conn.execute(
-                        """
-                        INSERT INTO runtime_testcase (
-                            node_id, testcase_number, coverage, cumulative_lines
-                        )
-                        VALUES (?, ?, ?, ?)
-                        """,
-                        (
-                            node_id,
-                            case_num,
-                            json.dumps(testcase_coverage_json),
-                            cumulative_lines,
-                        ),
-                    )
-
-            conn.commit()
+        db.commit()
 
     @staticmethod
     def delete_data(db: Any, repo_name: str):

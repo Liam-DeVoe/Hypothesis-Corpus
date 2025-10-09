@@ -1,6 +1,5 @@
 import json
 import logging
-import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -106,57 +105,50 @@ def repos_from_api():
 
 
 def filter_repos(db_path):
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT full_name, size_bytes, stargazers_count, is_fork
-        FROM core_repositories
-        """
+    from analysis.database import Database
+
+    db = Database(db_path=db_path)
+    repos = db.fetchall(
+        "SELECT full_name, size_bytes, stargazers_count, is_fork FROM core_repositories"
     )
-    repos = cursor.fetchall()
     repos_to_delete = []
 
-    for full_name, size_bytes, stargazers_count, is_fork in repos:
-        size_gb = size_bytes / 1_000_000
+    for repo in repos:
+        size_gb = repo["size_bytes"] / 1_000_000
 
         if size_gb > limit_gb:
-            print(f"  Rejected {full_name}: too large ({size_gb:.2f}gb)")
-            repos_to_delete.append(full_name)
+            print(f"  Rejected {repo['full_name']}: too large ({size_gb:.2f}gb)")
+            repos_to_delete.append(repo["full_name"])
             continue
 
-        if is_fork and stargazers_count < limit_forked_stars:
+        if repo["is_fork"] and repo["stargazers_count"] < limit_forked_stars:
             print(
-                f"  Rejected {full_name}: fork with {stargazers_count} < {limit_forked_stars} stars"
+                f"  Rejected {repo['full_name']}: fork with {repo['stargazers_count']} < {limit_forked_stars} stars"
             )
-            repos_to_delete.append(full_name)
+            repos_to_delete.append(repo["full_name"])
             continue
 
     for full_name in repos_to_delete:
-        cursor.execute(
-            "DELETE FROM core_repositories WHERE full_name = ?", (full_name,)
-        )
-    conn.commit()
+        db.execute("DELETE FROM core_repositories WHERE full_name = ?", (full_name,))
+    db.commit()
 
-    remaining_count = cursor.execute(
-        "SELECT COUNT(*) FROM core_repositories"
-    ).fetchone()[0]
-    conn.close()
+    remaining_count = db.fetchone("SELECT COUNT(*) FROM core_repositories")[0]
     print(
         f"Deleted {len(repos_to_delete)} repositories, {remaining_count} remaining in {db_path}"
     )
 
 
 def collect_repos(db_path):
-    repos = repos_from_api()
+    from analysis.database import Database
 
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM core_repositories")
-    conn.commit()
+    repos = repos_from_api()
+    db = Database(db_path=db_path)
+
+    db.execute("DELETE FROM core_repositories")
+    db.commit()
 
     for repo in repos.values():
-        cursor.execute(
+        db.execute(
             """
             INSERT OR REPLACE INTO core_repositories (full_name, size_bytes, stargazers_count, is_fork)
             VALUES (?, ?, ?, ?)
@@ -164,8 +156,6 @@ def collect_repos(db_path):
             (repo.full_name, repo.size_bytes, repo.stargazers_count, repo.is_fork),
         )
 
-    conn.commit()
-    count = cursor.execute("SELECT COUNT(*) FROM core_repositories").fetchone()[0]
-    conn.close()
-
+    db.commit()
+    count = db.fetchone("SELECT COUNT(*) FROM core_repositories")[0]
     print(f"Stored {count} repositories in {db_path}")

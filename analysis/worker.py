@@ -142,13 +142,12 @@ class Worker(Process):
             for experiment in experiments:
                 experiment.delete_data(db, work_item.repo_name)
 
-            with db.connection() as conn:
-                result = conn.execute(
-                    "SELECT id FROM core_repositories WHERE full_name = ?",
-                    (work_item.repo_name,),
-                ).fetchone()
-                assert result
-                work_item.repo_id = result["id"]
+            result = db.fetchone(
+                "SELECT id FROM core_repositories WHERE full_name = ?",
+                (work_item.repo_name,),
+            )
+            assert result
+            work_item.repo_id = result["id"]
 
             # Run all experiments for this repository
             all_nodes_processed = 0
@@ -200,26 +199,25 @@ class Worker(Process):
                     node_name = parts[2] if len(parts) > 2 else parts[-1]
 
                     # Add node to database
-                    with db.connection() as conn:
-                        conn.execute(
-                            """
-                            INSERT OR IGNORE INTO core_nodes (repo_id, node_id, file_path, class_name, node_name)
-                            VALUES (?, ?, ?, ?, ?)
-                            """,
-                            (
-                                work_item.repo_id,
-                                node_id,
-                                file_path,
-                                class_name,
-                                node_name,
-                            ),
-                        )
-                        conn.commit()
-                        result = conn.execute(
-                            "SELECT id FROM core_nodes WHERE repo_id = ? AND node_id = ?",
-                            (work_item.repo_id, node_id),
-                        ).fetchone()
-                        node_db_id = result["id"]
+                    db.execute(
+                        """
+                        INSERT OR IGNORE INTO core_nodes (repo_id, node_id, file_path, class_name, node_name)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (
+                            work_item.repo_id,
+                            node_id,
+                            file_path,
+                            class_name,
+                            node_name,
+                        ),
+                    )
+                    db.commit()
+                    result = db.fetchone(
+                        "SELECT id FROM core_nodes WHERE repo_id = ? AND node_id = ?",
+                        (work_item.repo_id, node_id),
+                    )
+                    node_db_id = result["id"]
 
                     if "error" in test_results:
                         error_msg = test_results["error"]
@@ -230,12 +228,11 @@ class Worker(Process):
                             f"[w{self.worker_id}][{work_item.repo_name}] Node {node_id} failed: {error_msg}"
                         )
 
-                        with db.connection() as conn:
-                            conn.execute(
-                                "UPDATE nodes SET status = ?, error_message = ? WHERE id = ?",
-                                ("failed", error_msg, node_db_id),
-                            )
-                            conn.commit()
+                        db.execute(
+                            "UPDATE core_nodes SET status = ?, error_message = ? WHERE id = ?",
+                            ("failed", error_msg, node_db_id),
+                        )
+                        db.commit()
                         nodes_failed += 1
                         continue
 
