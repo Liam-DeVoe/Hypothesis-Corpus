@@ -101,10 +101,9 @@ Clustering implementation:
 Core tables track repository analysis:
 - `repositories`: Repository metadata and processing status
 - `nodes`: Individual test information
-- `analysis_runs`: Metadata about analysis runs
 
 Experiment-specific tables are defined by each experiment's `get_schema_sql()`:
-- `runtime` experiment: `node_coverage`, `node_executions`, `observability_data`
+- `runtime` experiment: `runtime_summary` (execution metadata + coverage JSON), `runtime_testcase` (per-testcase coverage with cumulative lines)
 - `facets` experiment: `facets` table with summaries, property patterns, and technical domains
 
 Task-specific tables are defined by each task's `get_schema_sql()`:

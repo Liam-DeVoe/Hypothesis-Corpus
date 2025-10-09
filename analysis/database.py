@@ -48,19 +48,8 @@ class Database:
                     error_message TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (repo_id) REFERENCES repositories(id),
-                    UNIQUE(repo_id, node_id)
-                );
-
-                -- Analysis metadata
-                CREATE TABLE IF NOT EXISTS analysis_runs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    end_time TIMESTAMP,
-                    total_repos INTEGER DEFAULT 0,
-                    successful_repos INTEGER DEFAULT 0,
-                    failed_repos INTEGER DEFAULT 0,
-                    experiment_name TEXT,  -- Name of experiment run
-                    configuration TEXT  -- JSON configuration used
+                    UNIQUE(repo_id, node_id),
+                    FOREIGN KEY (repo_id) REFERENCES repositories(id)
                 );
 
                 -- Create indexes for better query performance

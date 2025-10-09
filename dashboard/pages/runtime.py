@@ -40,11 +40,11 @@ def main():
         overall_stats = pd.read_sql_query(
             """
             SELECT
-                COUNT(DISTINCT tc.node_id) as nodes_with_coverage,
-                COUNT(DISTINCT tc.file_path) as files_covered,
-                SUM(tc.covered_lines) as total_lines_covered,
-                AVG(tc.covered_lines) as avg_lines_per_file
-            FROM runtime_coverage_summary tc
+                COUNT(DISTINCT rs.node_id) as nodes_with_coverage,
+                SUM(rs.total_lines_covered) as total_lines_covered,
+                AVG(rs.total_lines_covered) as avg_lines_per_node
+            FROM runtime_summary rs
+            WHERE rs.coverage IS NOT NULL
             """,
             conn,
         )
@@ -55,12 +55,11 @@ def main():
             SELECT
                 r.repo_name as repository,
                 COUNT(DISTINCT t.id) as total_nodes,
-                COUNT(DISTINCT tc.node_id) as nodes_with_coverage,
-                SUM(tc.covered_lines) as total_lines_covered,
-                COUNT(DISTINCT tc.file_path) as files_covered
+                COUNT(DISTINCT rs.node_id) as nodes_with_coverage,
+                SUM(rs.total_lines_covered) as total_lines_covered
             FROM repositories r
             LEFT JOIN nodes t ON r.id = t.repo_id
-            LEFT JOIN runtime_coverage_summary tc ON t.id = tc.node_id
+            LEFT JOIN runtime_summary rs ON t.id = rs.node_id
             WHERE r.clone_status = 'success'
             GROUP BY r.id
             HAVING nodes_with_coverage > 0
@@ -74,12 +73,12 @@ def main():
         coverage_timeline = pd.read_sql_query(
             """
             SELECT
-                DATE(tc.collected_at) as date,
-                COUNT(DISTINCT tc.node_id) as nodes_count,
-                SUM(tc.covered_lines) as lines_covered,
-                COUNT(DISTINCT tc.file_path) as files_covered
-            FROM runtime_coverage_summary tc
-            GROUP BY DATE(tc.collected_at)
+                DATE(rs.executed_at) as date,
+                COUNT(DISTINCT rs.node_id) as nodes_count,
+                SUM(rs.total_lines_covered) as lines_covered
+            FROM runtime_summary rs
+            WHERE rs.coverage IS NOT NULL
+            GROUP BY DATE(rs.executed_at)
             ORDER BY date
             """,
             conn,
@@ -92,7 +91,7 @@ def main():
                 COUNT(*) as total_executions,
                 SUM(CASE WHEN passed = 1 THEN 1 ELSE 0 END) as passed,
                 SUM(CASE WHEN passed = 0 THEN 1 ELSE 0 END) as failed
-            FROM node_executions
+            FROM runtime_summary
             """,
             conn,
         )
@@ -101,7 +100,7 @@ def main():
         execution_times = pd.read_sql_query(
             """
             SELECT execution_time
-            FROM node_executions
+            FROM runtime_summary
             WHERE execution_time IS NOT NULL
             """,
             conn,
@@ -117,9 +116,9 @@ def main():
                 f"{overall_stats['nodes_with_coverage'].iloc[0]:,}",
             )
         with col2:
-            avg_lines = overall_stats["avg_lines_per_file"].iloc[0]
+            avg_lines = overall_stats["avg_lines_per_node"].iloc[0]
             st.metric(
-                "Avg Lines/File",
+                "Avg Lines/Node",
                 f"{avg_lines:.0f}" if avg_lines else "0",
             )
 
@@ -134,7 +133,7 @@ def main():
                 "total_nodes": "Total Nodes",
                 "repository": "Repository",
             },
-            hover_data=["nodes_with_coverage", "total_lines_covered", "files_covered"],
+            hover_data=["nodes_with_coverage", "total_lines_covered"],
         )
         fig.update_layout(height=600, xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
@@ -156,23 +155,10 @@ def main():
             )
         )
 
-        # Add files covered on secondary axis
-        fig.add_trace(
-            go.Scatter(
-                x=coverage_timeline["date"],
-                y=coverage_timeline["files_covered"],
-                name="Files Covered",
-                mode="lines+markers",
-                line={"color": "blue", "width": 2},
-                yaxis="y2",
-            )
-        )
-
         fig.update_layout(
             title="Coverage Metrics Over Time",
             xaxis_title="Date",
             yaxis={"title": "Lines Covered", "side": "left"},
-            yaxis2={"title": "Files Covered", "overlaying": "y", "side": "right"},
             hovermode="x unified",
             height=400,
         )
@@ -247,15 +233,14 @@ def main():
                 """
                 SELECT
                     t.node_id,
-                    tcc.testcase_number,
-                    tcc.file_path,
-                    tcc.cumulative_count,
+                    tc.testcase_number,
+                    tc.cumulative_lines,
                     r.repo_name as repository
-                FROM runtime_coverage tcc
-                JOIN nodes t ON tcc.node_id = t.id
+                FROM runtime_testcase tc
+                JOIN nodes t ON tc.node_id = t.id
                 JOIN repositories r ON t.repo_id = r.id
                 WHERE r.repo_name = ?
-                ORDER BY t.id, tcc.file_path, tcc.testcase_number
+                ORDER BY t.id, tc.testcase_number
                 """,
                 conn,
                 params=[selected_repo],
@@ -272,19 +257,12 @@ def main():
             for node_id in node_ids:
                 test_data = cumulative_data[cumulative_data["node_id"] == node_id]
 
-                # Aggregate coverage across all files for each case
-                aggregated_data = (
-                    test_data.groupby("testcase_number")
-                    .agg({"cumulative_count": "sum"})
-                    .reset_index()
-                )
-
                 test_name = node_id.lstrip(prefix)
 
                 fig.add_trace(
                     go.Scatter(
-                        x=aggregated_data["testcase_number"],
-                        y=aggregated_data["cumulative_count"],
+                        x=test_data["testcase_number"],
+                        y=test_data["cumulative_lines"],
                         mode="lines",
                         name=test_name,
                         line={"width": 2},
@@ -310,14 +288,13 @@ def main():
                 """
                 SELECT
                     t.node_id,
-                    tc.line_execution_counts,
-                    ne.examples_count
-                FROM runtime_coverage_summary tc
-                JOIN nodes t ON tc.node_id = t.id
+                    rs.line_execution_counts,
+                    rs.examples_count
+                FROM runtime_summary rs
+                JOIN nodes t ON rs.node_id = t.id
                 JOIN repositories r ON t.repo_id = r.id
-                LEFT JOIN node_executions ne ON t.id = ne.node_id
                 WHERE r.repo_name = ?
-                AND tc.line_execution_counts IS NOT NULL
+                AND rs.line_execution_counts IS NOT NULL
                 """,
                 conn,
                 params=[selected_repo],
@@ -333,22 +310,28 @@ def main():
 
             for _, row in line_execution_data.iterrows():
                 node_id = row["node_id"]
-                line_counts = json.loads(row["line_execution_counts"])
+                line_counts_dict = json.loads(row["line_execution_counts"])
 
-                if not line_counts:
+                if not line_counts_dict:
+                    continue
+
+                # Flatten nested dict structure: {"file": {"line": count}} -> [counts]
+                all_counts = []
+                for file_counts in line_counts_dict.values():
+                    all_counts.extend(file_counts.values())
+
+                if not all_counts:
                     continue
 
                 # Get total examples for this node (use max line execution count as proxy if examples_count not available)
                 total_examples = (
                     row["examples_count"]
                     if pd.notna(row["examples_count"])
-                    else max(line_counts.values())
+                    else max(all_counts)
                 )
 
                 # Calculate execution frequencies as percentages
-                frequencies = [
-                    count / total_examples * 100 for count in line_counts.values()
-                ]
+                frequencies = [count / total_examples * 100 for count in all_counts]
 
                 test_name = node_id.lstrip(prefix)
 
@@ -379,37 +362,32 @@ def main():
         st.subheader("Details")
         with db.connection() as conn:
             # Get test coverage details for selected repository
-            runtime_coverage_summary_details = pd.read_sql_query(
+            runtime_summary_details = pd.read_sql_query(
                 """
                 SELECT
                     t.node_id,
-                    tc.file_path,
-                    tc.covered_lines,
-                    te.passed,
-                    te.execution_time
+                    rs.total_lines_covered,
+                    rs.passed,
+                    rs.execution_time
                 FROM nodes t
                 JOIN repositories r ON t.repo_id = r.id
-                LEFT JOIN runtime_coverage_summary tc ON t.id = tc.node_id
-                LEFT JOIN node_executions te ON t.id = te.node_id
+                LEFT JOIN runtime_summary rs ON t.id = rs.node_id
                 WHERE r.repo_name = ?
-                AND tc.covered_lines IS NOT NULL
-                ORDER BY tc.covered_lines DESC
+                AND rs.coverage IS NOT NULL
+                ORDER BY rs.total_lines_covered DESC
                 """,
                 conn,
                 params=[selected_repo],
             )
 
-            if not runtime_coverage_summary_details.empty:
+            if not runtime_summary_details.empty:
                 st.dataframe(
-                    runtime_coverage_summary_details,
+                    runtime_summary_details,
                     width="stretch",
                     hide_index=True,
                     column_config={
                         "node_id": st.column_config.TextColumn("Test", width="large"),
-                        "file_path": st.column_config.TextColumn(
-                            "File", width="medium"
-                        ),
-                        "covered_lines": st.column_config.NumberColumn(
+                        "total_lines_covered": st.column_config.NumberColumn(
                             "Lines Covered", width="small"
                         ),
                         "passed": st.column_config.CheckboxColumn(

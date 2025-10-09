@@ -135,7 +135,6 @@ def main():
             st.Page("pages/Runtime.py", title="Runtime"),
             st.Page("pages/Facets.py", title="Facets"),
             st.Page("pages/Clusters.py", title="Clusters"),
-            st.Page("pages/History.py", title="History"),
         ]
     )
     pg.run()

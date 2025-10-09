@@ -65,7 +65,7 @@ def create_timing_histogram():
         execution_times = pd.read_sql_query(
             """
             SELECT execution_time
-            FROM node_executions
+            FROM runtime_summary
             WHERE execution_time IS NOT NULL
             """,
             conn,
@@ -109,11 +109,10 @@ def execution_frequency_histogram():
         all_line_execution_data = pd.read_sql_query(
             """
             SELECT
-                tc.line_execution_counts,
-                ne.examples_count
-            FROM runtime_coverage_summary tc
-            LEFT JOIN node_executions ne ON tc.node_id = ne.node_id
-            WHERE tc.line_execution_counts IS NOT NULL
+                rs.line_execution_counts,
+                rs.examples_count
+            FROM runtime_summary rs
+            WHERE rs.line_execution_counts IS NOT NULL
             """,
             conn,
         )
@@ -125,20 +124,28 @@ def execution_frequency_histogram():
     all_frequencies = []
 
     for _, row in all_line_execution_data.iterrows():
-        line_counts = json.loads(row["line_execution_counts"])
+        line_counts_dict = json.loads(row["line_execution_counts"])
 
-        if not line_counts:
+        if not line_counts_dict:
+            continue
+
+        # Flatten nested dict structure: {"file": {"line": count}} -> [counts]
+        all_counts = []
+        for file_counts in line_counts_dict.values():
+            all_counts.extend(file_counts.values())
+
+        if not all_counts:
             continue
 
         # Get total examples for this node
         total_examples = (
             row["examples_count"]
             if pd.notna(row["examples_count"])
-            else max(line_counts.values())
+            else max(all_counts)
         )
 
         # Calculate execution frequencies as percentages
-        frequencies = [count / total_examples * 100 for count in line_counts.values()]
+        frequencies = [count / total_examples * 100 for count in all_counts]
         all_frequencies.extend(frequencies)
 
     if not all_frequencies:

@@ -149,19 +149,7 @@ def main(
     console.print()
 
     # Initialize database
-    db = Database(cfg["database"]["path"])
-
-    # Start analysis run
-    with db.connection() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO analysis_runs (configuration, total_repos, experiment_name)
-            VALUES (?, ?, ?)
-        """,
-            (json.dumps(cfg), len(work_items), ",".join(experiments)),
-        )
-        run_id = cursor.lastrowid
-        conn.commit()
+    Database(cfg["database"]["path"])
 
     # Create worker pool
     console.print("[bold]Starting analysis...[/bold]")
@@ -196,20 +184,6 @@ def main(
                 console.print(
                     f"[w{result['worker_id']}] Finished repository {result['repo_name']}"
                 )
-
-    # Update analysis run
-    with db.connection() as conn:
-        conn.execute(
-            """
-            UPDATE analysis_runs
-            SET end_time = CURRENT_TIMESTAMP,
-                successful_repos = ?,
-                failed_repos = ?
-            WHERE id = ?
-        """,
-            (successful, failed, run_id),
-        )
-        conn.commit()
 
     # Print summary
     console.print()
