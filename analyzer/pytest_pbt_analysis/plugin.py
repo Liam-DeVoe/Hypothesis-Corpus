@@ -6,6 +6,14 @@ import pytest
 from hypothesis import HealthCheck, Phase, settings
 from hypothesis.internal.detection import is_hypothesis_test
 
+_collection_error = None
+
+
+def pytest_collectreport(report):
+    global _collection_error
+    if report.failed:
+        _collection_error = str(report.longrepr)
+
 
 def pytest_addoption(parser):
     group = parser.getgroup("pbt-analysis", "PBT analysis control options")
@@ -27,10 +35,13 @@ def pytest_addoption(parser):
 
 
 def pytest_collection_modifyitems(session, config, items):
-    assert items, "pyetst initial collection was empty"
     nodeid = config.getoption("experiment_nodeid")
     max_examples = config.getoption("pbt_max_examples")
 
+    if _collection_error:
+        raise AssertionError(_collection_error)
+
+    assert items
     n = len(items)
     for i, item in enumerate(reversed(items)):
         if item.nodeid != nodeid:

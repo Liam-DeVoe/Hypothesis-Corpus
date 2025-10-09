@@ -4,6 +4,11 @@ import sys
 import traceback
 from pathlib import Path
 
+try:
+    from .utils import filepath_from_node
+except ImportError:
+    from utils import filepath_from_node
+
 
 def main():
     """Run the configured experiment inside the container."""
@@ -18,11 +23,8 @@ def main():
         node_ids = config.get("node_ids", [])
         experiment_name = config.get("experiment_name", "coverage")
         debug = config.get("debug", False)
-        requirements_file = (
-            Path("/app/requirements.txt")
-            if Path("/app/requirements.txt").exists()
-            else None
-        )
+        requirements_file = Path("/app/requirements.txt")
+        assert requirements_file.exists()
 
         print(f"Starting analysis with experiment: {experiment_name}", flush=True)
         print(f"Python version: {sys.version}", flush=True)
@@ -56,22 +58,12 @@ def main():
         total_tests = len(node_ids)
 
         for i, node_id in enumerate(node_ids, 1):
-            parts = node_id.split("::")
-            file_path = Path(parts[0])
+            file_path = filepath_from_node(node_id)
 
             print(f"\nProcessing test {i}/{total_tests}: {node_id}", flush=True)
-            print(f"Looking for file: {file_path}", flush=True)
-
-            if not file_path.exists():
-                print(f"File not found: {file_path}", flush=True)
-                results[node_id] = {"error": f"File not found: {file_path}"}
-                continue
-
-            print(f"Found file: {file_path}", flush=True)
-
+            assert file_path.exists(), f"file not found: {file_path}"
             node_results = {"file_path": str(file_path)}
 
-            # Run experiment
             print(f"Running {experiment_name} experiment...", flush=True)
 
             try:

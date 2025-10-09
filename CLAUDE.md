@@ -10,8 +10,8 @@ This is a Property-Based Testing (PBT) Corpus Analysis system that analyzes Hypo
 
 ### Running Analysis
 ```bash
-# Build Docker image and run analysis
-docker build -f analyzer/Dockerfile -t pbt-analyzer . && python run_analysis.py --dataset data/dataset.json --workers 4
+# run analysis
+python run_analysis.py --dataset data/dataset.json --workers 4
 
 # Run sample test with MarkCBell/bigger repository
 python run_analysis.py --sample
@@ -21,6 +21,12 @@ python run_analysis.py --dataset data/dataset.json --limit 10 --workers 2
 
 # Start visualization dashboard
 streamlit run dashboard/Overview.py
+```
+
+### Rebuilding docker
+
+```
+docker build -f analyzer/Dockerfile -t pbt-analyzer .
 ```
 
 ### Running Tasks

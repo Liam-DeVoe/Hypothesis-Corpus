@@ -86,11 +86,7 @@ class FacetsExperiment(Experiment):
             timeout=60 * 10,
         )
 
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"Claude Code failed with exit code {result.returncode}: {result.stderr}"
-            )
-
+        assert result.returncode == 0
         response_text = result.stdout
         match = re.search(r"<answer>(.*?)</answer>", response_text, re.DOTALL)
 
