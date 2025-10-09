@@ -141,7 +141,7 @@ def remove_duplicates(db_path):
     repos = conn.execute(
         "SELECT id, full_name, stargazers_count FROM core_repositories"
     ).fetchall()
-    print(f"\nDetecting duplicates among {len(repos)} repositories...")
+    print(f"Removing duplicates among {len(repos)} repositories...")
 
     to_remove = set()
 
@@ -182,13 +182,12 @@ def remove_duplicates(db_path):
                     to_remove.add(repo1_name)
                     break  # This repo is being removed, move to next
 
-    if to_remove:
-        print(f"\nRemoving {len(to_remove)} duplicate repositories...")
-        for repo_name in to_remove:
-            conn.execute(
-                "DELETE FROM core_repositories WHERE full_name = ?", (repo_name,)
-            )
-        conn.commit()
-        print(f"Kept {len(repos) - len(to_remove)} unique repositories")
+    print(f"\nRemoving {len(to_remove)} duplicate repositories...")
+    for repo_name in to_remove:
+        conn.execute(
+            "DELETE FROM core_repositories WHERE full_name = ?", (repo_name,)
+        )
+    conn.commit()
+    print(f"Kept {len(repos) - len(to_remove)} unique repositories")
 
     conn.close()

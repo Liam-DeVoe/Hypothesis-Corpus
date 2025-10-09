@@ -25,7 +25,7 @@ def process_minhashes():
     print(f"Processing minhashes for {len(repos)} repositories...")
     for i, repo in enumerate(repos, 1):
         repo_name = repo["full_name"]
-        print(f"[{i}/{len(repos)}] {repo_name} ... ", end="", flush=True)
+        print(f"[{i}/{len(repos)}] {repo_name} ... ", flush=True)
         minhash_repository(conn, repo_name)
 
     conn.close()
