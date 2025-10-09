@@ -5,61 +5,73 @@ from pathlib import Path
 from typing import Any
 
 
-def setup_dependencies(requirements_file: Path | None = None) -> bool:
-    """Install Python dependencies in the container."""
+def filepath_from_node(nodeid: str) -> Path:
+    assert ".py" in nodeid
+    return Path(nodeid.split("::")[0])
 
-    def run_pip_install(args: list[str], description: str) -> bool:
-        """Run pip install with timing."""
-        print(f"Installing {description}...", flush=True)
 
-        try:
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "pip",
-                    "install",
-                    "--quiet",
-                    "--disable-pip-version-check",
-                ]
-                + args,
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode != 0:
-                print(
-                    f"Warning: {description} install had issues: {result.stderr}",
-                    flush=True,
-                )
-            return result.returncode == 0
-        except Exception:
-            return False
+# require a timeout so we don't forget to specify one and leave a trivial command
+# hanging for silly reasons
+def subprocess_run(
+    args: list[Any],
+    timeout: int,
+    *,
+    identifier=None,
+    pre_print=False,
+    log_all=False,
+    **kwargs,
+) -> subprocess.CompletedProcess:
+    args = [str(v) for v in args]
+    identifier = f"{identifier + ' ' if identifier is not None else ''}"
+    # sometimes we want to debug commands before they finish running.
+    if pre_print:
+        print(f"[pre-printed] {identifier}{' '.join(args)}")
 
-    print("Starting dependency installation...", flush=True)
+    r = subprocess.run(args, **kwargs, capture_output=True, text=True, timeout=timeout)
+    print(f"{identifier}{describe_process(r, all=log_all)}")
+    return r
 
-    # Install pytest_pbt_analysis plugin (copied at runtime)
+
+def describe_process(process, *, all=False):
+    command = " ".join([str(arg) for arg in process.args])
+
+    def _result(process):
+        return "success" if process.returncode == 0 else "failure"
+
+    s = f"(returncode {process.returncode}) {command} result: {_result(process)}"
+    if process.returncode != 0 or all:
+        s += f"\n{command} stderr: {process.stderr}"
+        s += f"\n{command} stdout: {process.stdout}"
+    return s
+
+
+def pip_install(args: list[str]):
+    result = subprocess_run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--quiet",
+            "--disable-pip-version-check",
+        ]
+        + args,
+        timeout=60 * 15,
+    )
+    assert result.returncode == 0
+
+
+def setup_dependencies(requirements_file: Path) -> bool:
+    print("installing dependencies...", flush=True)
+
     pbt_analysis_dir = Path("/app/pytest_pbt_analysis")
-    if pbt_analysis_dir.exists():
-        run_pip_install(["-e", str(pbt_analysis_dir)], "pytest_pbt_analysis plugin")
+    assert pbt_analysis_dir.exists()
 
-    # Install project requirements if they exist
-    if requirements_file and requirements_file.exists():
-        run_pip_install(
-            ["--no-dependencies", "-r", str(requirements_file)], "project requirements"
-        )
-
-    # Try to install the repository itself as a library
-    run_pip_install(["--no-dependencies", "-e", "/app"], "repository package")
-
-    if not run_pip_install(["pytest"], "pytest"):
-        print("Failed to install pytest", flush=True)
-        return False
-
-    if not run_pip_install(["-U", "hypothesis"], "hypothesis"):
-        print("Failed to install hypothesis", flush=True)
-        return False
-
-    print("Setup complete!", flush=True)
+    pip_install(["-e", str(pbt_analysis_dir)])
+    pip_install(["--no-dependencies", "-r", str(requirements_file)])
+    pip_install(["--no-dependencies", "-e", "/app"])
+    pip_install(["-U", "pytest"])
+    pip_install(["-U", "hypothesis"])
     return True
 
 

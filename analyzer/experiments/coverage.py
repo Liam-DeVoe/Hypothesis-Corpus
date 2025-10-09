@@ -1,15 +1,16 @@
 import json
 import shutil
-import subprocess
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 try:
     from .experiment import Experiment
+    from .utils import filepath_from_node
 except ImportError:
     # When running as standalone module in container
     from experiment import Experiment
+    from utils import filepath_from_node, subprocess_run
 
 
 class CoverageExperiment(Experiment):
@@ -81,25 +82,23 @@ class CoverageExperiment(Experiment):
         if obs_dir.exists():
             shutil.rmtree(obs_dir)
 
-        file_path = node_id.split("::")[0]
         pytest_args = [
             "python",
             "-m",
             "pytest",
-            file_path,
+            # optimization to only collect as much as we need to
+            filepath_from_node(node_id),
             "--experiment-nodeid",
             node_id,
             "--pbt-max-examples",
-            str(CoverageExperiment.max_examples),
+            CoverageExperiment.max_examples,
         ]
 
         if debug:
             pytest_args += ["-s", "-v"]
 
-        result = subprocess.run(
+        result = subprocess_run(
             pytest_args,
-            capture_output=True,
-            text=True,
             cwd="/app",
             timeout=timeout,
         )

@@ -1,15 +1,17 @@
+pytest==8.4.2
+datasketch==1.6.5
+hypothesis==6.140.2
+matplotlib==3.9.0
+# pinning these two for compatibility with an error
+# in transformers' PreTrainedModel
+sentence-transformers==4.1.0
+transformers==4.41.0
+
 streamlit>=1.28.0
 pandas>=2.0.0
 docker>=6.1.0
-hypothesis>=6.0.0
-pytest>=7.0.0
-matplotlib>=3.7.0
 plotly>=5.17.0
 click>=8.1.0
 rich>=13.0.0
 requests>=2.31.0
 scikit-learn>=1.7.2
-datasketch==1.6.5
-# pinning these two for compatibility with transformers PreTrainedModel
-sentence-transformers==4.1.0
-transformers==4.41.0

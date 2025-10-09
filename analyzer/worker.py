@@ -198,6 +198,7 @@ class Worker(Process):
                         continue
 
                     # Parse node_id
+                    # TODO this is stupid and wrong
                     parts = node_id.split("::")
                     file_path = parts[0]
                     class_name = parts[1] if len(parts) > 1 else None

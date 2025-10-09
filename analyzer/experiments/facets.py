@@ -1,13 +1,14 @@
 import re
-import subprocess
 from pathlib import Path
 from typing import Any
 
 try:
     from .experiment import Experiment
+    from .utils import subprocess_run
 except ImportError:
     # When running as standalone module in container
     from experiment import Experiment
+    from utils import subprocess_run
 
 
 SUMMARY_PROMPT = """Your job is to summarize what this property-based test is testing. Describe both the testing pattern/relationship being verified and the domain/technology being tested. Be clear, concise, and get to the point in at most two sentences. Focus on what is being tested and how, not on implementation details.
@@ -80,10 +81,8 @@ class FacetsExperiment(Experiment):
 
     @staticmethod
     def _run_claude(prompt: str) -> str:
-        result = subprocess.run(
+        result = subprocess_run(
             ["claude", "-p", prompt],
-            capture_output=True,
-            text=True,
             timeout=60 * 10,
         )
 

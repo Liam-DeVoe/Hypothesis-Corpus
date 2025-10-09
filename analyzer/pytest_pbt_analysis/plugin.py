@@ -27,6 +27,7 @@ def pytest_addoption(parser):
 
 
 def pytest_collection_modifyitems(session, config, items):
+    assert items, "pyetst initial collection was empty"
     nodeid = config.getoption("experiment_nodeid")
     max_examples = config.getoption("pbt_max_examples")
 

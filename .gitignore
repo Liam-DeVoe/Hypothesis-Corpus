@@ -3,3 +3,7 @@
 .cursor
 secrets.json
 .claude
+sandbox.py
+.hypothesis
+build
+*.egg-info
