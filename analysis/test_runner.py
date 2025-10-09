@@ -76,60 +76,52 @@ class TestRunner:
         debug: bool,
     ) -> bool:
         """Set up environment by copying experiment modules and config."""
-        try:
-            # Write requirements to file if provided
-            if requirements:
-                req_file = work_dir / "requirements.txt"
-                req_file.write_text(requirements)
+        # Write requirements to file if provided
+        if requirements:
+            req_file = work_dir / "requirements.txt"
+            req_file.write_text(requirements)
 
-            # Copy experiment modules that will run in the container
-            import analysis.experiments as experiments_package
+        # Copy experiment modules that will run in the container
+        import analysis.experiments as experiments_package
 
-            experiments_dir = Path(experiments_package.__file__).parent
+        experiments_dir = Path(experiments_package.__file__).parent
 
-            # Always copy shared helpers and runner
-            shutil.copy(
-                experiments_dir / "utils.py",
-                work_dir / "utils.py",
-            )
-            shutil.copy(
-                experiments_dir / "runner.py",
-                work_dir / "runner.py",
-            )
+        # Always copy shared helpers and runner
+        shutil.copy(
+            experiments_dir / "utils.py",
+            work_dir / "utils.py",
+        )
+        shutil.copy(
+            experiments_dir / "runner.py",
+            work_dir / "runner.py",
+        )
 
-            # Always copy base experiment module
-            shutil.copy(
-                experiments_dir / "experiment.py",
-                work_dir / "experiment.py",
-            )
+        # Always copy base experiment module
+        shutil.copy(
+            experiments_dir / "experiment.py",
+            work_dir / "experiment.py",
+        )
 
-            # Copy the specific experiment module
-            experiment_file = experiments_dir / f"{experiment_name}.py"
-            assert experiment_file.exists()
-            shutil.copy(experiment_file, work_dir / f"{experiment_name}.py")
+        # Copy the specific experiment module
+        experiment_file = experiments_dir / f"{experiment_name}.py"
+        assert experiment_file.exists()
+        shutil.copy(experiment_file, work_dir / f"{experiment_name}.py")
 
-            import analysis.pytest_pbt_analysis as pbt_package
+        import analysis.pytest_pbt_analysis as pbt_package
 
-            pbt_source_dir = Path(pbt_package.__file__).parent
-            pbt_dest_dir = work_dir / "pytest_pbt_analysis"
-            shutil.copytree(pbt_source_dir, pbt_dest_dir)
+        pbt_source_dir = Path(pbt_package.__file__).parent
+        pbt_dest_dir = work_dir / "pytest_pbt_analysis"
+        shutil.copytree(pbt_source_dir, pbt_dest_dir)
 
-            # Write configuration for the container
-            config = {
-                "node_ids": node_ids,
-                "repo_dir": "/app",
-                "experiment_name": experiment_name,
-                "debug": debug,
-            }
-            config_file = work_dir / "config.json"
-            config_file.write_text(json.dumps(config, indent=2))
-
-            return True
-        except Exception as e:
-            logger.error(
-                f"[w{self.worker_id}][unknown] Failed to setup environment: {e}"
-            )
-            return False
+        # Write configuration for the container
+        config = {
+            "node_ids": node_ids,
+            "repo_dir": "/app",
+            "experiment_name": experiment_name,
+            "debug": debug,
+        }
+        config_file = work_dir / "config.json"
+        config_file.write_text(json.dumps(config, indent=2))
 
     def run_in_container(
         self, repo_name: str, work_dir: Path, node_ids: list[str], debug: bool
@@ -180,14 +172,9 @@ class TestRunner:
         try:
             with tarfile.open(fileobj=tar_stream) as tar:
                 results_file = tar.extractfile("results.json")
-                if results_file:
-                    results = json.loads(results_file.read().decode("utf-8"))
-                    return results
-                else:
-                    logger.error(
-                        f"[w{self.worker_id}][{repo_name}] Could not extract results.json from tar"
-                    )
-                    return {"error": "Could not extract results", "logs": logs}
+                assert results_file
+                results = json.loads(results_file.read().decode("utf-8"))
+                return results
         finally:
             container.remove(force=True)
 
@@ -203,37 +190,21 @@ class TestRunner:
         """Process a complete repository."""
         work_dir = None
         try:
-            # Create temporary working directory
             work_dir = Path(
                 tempfile.mkdtemp(prefix=f"pbt_analysis_{repo_name.replace('/', '_')}_")
             )
-
-            # Clone repository
-            if not self.clone_repository(repo_name, work_dir / "repo"):
-                return {"error": "Failed to clone repository"}
-
-            # Setup environment
             repo_dir = work_dir / "repo"
-            if not self.setup_environment(
-                repo_dir, requirements, node_ids, experiment_name, debug=debug
-            ):
-                return {"error": "Failed to setup environment"}
 
+            self.clone_repository(repo_name, work_dir / "repo")
+            self.setup_environment(repo_dir, requirements, node_ids, experiment_name, debug=debug)
             results = self.run_in_container(repo_name, repo_dir, node_ids, debug)
-            if results is None:
-                return {"error": "No results returned from container"}
-
-            if "error" in results:
-                return results
-
+            assert results is not None
             return results
-
         except Exception as e:
             logger.error(
                 f"[w{self.worker_id}][{repo_name}] Failed to process repository: {e}"
             )
             return {"error": str(e)}
         finally:
-            # Clean up temporary directory
             if work_dir and work_dir.exists():
                 shutil.rmtree(work_dir, ignore_errors=True)
