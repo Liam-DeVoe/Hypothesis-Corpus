@@ -84,7 +84,7 @@ def analysis(
     db = Database(db_path=db_path)
 
     # Load work items directly from database
-    query = "SELECT full_name, requirements FROM core_repositories"
+    query = "SELECT full_name, requirements, node_ids FROM core_repository WHERE status = 'valid'"
     if limit:
         query += f" LIMIT {limit}"
 
@@ -94,7 +94,7 @@ def analysis(
     for repo in repos:
         work_item = WorkItem(
             repo_name=repo["full_name"],
-            node_ids=[],  # Empty means test discovery will run
+            node_ids=json.loads(repo["node_ids"]),
             requirements=repo["requirements"] or "",
         )
         work_items.append(work_item)
@@ -162,8 +162,8 @@ def install(db_path: str, limit: int):
 
     db = Database(db_path=db_path)
 
-    # Get repositories that need processing (no requirements yet)
-    query = "SELECT full_name FROM core_repositories WHERE requirements IS NULL"
+    # Get repositories that need processing
+    query = "SELECT full_name FROM core_repository WHERE status IS NULL"
     if limit:
         query += f" LIMIT {limit}"
 
@@ -174,6 +174,18 @@ def install(db_path: str, limit: int):
     successful = 0
     failed = 0
 
+    def _reject(repo_name: str):
+        nonlocal failed
+        failed += 1
+        db.execute(
+            "UPDATE core_repository SET status = ? WHERE full_name = ?",
+            ("invalid", repo_name),
+        )
+        db.commit()
+
+    def is_clean_install(result):
+        return result["collection_returncode"] == 0 and len(result["node_ids"]) > 0
+
     for i, repo in enumerate(repos, 1):
         repo_name = repo["full_name"]
         console.print(f"[{i}/{len(repos)}] Processing [cyan]{repo_name}[/cyan]...")
@@ -182,12 +194,22 @@ def install(db_path: str, limit: int):
             result = install_repository(repo_name)
         except Exception as e:
             console.print(f"  ✗ Failed: [red]{traceback.format_exception(e)}[/red]\n")
-            failed += 1
+            _reject(repo_name)
+            continue
+
+        if not is_clean_install(result):
+            console.print(f"  ✗ Failed: [red]not a clean install ({result})[/red]\n")
+            _reject(repo_name)
             continue
 
         db.execute(
-            "UPDATE core_repositories SET requirements = ?, node_ids = ? WHERE full_name = ?",
-            (result["requirements"], json.dumps(result["node_ids"]), repo_name),
+            "UPDATE core_repository SET status = ?, requirements = ?, node_ids = ? WHERE full_name = ?",
+            (
+                "valid",
+                result["requirements"],
+                json.dumps(result["node_ids"]),
+                repo_name,
+            ),
         )
         db.commit()
 

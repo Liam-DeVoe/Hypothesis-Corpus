@@ -46,7 +46,7 @@ def load_data():
             """
             SELECT
                 COUNT(*) as total
-            FROM core_repositories
+            FROM core_repository
             """
         ).fetchone()
 
@@ -57,13 +57,13 @@ def load_data():
                 COUNT(*) as total,
                 SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful,
                 SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
-            FROM core_nodes
+            FROM core_node
             """
         ).fetchone()
 
         return {
             "repositories": dict(repo_stats),
-            "core_nodes": dict(node_stats),
+            "core_node": dict(node_stats),
         }
 
 
@@ -82,20 +82,20 @@ def render_overview_metrics(stats: dict[str, Any]):
     with col2:
         st.metric(
             "Nodes Analyzed",
-            stats["core_nodes"]["total"],
-            f"{stats['core_nodes']['successful']} successful",
+            stats["core_node"]["total"],
+            f"{stats['core_node']['successful']} successful",
         )
 
     with col3:
         success_rate = (
-            stats["core_nodes"]["successful"] / stats["core_nodes"]["total"] * 100
-            if stats["core_nodes"]["total"] > 0
+            stats["core_node"]["successful"] / stats["core_node"]["total"] * 100
+            if stats["core_node"]["total"] > 0
             else 0
         )
         st.metric(
             "Success Rate",
             f"{success_rate:.1f}%",
-            f"{stats['core_nodes']['failed']} failed",
+            f"{stats['core_node']['failed']} failed",
         )
 
 

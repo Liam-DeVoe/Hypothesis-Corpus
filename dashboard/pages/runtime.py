@@ -57,8 +57,8 @@ def main():
                 COUNT(DISTINCT t.id) as total_nodes,
                 COUNT(DISTINCT rs.node_id) as nodes_with_coverage,
                 SUM(rs.total_lines_covered) as total_lines_covered
-            FROM core_repositories r
-            LEFT JOIN core_nodes t ON r.id = t.repo_id
+            FROM core_repository r
+            LEFT JOIN core_node t ON r.id = t.repo_id
             LEFT JOIN runtime_summary rs ON t.id = rs.node_id
             GROUP BY r.id
             HAVING nodes_with_coverage > 0
@@ -236,8 +236,8 @@ def main():
                     tc.cumulative_lines,
                     r.full_name as repository
                 FROM runtime_testcase tc
-                JOIN core_nodes t ON tc.node_id = t.id
-                JOIN core_repositories r ON t.repo_id = r.id
+                JOIN core_node t ON tc.node_id = t.id
+                JOIN core_repository r ON t.repo_id = r.id
                 WHERE r.full_name = ?
                 ORDER BY t.id, tc.testcase_number
                 """,
@@ -290,8 +290,8 @@ def main():
                     rs.line_execution_counts,
                     rs.examples_count
                 FROM runtime_summary rs
-                JOIN core_nodes t ON rs.node_id = t.id
-                JOIN core_repositories r ON t.repo_id = r.id
+                JOIN core_node t ON rs.node_id = t.id
+                JOIN core_repository r ON t.repo_id = r.id
                 WHERE r.full_name = ?
                 AND rs.line_execution_counts IS NOT NULL
                 """,
@@ -368,8 +368,8 @@ def main():
                     rs.total_lines_covered,
                     rs.passed,
                     rs.execution_time
-                FROM core_nodes t
-                JOIN core_repositories r ON t.repo_id = r.id
+                FROM core_node t
+                JOIN core_repository r ON t.repo_id = r.id
                 LEFT JOIN runtime_summary rs ON t.id = rs.node_id
                 WHERE r.full_name = ?
                 AND rs.coverage IS NOT NULL

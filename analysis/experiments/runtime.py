@@ -33,7 +33,7 @@ class RuntimeExperiment(Experiment):
                 line_execution_counts TEXT,  -- JSON mapping: {"file_path": {"line_num": execution_count, ...}, ...}
                 total_lines_covered INTEGER,  -- Sum of unique lines across all files
                 executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (node_id) REFERENCES core_nodes(id)
+                FOREIGN KEY (node_id) REFERENCES core_node(id)
             );
 
             CREATE TABLE IF NOT EXISTS runtime_testcase (
@@ -42,7 +42,7 @@ class RuntimeExperiment(Experiment):
                 testcase_number INTEGER NOT NULL,  -- Order of test case execution
                 coverage TEXT,  -- JSON mapping: {"file_path": [line_numbers], ...}
                 cumulative_lines INTEGER,  -- Count of unique lines seen so far across all files
-                FOREIGN KEY (node_id) REFERENCES core_nodes(id)
+                FOREIGN KEY (node_id) REFERENCES core_node(id)
             );
 
             CREATE INDEX IF NOT EXISTS idx_runtime_summary ON runtime_summary(node_id);

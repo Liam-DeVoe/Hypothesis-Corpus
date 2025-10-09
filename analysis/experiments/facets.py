@@ -73,7 +73,7 @@ class FacetsExperiment(Experiment):
                 type TEXT NOT NULL,
                 facet TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (node_id) REFERENCES core_nodes(id)
+                FOREIGN KEY (node_id) REFERENCES core_node(id)
             );
 
             CREATE INDEX IF NOT EXISTS idx_facets_node ON facets(node_id);

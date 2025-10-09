@@ -40,7 +40,7 @@ def main():
                 MIN(LENGTH(s.facet)) as min_summary_length,
                 MAX(LENGTH(s.facet)) as max_summary_length
             FROM facets s
-            JOIN core_nodes n ON s.node_id = n.id
+            JOIN core_node n ON s.node_id = n.id
             JOIN repositories r ON n.repo_id = r.id
             WHERE s.type = 'summary'
             """,
@@ -107,8 +107,8 @@ def main():
                 COUNT(DISTINCT n.id) as total_nodes,
                 COUNT(DISTINCT s.node_id) as nodes_with_summaries,
                 AVG(LENGTH(s.facet)) as avg_summary_length
-            FROM core_repositories r
-            LEFT JOIN core_nodes n ON r.id = n.repo_id
+            FROM core_repository r
+            LEFT JOIN core_node n ON r.id = n.repo_id
             LEFT JOIN facets s ON n.id = s.node_id
             GROUP BY r.id
             HAVING nodes_with_summaries > 0
@@ -277,8 +277,8 @@ def main():
                     LENGTH(s.facet) as summary_length,
                     s.created_at
                 FROM facets s
-                JOIN core_nodes n ON s.node_id = n.id
-                JOIN core_repositories r ON n.repo_id = r.id
+                JOIN core_node n ON s.node_id = n.id
+                JOIN core_repository r ON n.repo_id = r.id
                 WHERE r.full_name = ?
                     AND s.type = 'summary'
                 ORDER BY n.node_id

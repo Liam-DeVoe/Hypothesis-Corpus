@@ -186,8 +186,8 @@ def create_nodes_per_repo_histogram():
             SELECT
                 r.full_name as repo_name,
                 COUNT(DISTINCT t.id) as node_count
-            FROM core_repositories r
-            LEFT JOIN core_nodes t ON r.id = t.repo_id
+            FROM core_repository r
+            LEFT JOIN core_node t ON r.id = t.repo_id
             GROUP BY r.id
             HAVING node_count > 0
             """,

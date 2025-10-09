@@ -35,8 +35,8 @@ def main():
                 r.full_name as repository,
                 COUNT(DISTINCT t.id) as node_count,
                 r.created_at
-            FROM core_repositories r
-            LEFT JOIN core_nodes t ON r.id = t.repo_id
+            FROM core_repository r
+            LEFT JOIN core_node t ON r.id = t.repo_id
             GROUP BY r.id
             ORDER BY r.created_at DESC
             LIMIT 100
@@ -74,8 +74,8 @@ def main():
                     SELECT
                         t.node_id,
                         t.status
-                    FROM core_nodes t
-                    JOIN core_repositories r ON t.repo_id = r.id
+                    FROM core_node t
+                    JOIN core_repository r ON t.repo_id = r.id
                     WHERE r.full_name = ?
                     GROUP BY t.id
                 """,

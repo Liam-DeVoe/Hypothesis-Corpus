@@ -76,7 +76,7 @@ def compute_minhashes(repo_name: str) -> list[MinHash]:
 
 def load_minhashes(db, repo_name: str) -> list[MinHash] | None:
     result = db.fetchone(
-        "SELECT id FROM core_repositories WHERE full_name = ?",
+        "SELECT id FROM core_repository WHERE full_name = ?",
         (repo_name,),
     )
     assert result
@@ -93,7 +93,7 @@ def minhash_repository(db, repo_name: str):
     minhashes = compute_minhashes(repo_name)
 
     result = db.fetchone(
-        "SELECT id FROM core_repositories WHERE full_name = ?",
+        "SELECT id FROM core_repository WHERE full_name = ?",
         (repo_name,),
     )
     assert result, f"Repository {repo_name} not found"
@@ -138,7 +138,7 @@ def remove_duplicates(db_path):
     from analysis.database import Database
 
     db = Database(db_path=db_path)
-    repos = db.fetchall("SELECT id, full_name, stargazers_count FROM core_repositories")
+    repos = db.fetchall("SELECT id, full_name, stargazers_count FROM core_repository")
     print(f"Removing duplicates among {len(repos)} repositories...")
 
     to_remove = set()
@@ -182,6 +182,6 @@ def remove_duplicates(db_path):
 
     print(f"\nRemoving {len(to_remove)} duplicate repositories...")
     for repo_name in to_remove:
-        db.execute("DELETE FROM core_repositories WHERE full_name = ?", (repo_name,))
+        db.execute("DELETE FROM core_repository WHERE full_name = ?", (repo_name,))
     db.commit()
     print(f"Kept {len(repos) - len(to_remove)} unique repositories")

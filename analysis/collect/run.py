@@ -19,7 +19,7 @@ def init_db():
 
 def process_minhashes():
     db = Database(db_path=str(db_path))
-    repos = db.fetchall("SELECT id, full_name FROM core_repositories")
+    repos = db.fetchall("SELECT id, full_name FROM core_repository")
 
     print(f"Processing minhashes for {len(repos)} repositories...")
     for i, repo in enumerate(repos, 1):

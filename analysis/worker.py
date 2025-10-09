@@ -143,7 +143,7 @@ class Worker(Process):
                 experiment.delete_data(db, work_item.repo_name)
 
             result = db.fetchone(
-                "SELECT id FROM core_repositories WHERE full_name = ?",
+                "SELECT id FROM core_repository WHERE full_name = ?",
                 (work_item.repo_name,),
             )
             assert result
@@ -201,7 +201,7 @@ class Worker(Process):
                     # Add node to database
                     db.execute(
                         """
-                        INSERT OR IGNORE INTO core_nodes (repo_id, node_id, file_path, class_name, node_name)
+                        INSERT OR IGNORE INTO core_node (repo_id, node_id, file_path, class_name, node_name)
                         VALUES (?, ?, ?, ?, ?)
                         """,
                         (
@@ -214,7 +214,7 @@ class Worker(Process):
                     )
                     db.commit()
                     result = db.fetchone(
-                        "SELECT id FROM core_nodes WHERE repo_id = ? AND node_id = ?",
+                        "SELECT id FROM core_node WHERE repo_id = ? AND node_id = ?",
                         (work_item.repo_id, node_id),
                     )
                     node_db_id = result["id"]
@@ -229,7 +229,7 @@ class Worker(Process):
                         )
 
                         db.execute(
-                            "UPDATE core_nodes SET status = ?, error_message = ? WHERE id = ?",
+                            "UPDATE core_node SET status = ?, error_message = ? WHERE id = ?",
                             ("failed", error_msg, node_db_id),
                         )
                         db.commit()

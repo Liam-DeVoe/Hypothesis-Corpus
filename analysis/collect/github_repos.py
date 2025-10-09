@@ -109,7 +109,7 @@ def filter_repos(db_path):
 
     db = Database(db_path=db_path)
     repos = db.fetchall(
-        "SELECT full_name, size_bytes, stargazers_count, is_fork FROM core_repositories"
+        "SELECT full_name, size_bytes, stargazers_count, is_fork FROM core_repository"
     )
     repos_to_delete = []
 
@@ -129,10 +129,10 @@ def filter_repos(db_path):
             continue
 
     for full_name in repos_to_delete:
-        db.execute("DELETE FROM core_repositories WHERE full_name = ?", (full_name,))
+        db.execute("DELETE FROM core_repository WHERE full_name = ?", (full_name,))
     db.commit()
 
-    remaining_count = db.fetchone("SELECT COUNT(*) FROM core_repositories")[0]
+    remaining_count = db.fetchone("SELECT COUNT(*) FROM core_repository")[0]
     print(
         f"Deleted {len(repos_to_delete)} repositories, {remaining_count} remaining in {db_path}"
     )
@@ -144,18 +144,18 @@ def collect_repos(db_path):
     repos = repos_from_api()
     db = Database(db_path=db_path)
 
-    db.execute("DELETE FROM core_repositories")
+    db.execute("DELETE FROM core_repository")
     db.commit()
 
     for repo in repos.values():
         db.execute(
             """
-            INSERT OR REPLACE INTO core_repositories (full_name, size_bytes, stargazers_count, is_fork)
+            INSERT OR REPLACE INTO core_repository (full_name, size_bytes, stargazers_count, is_fork)
             VALUES (?, ?, ?, ?)
         """,
             (repo.full_name, repo.size_bytes, repo.stargazers_count, repo.is_fork),
         )
 
     db.commit()
-    count = db.fetchone("SELECT COUNT(*) FROM core_repositories")[0]
+    count = db.fetchone("SELECT COUNT(*) FROM core_repository")[0]
     print(f"Stored {count} repositories in {db_path}")

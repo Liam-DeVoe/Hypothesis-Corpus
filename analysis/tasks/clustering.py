@@ -69,7 +69,7 @@ class ClusteringTask(Task):
                 UNIQUE(facet_type, cluster_id)
             );
 
-            CREATE TABLE IF NOT EXISTS facet_cluster_assignments (
+            CREATE TABLE IF NOT EXISTS facet_cluster_assignment (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 facet_id INTEGER NOT NULL,
                 facet_text TEXT NOT NULL,
@@ -80,8 +80,8 @@ class ClusteringTask(Task):
                 UNIQUE(facet_id)
             );
 
-            CREATE INDEX IF NOT EXISTS idx_cluster_assignments_type ON facet_cluster_assignments(facet_type);
-            CREATE INDEX IF NOT EXISTS idx_cluster_assignments_cluster ON facet_cluster_assignments(cluster_id);
+            CREATE INDEX IF NOT EXISTS idx_cluster_assignments_type ON facet_cluster_assignment(facet_type);
+            CREATE INDEX IF NOT EXISTS idx_cluster_assignments_cluster ON facet_cluster_assignment(cluster_id);
         """
 
     # Class-level model cache to avoid reloading
@@ -275,7 +275,7 @@ class ClusteringTask(Task):
                 for facet_id, facet_text in cluster_info["facets"]:
                     conn.execute(
                         """
-                        INSERT OR REPLACE INTO facet_cluster_assignments
+                        INSERT OR REPLACE INTO facet_cluster_assignment
                         (facet_id, facet_text, facet_type, cluster_id)
                         VALUES (?, ?, ?, ?)
                         """,
@@ -304,7 +304,7 @@ class ClusteringTask(Task):
                 for facet_id, facet_text in cluster_info["facets"]:
                     conn.execute(
                         """
-                        INSERT OR REPLACE INTO facet_cluster_assignments
+                        INSERT OR REPLACE INTO facet_cluster_assignment
                         (facet_id, facet_text, facet_type, cluster_id)
                         VALUES (?, ?, ?, ?)
                         """,
@@ -324,7 +324,7 @@ class ClusteringTask(Task):
         logger.info("Deleting clustering data...")
 
         with db.connection() as conn:
-            conn.execute("DELETE FROM facet_cluster_assignments")
+            conn.execute("DELETE FROM facet_cluster_assignment")
             conn.execute("DELETE FROM facet_clusters")
             conn.commit()
 

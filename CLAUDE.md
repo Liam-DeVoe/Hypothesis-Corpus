@@ -50,13 +50,13 @@ docker build -f analysis/Dockerfile -t pbt-analysis .
 ```bash
 # Check database contents
 sqlite3 analysis/data.db ".tables"
-sqlite3 analysis/data.db "SELECT * FROM core_repositories LIMIT 5;"
+sqlite3 analysis/data.db "SELECT * FROM core_repository LIMIT 5;"
 ```
 
 ## Architecture
 
 ### Core Flow
-1. **python run.py collect** collects repositories from GitHub and stores in `core_repositories` table
+1. **python run.py collect** collects repositories from GitHub and stores in `core_repository` table
 2. **python run.py install** clones repos, installs dependencies, collects test nodes, updates database
 3. **python run.py analysis** reads from database and orchestrates the analysis pipeline
 4. **WorkerPool** (analysis/worker.py) distributes repositories across multiple processes
@@ -111,18 +111,18 @@ Clustering implementation:
 The unified database (`analysis/data.db`) contains collection and analysis tables:
 
 **Collection tables** (for GitHub repository discovery):
-- `core_repositories`: Collected repositories from GitHub search (includes `full_name`, `requirements`, metadata)
+- `core_repository`: Collected repositories from GitHub search (includes `full_name`, `requirements`, metadata)
 - `core_minhashes`: MinHash data for deduplication
 
 **Analysis tables** (for test analysis):
-- `core_nodes`: Individual test information (references core_repositories)
+- `core_node`: Individual test information (references core_repository)
 
 Experiment-specific tables are defined by each experiment's `get_schema_sql()`:
 - `runtime` experiment: `runtime_summary` (execution metadata + coverage JSON), `runtime_testcase` (per-testcase coverage with cumulative lines)
 - `facets` experiment: `facets` table with summaries, property patterns, and technical domains
 
 Task-specific tables are defined by each task's `get_schema_sql()`:
-- `clustering` task: `facet_clusters`, `facet_cluster_assignments`
+- `clustering` task: `facet_clusters`, `facet_cluster_assignment`
 
 ### Configuration
 
@@ -143,8 +143,8 @@ See `analysis/secrets.json.example` for a template.
 
 ### Database-Driven Workflow
 
-The analysis system pulls repositories directly from the `core_repositories` table in `analysis/data.db`:
-- **Step 1**: Repositories are collected via `python run.py collect` and stored in `core_repositories`
+The analysis system pulls repositories directly from the `core_repository` table in `analysis/data.db`:
+- **Step 1**: Repositories are collected via `python run.py collect` and stored in `core_repository`
 - **Step 2**: `python run.py install` processes each repo:
   - Clones the repository
   - Runs installation in Docker container (isolated, reproducible)

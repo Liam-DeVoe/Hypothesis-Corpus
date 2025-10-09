@@ -48,12 +48,13 @@ class Database:
         self._conn.executescript(
             """
             -- Repository information (populated by collection)
-            CREATE TABLE IF NOT EXISTS core_repositories (
+            CREATE TABLE IF NOT EXISTS core_repository (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 full_name TEXT UNIQUE NOT NULL,
                 size_bytes INTEGER NOT NULL,
                 stargazers_count INTEGER NOT NULL,
                 is_fork BOOLEAN NOT NULL,
+                status TEXT,  -- NULL (not processed), 'valid' (installed successfully), 'invalid' (installation failed)
                 requirements TEXT,
                 node_ids TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -65,11 +66,11 @@ class Database:
                 repo_id INTEGER NOT NULL,
                 minhash_data BLOB NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (repo_id) REFERENCES core_repositories(id)
+                FOREIGN KEY (repo_id) REFERENCES core_repository(id)
             );
 
             -- Node information (populated by analysis)
-            CREATE TABLE IF NOT EXISTS core_nodes (
+            CREATE TABLE IF NOT EXISTS core_node (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 repo_id INTEGER NOT NULL,
                 node_id TEXT NOT NULL,
@@ -79,14 +80,15 @@ class Database:
                 status TEXT,
                 error_message TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (repo_id) REFERENCES core_repositories(id),
+                FOREIGN KEY (repo_id) REFERENCES core_repository(id),
                 UNIQUE(repo_id, node_id)
             );
 
             -- Create indexes for better query performance
             CREATE INDEX IF NOT EXISTS idx_minhashes_repo ON core_minhashes(repo_id);
-            CREATE INDEX IF NOT EXISTS idx_nodes_repo ON core_nodes(repo_id);
-            CREATE INDEX IF NOT EXISTS idx_nodes_status ON core_nodes(status);
+            CREATE INDEX IF NOT EXISTS idx_nodes_repo ON core_node(repo_id);
+            CREATE INDEX IF NOT EXISTS idx_nodes_status ON core_node(status);
+            CREATE INDEX IF NOT EXISTS idx_repository_status ON core_repository(status);
         """
         )
         self._conn.commit()
@@ -135,7 +137,7 @@ class Database:
 
     def delete_experiment_data(self, repo_name: str, tables: list[str]):
         result = self.fetchone(
-            "SELECT id FROM core_repositories WHERE full_name = ?",
+            "SELECT id FROM core_repository WHERE full_name = ?",
             (repo_name,),
         )
 
@@ -144,7 +146,7 @@ class Database:
 
         repo_id = result["id"]
         node_ids = self.fetchall(
-            "SELECT id FROM core_nodes WHERE repo_id = ?", (repo_id,)
+            "SELECT id FROM core_node WHERE repo_id = ?", (repo_id,)
         )
         node_id_list = [row["id"] for row in node_ids]
 

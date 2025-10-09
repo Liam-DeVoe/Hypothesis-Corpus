@@ -150,7 +150,7 @@ def display_clusters(db: Database, facet_type: str):
                 SELECT
                     fca.facet_text,
                     COUNT(f.node_id) as usage_count
-                FROM facet_cluster_assignments fca
+                FROM facet_cluster_assignment fca
                 JOIN facets f ON fca.facet_text = f.facet AND fca.facet_type = f.type
                 WHERE fca.cluster_id = ? AND fca.facet_type = ?
                 GROUP BY fca.facet_text
@@ -177,7 +177,7 @@ def display_clusters(db: Database, facet_type: str):
                                 n.node_id,
                                 r.repo_name as repository
                             FROM facets f
-                            JOIN core_nodes n ON f.node_id = n.id
+                            JOIN core_node n ON f.node_id = n.id
                             JOIN repositories r ON n.repo_id = r.id
                             WHERE f.facet = ? AND f.type = ?
                             LIMIT 10

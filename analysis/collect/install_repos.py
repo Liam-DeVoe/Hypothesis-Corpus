@@ -70,13 +70,11 @@ def install_repository(
             mem_limit="2g",
             security_opt=["no-new-privileges"],
         )
-
         container.put_archive("/", tar_stream.read())
         container.start()
 
         # Wait for completion (30 minute timeout)
         result = container.wait(timeout=30 * 60)
-
         logs = container.logs(stdout=True, stderr=True).decode("utf-8")
         assert result.get("StatusCode") == 0, logs
 
