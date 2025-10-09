@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class Database:
     """SQLite database for storing PBT analysis results."""
 
-    def __init__(self, db_path: str = "data/analysis.db"):
+    def __init__(self, db_path: str = "data/data.db"):
         """Initialize database connection."""
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -26,18 +26,8 @@ class Database:
         with self.connection() as conn:
             conn.executescript(
                 """
-                -- Repository information
-                CREATE TABLE IF NOT EXISTS repositories (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    repo_name TEXT NOT NULL UNIQUE,
-                    url TEXT NOT NULL,
-                    clone_status TEXT,
-                    error_message TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-
                 -- Node information
-                CREATE TABLE IF NOT EXISTS nodes (
+                CREATE TABLE core_nodes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     repo_id INTEGER NOT NULL,
                     node_id TEXT NOT NULL,
@@ -47,14 +37,13 @@ class Database:
                     status TEXT,
                     error_message TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (repo_id) REFERENCES repositories(id),
-                    UNIQUE(repo_id, node_id),
-                    FOREIGN KEY (repo_id) REFERENCES repositories(id)
+                    FOREIGN KEY (repo_id) REFERENCES core_repositories(id),
+                    UNIQUE(repo_id, node_id)
                 );
 
                 -- Create indexes for better query performance
-                CREATE INDEX IF NOT EXISTS idx_nodes_repo ON nodes(repo_id);
-                CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status);
+                CREATE INDEX IF NOT EXISTS idx_nodes_repo ON core_nodes(repo_id);
+                CREATE INDEX IF NOT EXISTS idx_nodes_status ON core_nodes(status);
             """
             )
 
@@ -91,7 +80,7 @@ class Database:
     def delete_experiment_data(self, repo_name: str, tables: list[str]):
         with self.connection() as conn:
             result = conn.execute(
-                "SELECT id FROM repositories WHERE repo_name = ?",
+                "SELECT id FROM core_repositories WHERE full_name = ?",
                 (repo_name,),
             ).fetchone()
 
@@ -100,7 +89,7 @@ class Database:
 
             repo_id = result["id"]
             node_ids = conn.execute(
-                "SELECT id FROM nodes WHERE repo_id = ?", (repo_id,)
+                "SELECT id FROM core_nodes WHERE repo_id = ?", (repo_id,)
             ).fetchall()
             node_id_list = [row["id"] for row in node_ids]
 

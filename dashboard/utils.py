@@ -13,7 +13,7 @@ from analysis.database import Database
 
 @st.cache_resource
 def get_database():
-    return Database("data/analysis.db")
+    return Database("data/data.db")
 
 
 def render_sidebar():
@@ -184,11 +184,10 @@ def create_nodes_per_repo_histogram():
         repo_node_counts = pd.read_sql_query(
             """
             SELECT
-                r.repo_name,
+                r.full_name as repo_name,
                 COUNT(DISTINCT t.id) as node_count
-            FROM repositories r
-            LEFT JOIN nodes t ON r.id = t.repo_id
-            WHERE r.clone_status = 'success'
+            FROM core_repositories r
+            LEFT JOIN core_nodes t ON r.id = t.repo_id
             GROUP BY r.id
             HAVING node_count > 0
             """,

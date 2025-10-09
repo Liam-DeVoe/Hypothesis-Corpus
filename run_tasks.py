@@ -31,7 +31,7 @@ def cli():
 
 @cli.command()
 @click.argument("task")
-@click.option("--db-path", default="data/analysis.db", help="Path to database")
+@click.option("--db-path", default="data/data.db", help="Path to database")
 def run(task: str, db_path: str):
     """Run a specific task.
 
@@ -62,7 +62,7 @@ def run(task: str, db_path: str):
 
 
 @cli.command()
-@click.option("--db-path", default="data/analysis.db", help="Path to database")
+@click.option("--db-path", default="data/data.db", help="Path to database")
 @click.option("--task", help="Specific task to clear (default: all)")
 def clear(db_path: str, task: str):
     """Clear task data from the database."""

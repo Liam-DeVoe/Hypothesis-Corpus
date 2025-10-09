@@ -177,7 +177,7 @@ def display_clusters(db: Database, facet_type: str):
                                 n.node_id,
                                 r.repo_name as repository
                             FROM facets f
-                            JOIN nodes n ON f.node_id = n.id
+                            JOIN core_nodes n ON f.node_id = n.id
                             JOIN repositories r ON n.repo_id = r.id
                             WHERE f.facet = ? AND f.type = ?
                             LIMIT 10

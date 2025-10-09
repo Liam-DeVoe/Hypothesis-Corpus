@@ -142,17 +142,12 @@ class Worker(Process):
             for experiment in experiments:
                 experiment.delete_data(db, work_item.repo_name)
 
-            # Add repository to database
             with db.connection() as conn:
-                conn.execute(
-                    "INSERT OR IGNORE INTO repositories (repo_name, url) VALUES (?, ?)",
-                    (work_item.repo_name, f"https://github.com/{work_item.repo_name}"),
-                )
-                conn.commit()
                 result = conn.execute(
-                    "SELECT id FROM repositories WHERE repo_name = ?",
+                    "SELECT id FROM core_repositories WHERE full_name = ?",
                     (work_item.repo_name,),
                 ).fetchone()
+                assert result
                 work_item.repo_id = result["id"]
 
             # Run all experiments for this repository
@@ -208,7 +203,7 @@ class Worker(Process):
                     with db.connection() as conn:
                         conn.execute(
                             """
-                            INSERT OR IGNORE INTO nodes (repo_id, node_id, file_path, class_name, node_name)
+                            INSERT OR IGNORE INTO core_nodes (repo_id, node_id, file_path, class_name, node_name)
                             VALUES (?, ?, ?, ?, ?)
                             """,
                             (
@@ -221,7 +216,7 @@ class Worker(Process):
                         )
                         conn.commit()
                         result = conn.execute(
-                            "SELECT id FROM nodes WHERE repo_id = ? AND node_id = ?",
+                            "SELECT id FROM core_nodes WHERE repo_id = ? AND node_id = ?",
                             (work_item.repo_id, node_id),
                         ).fetchone()
                         node_db_id = result["id"]
@@ -278,14 +273,6 @@ class Worker(Process):
                     f"{nodes_processed} processed, {nodes_failed} failed"
                 )
 
-            # Update repository status
-            with db.connection() as conn:
-                conn.execute(
-                    "UPDATE repositories SET clone_status = ?, error_message = ? WHERE id = ?",
-                    ("success", None, work_item.repo_id),
-                )
-                conn.commit()
-
             return {
                 "success": True,
                 "nodes_processed": all_nodes_processed,
@@ -296,13 +283,6 @@ class Worker(Process):
             logger.error(
                 f"[w{self.worker_id}][{work_item.repo_name}] Error processing: {e}"
             )
-            if work_item.repo_id:
-                with db.connection() as conn:
-                    conn.execute(
-                        "UPDATE repositories SET clone_status = ?, error_message = ? WHERE id = ?",
-                        ("failed", str(e), work_item.repo_id),
-                    )
-                    conn.commit()
             return {"success": False, "error": str(e)}
 
 
@@ -312,7 +292,7 @@ class WorkerPool:
     def __init__(
         self,
         num_workers: int = 4,
-        db_path: str = "data/analysis.db",
+        db_path: str = "data/data.db",
         docker_image: str = "pbt-analysis:latest",
         *,
         experiments: list[str],

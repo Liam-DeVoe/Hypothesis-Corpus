@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def run_task(
     task_name: str,
-    db_path: str = "data/analysis.db",
+    db_path: str = "data/data.db",
 ) -> dict[str, Any]:
     """Run a specific task.
 
@@ -52,7 +52,7 @@ def run_task(
 
 def run_tasks_for_experiment(
     experiment_name: str,
-    db_path: str = "data/analysis.db",
+    db_path: str = "data/data.db",
 ) -> list[dict[str, Any]]:
     """Run all tasks that follow a given experiment.
 

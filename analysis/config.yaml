@@ -1,7 +1,7 @@
 # Configuration for PBT corpus analysis
 
 database:
-  path: "data/analysis.db"
+  path: "data/data.db"
 
 docker:
   image: "pbt-analysis:latest"

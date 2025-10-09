@@ -40,7 +40,7 @@ def main():
                 MIN(LENGTH(s.facet)) as min_summary_length,
                 MAX(LENGTH(s.facet)) as max_summary_length
             FROM facets s
-            JOIN nodes n ON s.node_id = n.id
+            JOIN core_nodes n ON s.node_id = n.id
             JOIN repositories r ON n.repo_id = r.id
             WHERE s.type = 'summary'
             """,
@@ -103,14 +103,13 @@ def main():
         repo_summaries = pd.read_sql_query(
             """
             SELECT
-                r.repo_name as repository,
+                r.full_name as repository,
                 COUNT(DISTINCT n.id) as total_nodes,
                 COUNT(DISTINCT s.node_id) as nodes_with_summaries,
                 AVG(LENGTH(s.facet)) as avg_summary_length
-            FROM repositories r
-            LEFT JOIN nodes n ON r.id = n.repo_id
+            FROM core_repositories r
+            LEFT JOIN core_nodes n ON r.id = n.repo_id
             LEFT JOIN facets s ON n.id = s.node_id
-            WHERE r.clone_status = 'success'
             GROUP BY r.id
             HAVING nodes_with_summaries > 0
             ORDER BY nodes_with_summaries DESC
@@ -278,9 +277,9 @@ def main():
                     LENGTH(s.facet) as summary_length,
                     s.created_at
                 FROM facets s
-                JOIN nodes n ON s.node_id = n.id
-                JOIN repositories r ON n.repo_id = r.id
-                WHERE r.repo_name = ?
+                JOIN core_nodes n ON s.node_id = n.id
+                JOIN core_repositories r ON n.repo_id = r.id
+                WHERE r.full_name = ?
                     AND s.type = 'summary'
                 ORDER BY n.node_id
                 """,

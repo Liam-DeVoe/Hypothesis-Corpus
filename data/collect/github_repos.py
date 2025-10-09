@@ -111,7 +111,7 @@ def filter_repos(db_path):
     cursor.execute(
         """
         SELECT full_name, size_bytes, stargazers_count, is_fork
-        FROM repositories
+        FROM core_repositories
         """
     )
     repos = cursor.fetchall()
@@ -133,10 +133,14 @@ def filter_repos(db_path):
             continue
 
     for full_name in repos_to_delete:
-        cursor.execute("DELETE FROM repositories WHERE full_name = ?", (full_name,))
+        cursor.execute(
+            "DELETE FROM core_repositories WHERE full_name = ?", (full_name,)
+        )
     conn.commit()
 
-    remaining_count = cursor.execute("SELECT COUNT(*) FROM repositories").fetchone()[0]
+    remaining_count = cursor.execute(
+        "SELECT COUNT(*) FROM core_repositories"
+    ).fetchone()[0]
     conn.close()
     print(
         f"Deleted {len(repos_to_delete)} repositories, {remaining_count} remaining in {db_path}"
@@ -148,20 +152,20 @@ def collect_repos(db_path):
 
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM repositories")
+    cursor.execute("DELETE FROM core_repositories")
     conn.commit()
 
     for repo in repos.values():
         cursor.execute(
             """
-            INSERT OR REPLACE INTO repositories (full_name, size_bytes, stargazers_count, is_fork)
+            INSERT OR REPLACE INTO core_repositories (full_name, size_bytes, stargazers_count, is_fork)
             VALUES (?, ?, ?, ?)
         """,
             (repo.full_name, repo.size_bytes, repo.stargazers_count, repo.is_fork),
         )
 
     conn.commit()
-    count = cursor.execute("SELECT COUNT(*) FROM repositories").fetchone()[0]
+    count = cursor.execute("SELECT COUNT(*) FROM core_repositories").fetchone()[0]
     conn.close()
 
     print(f"Stored {count} repositories in {db_path}")

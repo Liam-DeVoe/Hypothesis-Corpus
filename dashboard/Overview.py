@@ -45,10 +45,8 @@ def load_data():
         repo_stats = conn.execute(
             """
             SELECT
-                COUNT(*) as total,
-                SUM(CASE WHEN clone_status = 'success' THEN 1 ELSE 0 END) as successful,
-                SUM(CASE WHEN clone_status = 'failed' THEN 1 ELSE 0 END) as failed
-            FROM repositories
+                COUNT(*) as total
+            FROM core_repositories
             """
         ).fetchone()
 
@@ -59,13 +57,13 @@ def load_data():
                 COUNT(*) as total,
                 SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful,
                 SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
-            FROM nodes
+            FROM core_nodes
             """
         ).fetchone()
 
         return {
             "repositories": dict(repo_stats),
-            "nodes": dict(node_stats),
+            "core_nodes": dict(node_stats),
         }
 
 
@@ -79,34 +77,26 @@ def render_overview_metrics(stats: dict[str, Any]):
         st.metric(
             "Repositories",
             stats["repositories"]["total"],
-            f"{stats['repositories']['successful']} successful",
         )
 
     with col2:
         st.metric(
             "Nodes Analyzed",
-            stats["nodes"]["total"],
-            f"{stats['nodes']['successful']} successful",
+            stats["core_nodes"]["total"],
+            f"{stats['core_nodes']['successful']} successful",
         )
 
     with col3:
         success_rate = (
-            stats["repositories"]["successful"] / stats["repositories"]["total"] * 100
-            if stats["repositories"]["total"] > 0
+            stats["core_nodes"]["successful"] / stats["core_nodes"]["total"] * 100
+            if stats["core_nodes"]["total"] > 0
             else 0
         )
         st.metric(
             "Success Rate",
             f"{success_rate:.1f}%",
-            f"{stats['repositories']['failed']} failed",
+            f"{stats['core_nodes']['failed']} failed",
         )
-
-    # Progress bar
-    if stats["repositories"]["total"] > 0:
-        progress = (
-            stats["repositories"]["successful"] + stats["repositories"]["failed"]
-        ) / stats["repositories"]["total"]
-        st.progress(progress, text=f"Analysis Progress: {progress*100:.1f}%")
 
 
 def overview_page():

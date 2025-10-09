@@ -32,12 +32,11 @@ def main():
         repos = pd.read_sql_query(
             """
             SELECT
-                r.repo_name as repository,
-                r.clone_status as status,
+                r.full_name as repository,
                 COUNT(DISTINCT t.id) as node_count,
                 r.created_at
-            FROM repositories r
-            LEFT JOIN nodes t ON r.id = t.repo_id
+            FROM core_repositories r
+            LEFT JOIN core_nodes t ON r.id = t.repo_id
             GROUP BY r.id
             ORDER BY r.created_at DESC
             LIMIT 100
@@ -49,12 +48,6 @@ def main():
         st.info("No repositories processed yet.")
         return
 
-    # Filter by status
-    status_filter = st.selectbox("Status", ["All", "success", "failed"], index=0)
-
-    if status_filter != "All":
-        repos = repos[repos["status"] == status_filter]
-
     # Display repository table
     st.dataframe(
         repos,
@@ -62,7 +55,6 @@ def main():
         hide_index=True,
         column_config={
             "repository": st.column_config.TextColumn("Repository", width="medium"),
-            "status": st.column_config.TextColumn("Status", width="small"),
             "node_count": st.column_config.NumberColumn("Tests", width="small"),
             "created_at": st.column_config.DatetimeColumn(
                 "Analyzed At", width="medium"
@@ -82,9 +74,9 @@ def main():
                     SELECT
                         t.node_id,
                         t.status
-                    FROM nodes t
-                    JOIN repositories r ON t.repo_id = r.id
-                    WHERE r.repo_name = ?
+                    FROM core_nodes t
+                    JOIN core_repositories r ON t.repo_id = r.id
+                    WHERE r.full_name = ?
                     GROUP BY t.id
                 """,
                     conn,

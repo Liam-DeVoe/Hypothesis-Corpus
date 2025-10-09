@@ -8,7 +8,7 @@ from pathlib import Path
 from github_repos import collect_repos, filter_repos
 from minhash import minhash_repository, remove_duplicates
 
-db_path = Path(__file__).parent / "data.db"
+db_path = Path(__file__).parent.parent / "data.db"
 
 
 def init_db():
@@ -16,7 +16,7 @@ def init_db():
     conn = sqlite3.connect(db_path)
     conn.execute(
         """
-        CREATE TABLE IF NOT EXISTS repositories (
+        CREATE TABLE IF NOT EXISTS core_repositories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             full_name TEXT UNIQUE NOT NULL,
             size_bytes INTEGER NOT NULL,
@@ -28,15 +28,15 @@ def init_db():
     )
     conn.executescript(
         """
-        CREATE TABLE IF NOT EXISTS minhash_files (
+        CREATE TABLE IF NOT EXISTS core_minhashes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             repo_id INTEGER NOT NULL,
             minhash_data BLOB NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (repo_id) REFERENCES repositories(id)
+            FOREIGN KEY (repo_id) REFERENCES core_repositories(id)
         );
 
-        CREATE INDEX IF NOT EXISTS idx_minhash_repo ON minhash_files(repo_id);
+        CREATE INDEX IF NOT EXISTS idx_core_minhashes_repo ON core_minhashes(repo_id);
         """
     )
     conn.commit()
@@ -46,7 +46,7 @@ def init_db():
 def process_minhashes():
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    repos = conn.execute("SELECT id, full_name FROM repositories").fetchall()
+    repos = conn.execute("SELECT id, full_name FROM core_repositories").fetchall()
 
     print(f"Processing minhashes for {len(repos)} repositories...")
     for i, repo in enumerate(repos, 1):

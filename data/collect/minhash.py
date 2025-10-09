@@ -77,14 +77,14 @@ def compute_minhashes(repo_name: str) -> list[MinHash]:
 
 def load_minhashes(conn, repo_name: str) -> list[MinHash] | None:
     result = conn.execute(
-        "SELECT id FROM repositories WHERE full_name = ?",
+        "SELECT id FROM core_repositories WHERE full_name = ?",
         (repo_name,),
     ).fetchone()
     assert result
 
     repo_id = result["id"]
     rows = conn.execute(
-        "SELECT minhash_data FROM minhash_files WHERE repo_id = ?",
+        "SELECT minhash_data FROM core_minhashes WHERE repo_id = ?",
         (repo_id,),
     ).fetchall()
     return [pickle.loads(row["minhash_data"]) for row in rows]
@@ -94,17 +94,17 @@ def minhash_repository(conn, repo_name: str):
     minhashes = compute_minhashes(repo_name)
 
     result = conn.execute(
-        "SELECT id FROM repositories WHERE full_name = ?",
+        "SELECT id FROM core_repositories WHERE full_name = ?",
         (repo_name,),
     ).fetchone()
     assert result, f"Repository {repo_name} not found"
     repo_id = result["id"]
 
-    conn.execute("DELETE FROM minhash_files WHERE repo_id = ?", (repo_id,))
+    conn.execute("DELETE FROM core_minhashes WHERE repo_id = ?", (repo_id,))
     for minhash in minhashes:
         minhash_blob = pickle.dumps(minhash)
         conn.execute(
-            "INSERT INTO minhash_files (repo_id, minhash_data) VALUES (?, ?)",
+            "INSERT INTO core_minhashes (repo_id, minhash_data) VALUES (?, ?)",
             (repo_id, minhash_blob),
         )
 
@@ -139,7 +139,7 @@ def remove_duplicates(db_path):
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     repos = conn.execute(
-        "SELECT id, full_name, stargazers_count FROM repositories"
+        "SELECT id, full_name, stargazers_count FROM core_repositories"
     ).fetchall()
     print(f"\nDetecting duplicates among {len(repos)} repositories...")
 
@@ -185,7 +185,9 @@ def remove_duplicates(db_path):
     if to_remove:
         print(f"\nRemoving {len(to_remove)} duplicate repositories...")
         for repo_name in to_remove:
-            conn.execute("DELETE FROM repositories WHERE full_name = ?", (repo_name,))
+            conn.execute(
+                "DELETE FROM core_repositories WHERE full_name = ?", (repo_name,)
+            )
         conn.commit()
         print(f"Kept {len(repos) - len(to_remove)} unique repositories")
 

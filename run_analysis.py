@@ -51,7 +51,7 @@ def load_config(config_path: str = "analysis/config.yaml") -> dict[str, Any]:
             f"[yellow]Warning: Config file not found at {config_path}, using defaults[/yellow]"
         )
         return {
-            "database": {"path": "data/analysis.db"},
+            "database": {"path": "data/data.db"},
             "docker": {"image": "pbt-analysis:latest"},
             "workers": {"max_workers": 4},
         }
@@ -180,10 +180,6 @@ def main(
                     console.print(
                         f"[w{result['worker_id']}] {result['repo_name']}: [red]{result['error']}[/red]"
                     )
-
-                console.print(
-                    f"[w{result['worker_id']}] Finished repository {result['repo_name']}"
-                )
 
     # Print summary
     console.print()

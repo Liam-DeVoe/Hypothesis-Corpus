@@ -41,8 +41,8 @@ python run_tasks.py clear --task clustering
 ### Development & Debugging
 ```bash
 # Check database contents
-sqlite3 data/analysis.db ".tables"
-sqlite3 data/analysis.db "SELECT * FROM repositories LIMIT 5;"
+sqlite3 data/data.db ".tables"
+sqlite3 data/data.db "SELECT * FROM core_repositories LIMIT 5;"
 ```
 
 ## Architecture
@@ -98,9 +98,14 @@ Clustering implementation:
 - Model is cached at class level to avoid reloading
 
 #### Database Schema
-Core tables track repository analysis:
-- `repositories`: Repository metadata and processing status
-- `nodes`: Individual test information
+The unified database (`data/data.db`) contains collection and analysis tables:
+
+**Collection tables** (for GitHub repository discovery):
+- `core_repositories`: Collected repositories from GitHub search
+- `core_minhashes`: MinHash data for deduplication
+
+**Analysis tables** (for test analysis):
+- `core_nodes`: Individual test information (references core_repositories)
 
 Experiment-specific tables are defined by each experiment's `get_schema_sql()`:
 - `runtime` experiment: `runtime_summary` (execution metadata + coverage JSON), `runtime_testcase` (per-testcase coverage with cumulative lines)
