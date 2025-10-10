@@ -1,5 +1,4 @@
 import re
-from pathlib import Path
 from typing import Any
 
 try:
@@ -121,7 +120,7 @@ class FacetsExperiment(Experiment):
         return [domain.strip() for domain in domains]
 
     @staticmethod
-    def run(file_path: Path, node_id: str, debug) -> dict[str, Any]:
+    def run(node_id: str, debug) -> dict[str, Any]:
         """Run the facets experiment - generates summary, pattern, and domain facets."""
         # First, generate the summary
         summary = FacetsExperiment._run_summary(node_id)

@@ -21,12 +21,12 @@ POST_INSTALL = config["post_install"]
 def pip_install(args):
     """Run pip install."""
     cmd = [sys.executable, "-m", "pip", "install", "--quiet"] + args
-    subprocess.run(cmd, cwd="/app", capture_output=True)
+    subprocess.run(cmd, cwd="/app/repo", capture_output=True)
 
 
 def try_install_repo():
     """Try various installation methods."""
-    source_root = Path("/app")
+    source_root = Path("/app/repo")
 
     # first, try installing through the happy path.
     pip_install(["-e", str(source_root)])
@@ -79,9 +79,9 @@ packages = [
     if not (line.startswith("-e") or " @ file:" in line)
 ]
 
-# Configure git to trust /app directory (fixes dubious ownership error)
+# Configure git to trust /app/repo directory (fixes dubious ownership error)
 subprocess.run(
-    ["git", "config", "--global", "--add", "safe.directory", "/app"],
+    ["git", "config", "--global", "--add", "safe.directory", "/app/repo"],
     capture_output=True,
 )
 
@@ -89,7 +89,7 @@ commit_hash = subprocess.run(
     ["git", "rev-parse", "HEAD"],
     capture_output=True,
     text=True,
-    cwd="/app",
+    cwd="/app/repo",
 )
 assert commit_hash.returncode == 0
 commit_hash = commit_hash.stdout.strip()
@@ -111,7 +111,7 @@ class CollectionPlugin:
 
 
 plugin = CollectionPlugin()
-collection_returncode = pytest.main(["--collect-only", "/app"], plugins=[plugin])
+collection_returncode = pytest.main(["--collect-only", "/app/repo"], plugins=[plugin])
 output = {
     "requirements": "\n".join(packages),
     "node_ids": plugin.node_ids,

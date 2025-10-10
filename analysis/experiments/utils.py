@@ -7,7 +7,7 @@ from typing import Any
 
 def filepath_from_node(nodeid: str) -> Path:
     assert ".py" in nodeid
-    return Path(nodeid.split("::")[0])
+    return Path("/app/repo") / nodeid.split("::")[0]
 
 
 # require a timeout so we don't forget to specify one and leave a trivial command
@@ -46,7 +46,7 @@ def describe_process(process, *, all=False):
 
 
 def pip_install(args: list[str]):
-    result = subprocess_run(
+    return subprocess_run(
         [
             sys.executable,
             "-m",
@@ -58,21 +58,6 @@ def pip_install(args: list[str]):
         + args,
         timeout=60 * 15,
     )
-    assert result.returncode == 0
-
-
-def setup_dependencies(requirements_file: Path) -> bool:
-    print("installing dependencies...", flush=True)
-
-    pbt_analysis_dir = Path("/app/pytest_pbt_analysis")
-    assert pbt_analysis_dir.exists()
-
-    pip_install(["-e", str(pbt_analysis_dir)])
-    pip_install(["--no-dependencies", "-r", str(requirements_file)])
-    pip_install(["--no-dependencies", "-e", "/app"])
-    pip_install(["-U", "pytest"])
-    pip_install(["-U", "hypothesis"])
-    return True
 
 
 def parse_observability_data(obs_dir: Path) -> dict[str, Any]:

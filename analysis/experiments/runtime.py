@@ -50,9 +50,7 @@ class RuntimeExperiment(Experiment):
         """
 
     @staticmethod
-    def run(
-        file_path, node_id: str, timeout: int = 300, *, debug: bool
-    ) -> dict[str, Any]:
+    def run(node_id: str, timeout: int = 300, *, debug: bool) -> dict[str, Any]:
         from utils import parse_observability_data
 
         # Clear any previous observability data

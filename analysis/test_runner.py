@@ -68,17 +68,17 @@ class TestRunner:
 
     def setup_environment(
         self,
-        work_dir: Path,
+        app_dir: Path,
         requirements: str,
         node_ids: list[str],
         experiment_name: str = "coverage",
         *,
         debug: bool,
     ) -> bool:
-        """Set up environment by copying experiment modules and config."""
+        """Set up environment by copying experiment modules and config to app_dir."""
         # Write requirements to file if provided
         if requirements:
-            req_file = work_dir / "requirements.txt"
+            req_file = app_dir / "requirements.txt"
             req_file.write_text(requirements)
 
         # Copy experiment modules that will run in the container
@@ -89,38 +89,38 @@ class TestRunner:
         # Always copy shared helpers and runner
         shutil.copy(
             experiments_dir / "utils.py",
-            work_dir / "utils.py",
+            app_dir / "utils.py",
         )
         shutil.copy(
             experiments_dir / "runner.py",
-            work_dir / "runner.py",
+            app_dir / "runner.py",
         )
 
         # Always copy base experiment module
         shutil.copy(
             experiments_dir / "experiment.py",
-            work_dir / "experiment.py",
+            app_dir / "experiment.py",
         )
 
         # Copy the specific experiment module
         experiment_file = experiments_dir / f"{experiment_name}.py"
         assert experiment_file.exists()
-        shutil.copy(experiment_file, work_dir / f"{experiment_name}.py")
+        shutil.copy(experiment_file, app_dir / f"{experiment_name}.py")
 
         import analysis.pytest_pbt_analysis as pbt_package
 
         pbt_source_dir = Path(pbt_package.__file__).parent
-        pbt_dest_dir = work_dir / "pytest_pbt_analysis"
+        pbt_dest_dir = app_dir / "pytest_pbt_analysis"
         shutil.copytree(pbt_source_dir, pbt_dest_dir)
 
         # Write configuration for the container
         config = {
             "node_ids": node_ids,
-            "repo_dir": "/app",
+            "repo_dir": "/app/repo",
             "experiment_name": experiment_name,
             "debug": debug,
         }
-        config_file = work_dir / "config.json"
+        config_file = app_dir / "config.json"
         config_file.write_text(json.dumps(config, indent=2))
 
     def run_in_container(
@@ -131,9 +131,8 @@ class TestRunner:
 
         tar_stream = BytesIO()
         with tarfile.open(fileobj=tar_stream, mode="w") as tar:
-            # Add all files from work_dir as /app in the container
-            for item in work_dir.iterdir():
-                tar.add(item, arcname=f"/app/{item.name}")
+            tar.add(work_dir / "app", arcname="/app")
+            tar.add(work_dir / "repo", arcname="/app/repo")
         tar_stream.seek(0)
 
         secrets_path = Path(__file__).parent / "secrets.json"
@@ -194,12 +193,14 @@ class TestRunner:
                 tempfile.mkdtemp(prefix=f"pbt_analysis_{repo_name.replace('/', '_')}_")
             )
             repo_dir = work_dir / "repo"
+            app_dir = work_dir / "app"
+            app_dir.mkdir(exist_ok=True)
 
-            self.clone_repository(repo_name, work_dir / "repo")
+            self.clone_repository(repo_name, repo_dir)
             self.setup_environment(
-                repo_dir, requirements, node_ids, experiment_name, debug=debug
+                app_dir, requirements, node_ids, experiment_name, debug=debug
             )
-            results = self.run_in_container(repo_name, repo_dir, node_ids, debug)
+            results = self.run_in_container(repo_name, work_dir, node_ids, debug)
             assert results is not None
             return results
         except Exception as e:

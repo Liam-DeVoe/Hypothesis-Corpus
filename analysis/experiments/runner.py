@@ -5,9 +5,9 @@ import traceback
 from pathlib import Path
 
 try:
-    from .utils import filepath_from_node
+    from .utils import filepath_from_node, pip_install
 except ImportError:
-    from utils import filepath_from_node
+    from utils import filepath_from_node, pip_install
 
 
 def main():
@@ -31,12 +31,15 @@ def main():
         print(f"Current directory: {Path.cwd()}", flush=True)
         print(f"Node IDs to process: {node_ids}", flush=True)
 
-        # Setup dependencies
-        from utils import setup_dependencies
+        # install library and dependencies
+        print("installing dependencies...", flush=True)
 
-        if not setup_dependencies(requirements_file):
-            print("ERROR: Failed to setup dependencies", flush=True)
-            sys.exit(1)
+        pbt_analysis_dir = Path("/app/pytest_pbt_analysis")
+        assert pbt_analysis_dir.exists()
+
+        pip_install(["--no-dependencies", "-r", str(requirements_file)])
+        pip_install(["--no-dependencies", "/app/repo"])
+        pip_install(["-e", str(pbt_analysis_dir)])
 
         import experiment
 
@@ -67,7 +70,7 @@ def main():
             print(f"Running {experiment_name} experiment...", flush=True)
 
             try:
-                exp_data = experiment_class.run(file_path, node_id, debug=debug)
+                exp_data = experiment_class.run(node_id, debug=debug)
                 node_results[experiment_name] = exp_data
             except Exception as e:
                 print(f"ERROR: Experiment failed: {e}", flush=True)

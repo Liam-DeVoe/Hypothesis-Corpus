@@ -22,7 +22,7 @@ class Experiment(ABC):
 
     @staticmethod
     @abstractmethod
-    def run(file_path: Any, node_id: str) -> dict[str, Any]:
+    def run(node_id: str) -> dict[str, Any]:
         """Run the experiment and return data."""
         pass
 

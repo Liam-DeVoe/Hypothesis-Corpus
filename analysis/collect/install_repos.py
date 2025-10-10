@@ -25,6 +25,7 @@ def install_repository(
     container = None
     work_dir = Path(tempfile.mkdtemp(prefix=f"install_{repo_name.replace('/', '_')}_"))
     repo_dir = work_dir / "repo"
+    app_dir = work_dir / "app"
     docker_client = docker.from_env()
 
     try:
@@ -43,24 +44,24 @@ def install_repository(
             check=True,
         )
 
-        # Copy installation script into repository
+        # Create app directory and copy installation infrastructure
+        app_dir.mkdir(exist_ok=True)
         install_script_source = Path(__file__).parent / "_install.py"
-        install_script_dest = repo_dir / "_install.py"
-        shutil.copy(install_script_source, install_script_dest)
+        shutil.copy(install_script_source, app_dir / "_install.py")
 
         # Create config file for the installation script
         config = {
             "pre_install": PRE_INSTALL,
             "post_install": POST_INSTALL,
         }
-        config_path = repo_dir / "_install_config.json"
+        config_path = app_dir / "_install_config.json"
         config_path.write_text(json.dumps(config))
 
-        # Create tar archive of repository
+        # Create tar archive from structured directories
         tar_stream = BytesIO()
         with tarfile.open(fileobj=tar_stream, mode="w") as tar:
-            for item in repo_dir.iterdir():
-                tar.add(item, arcname=f"/app/{item.name}")
+            tar.add(app_dir, arcname="/app")
+            tar.add(repo_dir, arcname="/app/repo")
         tar_stream.seek(0)
 
         # Create and run container
