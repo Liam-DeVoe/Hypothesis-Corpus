@@ -273,5 +273,35 @@ def clear(db_path: str, task_name: str):
         console.print("[green]All task data cleared[/green]")
 
 
+# ==============================================================================
+# DASHBOARD COMMAND
+# ==============================================================================
+
+
+@cli.command()
+@click.option("--db-path", default="analysis/data.db", help="Path to database file")
+@click.option("--port", default=8501, help="Port to run dashboard on")
+def dashboard(db_path: str, port: int):
+    """Start the Streamlit dashboard."""
+    import os
+    import subprocess
+
+    # Set environment variable for dashboard to use
+    os.environ["PBT_DB_PATH"] = db_path
+
+    console.print(f"[bold]Starting dashboard on port {port}...[/bold]")
+    console.print(f"Database: [green]{db_path}[/green]")
+    console.print(f"URL: [blue]http://localhost:{port}[/blue]")
+    console.print()
+
+    try:
+        subprocess.run(
+            ["streamlit", "run", "dashboard/Overview.py", "--server.port", str(port)],
+            check=True,
+        )
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Dashboard stopped[/yellow]")
+
+
 if __name__ == "__main__":
     cli()

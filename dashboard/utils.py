@@ -61,15 +61,14 @@ def create_timing_histogram():
     """
     db = get_database()
 
-    with db.connection() as conn:
-        execution_times = pd.read_sql_query(
-            """
-            SELECT execution_time
-            FROM runtime_summary
-            WHERE execution_time IS NOT NULL
-            """,
-            conn,
-        )
+    execution_times = pd.read_sql_query(
+        """
+        SELECT execution_time
+        FROM runtime_summary
+        WHERE execution_time IS NOT NULL
+        """,
+        db._conn,
+    )
 
     if execution_times.empty or len(execution_times) == 0:
         return None
@@ -105,17 +104,16 @@ def execution_frequency_histogram():
 
     db = get_database()
 
-    with db.connection() as conn:
-        all_line_execution_data = pd.read_sql_query(
-            """
-            SELECT
-                rs.line_execution_counts,
-                rs.examples_count
-            FROM runtime_summary rs
-            WHERE rs.line_execution_counts IS NOT NULL
-            """,
-            conn,
-        )
+    all_line_execution_data = pd.read_sql_query(
+        """
+        SELECT
+            rs.line_execution_counts,
+            rs.examples_count
+        FROM runtime_summary rs
+        WHERE rs.line_execution_counts IS NOT NULL
+        """,
+        db._conn,
+    )
 
     if all_line_execution_data.empty:
         return None
@@ -180,19 +178,18 @@ def create_nodes_per_repo_histogram():
     """
     db = get_database()
 
-    with db.connection() as conn:
-        repo_node_counts = pd.read_sql_query(
-            """
-            SELECT
-                r.full_name as repo_name,
-                COUNT(DISTINCT t.id) as node_count
-            FROM core_repository r
-            LEFT JOIN core_node t ON r.id = t.repo_id
-            GROUP BY r.id
-            HAVING node_count > 0
-            """,
-            conn,
-        )
+    repo_node_counts = pd.read_sql_query(
+        """
+        SELECT
+            r.full_name as repo_name,
+            COUNT(DISTINCT t.id) as node_count
+        FROM core_repository r
+        LEFT JOIN core_node t ON r.id = t.repo_id
+        GROUP BY r.id
+        HAVING node_count > 0
+        """,
+        db._conn,
+    )
 
     if repo_node_counts.empty:
         return None

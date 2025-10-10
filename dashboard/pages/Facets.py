@@ -29,108 +29,107 @@ def main():
     db = get_database()
 
     # Get overall facets statistics
-    with db.connection() as conn:
-        # Overall stats
-        overall_stats = pd.read_sql_query(
-            """
-            SELECT
-                COUNT(DISTINCT s.node_id) as nodes_with_summaries,
-                COUNT(DISTINCT r.id) as repos_with_summaries,
-                AVG(LENGTH(s.facet)) as avg_summary_length,
-                MIN(LENGTH(s.facet)) as min_summary_length,
-                MAX(LENGTH(s.facet)) as max_summary_length
-            FROM facets s
-            JOIN core_node n ON s.node_id = n.id
-            JOIN repositories r ON n.repo_id = r.id
-            WHERE s.type = 'summary'
-            """,
-            conn,
-        )
+    # Overall stats
+    overall_stats = pd.read_sql_query(
+        """
+        SELECT
+            COUNT(DISTINCT s.node_id) as nodes_with_summaries,
+            COUNT(DISTINCT r.id) as repos_with_summaries,
+            AVG(LENGTH(s.facet)) as avg_summary_length,
+            MIN(LENGTH(s.facet)) as min_summary_length,
+            MAX(LENGTH(s.facet)) as max_summary_length
+        FROM facets s
+        JOIN core_node n ON s.node_id = n.id
+        JOIN core_repository r ON n.repo_id = r.id
+        WHERE s.type = 'summary'
+        """,
+        db._conn,
+    )
 
-        # Pattern stats
-        pattern_stats = pd.read_sql_query(
-            """
-            SELECT
-                COUNT(DISTINCT node_id) as nodes_with_patterns,
-                COUNT(*) as total_patterns
-            FROM facets
-            WHERE type = 'pattern'
-            """,
-            conn,
-        )
+    # Pattern stats
+    pattern_stats = pd.read_sql_query(
+        """
+        SELECT
+            COUNT(DISTINCT node_id) as nodes_with_patterns,
+            COUNT(*) as total_patterns
+        FROM facets
+        WHERE type = 'pattern'
+        """,
+        db._conn,
+    )
 
-        patterns = pd.read_sql_query(
-            """
-            SELECT
-                facet as pattern,
-                COUNT(*) as count,
-                COUNT(DISTINCT node_id) as unique_tests
-            FROM facets
-            WHERE type = 'pattern'
-            GROUP BY facet
-            ORDER BY count DESC
-            """,
-            conn,
-        )
+    patterns = pd.read_sql_query(
+        """
+        SELECT
+            facet as pattern,
+            COUNT(*) as count,
+            COUNT(DISTINCT node_id) as unique_tests
+        FROM facets
+        WHERE type = 'pattern'
+        GROUP BY facet
+        ORDER BY count DESC
+        """,
+        db._conn,
+    )
 
-        # Domain stats
-        domain_stats = pd.read_sql_query(
-            """
-            SELECT
-                COUNT(DISTINCT node_id) as nodes_with_domains,
-                COUNT(*) as total_domains
-            FROM facets
-            WHERE type = 'domain'
-            """,
-            conn,
-        )
+    # Domain stats
+    domain_stats = pd.read_sql_query(
+        """
+        SELECT
+            COUNT(DISTINCT node_id) as nodes_with_domains,
+            COUNT(*) as total_domains
+        FROM facets
+        WHERE type = 'domain'
+        """,
+        db._conn,
+    )
 
-        domains = pd.read_sql_query(
-            """
-            SELECT
-                facet as domain,
-                COUNT(*) as count,
-                COUNT(DISTINCT node_id) as unique_tests
-            FROM facets
-            WHERE type = 'domain'
-            GROUP BY facet
-            ORDER BY count DESC
-            """,
-            conn,
-        )
+    domains = pd.read_sql_query(
+        """
+        SELECT
+            facet as domain,
+            COUNT(*) as count,
+            COUNT(DISTINCT node_id) as unique_tests
+        FROM facets
+        WHERE type = 'domain'
+        GROUP BY facet
+        ORDER BY count DESC
+        """,
+        db._conn,
+    )
 
-        # Summaries by repository
-        repo_summaries = pd.read_sql_query(
-            """
-            SELECT
-                r.full_name as repository,
-                COUNT(DISTINCT n.id) as total_nodes,
-                COUNT(DISTINCT s.node_id) as nodes_with_summaries,
-                AVG(LENGTH(s.facet)) as avg_summary_length
-            FROM core_repository r
-            LEFT JOIN core_node n ON r.id = n.repo_id
-            LEFT JOIN facets s ON n.id = s.node_id
-            GROUP BY r.id
-            HAVING nodes_with_summaries > 0
-            ORDER BY nodes_with_summaries DESC
-            LIMIT 50
-            """,
-            conn,
-        )
+    # Summaries by repository
+    repo_summaries = pd.read_sql_query(
+        """
+        SELECT
+            r.full_name as repository,
+            COUNT(DISTINCT n.id) as total_nodes,
+            COUNT(DISTINCT s.node_id) as nodes_with_summaries,
+            AVG(LENGTH(s.facet)) as avg_summary_length
+        FROM core_repository r
+        LEFT JOIN core_node n ON r.id = n.repo_id
+        LEFT JOIN facets s ON n.id = s.node_id
+        GROUP BY r.id
+        HAVING nodes_with_summaries > 0
+        ORDER BY nodes_with_summaries DESC
+        LIMIT 50
+        """,
+        db._conn,
+    )
 
-        # Summaries over time
-        summary_timeline = pd.read_sql_query(
-            """
-            SELECT
-                DATE(s.created_at) as date,
-                COUNT(*) as summaries_created,
-                AVG(LENGTH(s.facet)) as avg_length
-            FROM facets s
-            GROUP BY DATE(s.created_at)
-            ORDER BY date
-            """,
-            conn,
-        )
+    # Summaries over time
+    summary_timeline = pd.read_sql_query(
+        """
+        SELECT
+            DATE(s.created_at) as date,
+            COUNT(*) as summaries_created,
+            AVG(LENGTH(s.facet)) as avg_length
+        FROM facets s
+        GROUP BY DATE(s.created_at)
+        ORDER BY date
+        """,
+        db._conn,
+    )
 
     # Display overall metrics
     if not overall_stats.empty and overall_stats["nodes_with_summaries"].iloc[0] > 0:
@@ -263,91 +262,90 @@ def main():
     )
 
     if selected_repo:
-        with db.connection() as conn:
-            # Get summaries for selected repository
-            summaries = pd.read_sql_query(
-                """
-                SELECT
-                    n.id as node_db_id,
-                    n.node_id as test_name,
-                    n.file_path,
-                    n.class_name,
-                    n.node_name,
-                    s.facet as summary,
-                    LENGTH(s.facet) as summary_length,
-                    s.created_at
-                FROM facets s
-                JOIN core_node n ON s.node_id = n.id
-                JOIN core_repository r ON n.repo_id = r.id
-                WHERE r.full_name = ?
-                    AND s.type = 'summary'
-                ORDER BY n.node_id
-                """,
-                conn,
-                params=[selected_repo],
-            )
+        # Get summaries for selected repository
+        summaries = pd.read_sql_query(
+            """
+            SELECT
+                n.id as node_db_id,
+                n.node_id as test_name,
+                n.file_path,
+                n.class_name,
+                n.node_name,
+                s.facet as summary,
+                LENGTH(s.facet) as summary_length,
+                s.created_at
+            FROM facets s
+            JOIN core_node n ON s.node_id = n.id
+            JOIN core_repository r ON n.repo_id = r.id
+            WHERE r.full_name = ?
+                AND s.type = 'summary'
+            ORDER BY n.node_id
+            """,
+            db._conn,
+            params=[selected_repo],
+        )
 
-            if not summaries.empty:
-                # Display summary count for selected repo
-                st.write(f"**{len(summaries)}** tests found")
+        if not summaries.empty:
+            # Display summary count for selected repo
+            st.write(f"**{len(summaries)}** tests found")
 
-                # Show each summary in an expandable section
-                for idx, row in summaries.iterrows():
-                    # Get patterns for this test
-                    patterns_for_test = pd.read_sql_query(
-                        """
-                        SELECT facet as pattern
-                        FROM facets
-                        WHERE node_id = ? AND type = 'pattern'
-                        ORDER BY id
-                        """,
-                        conn,
-                        params=[row["node_db_id"]],
-                    )
+            # Show each summary in an expandable section
+            for idx, row in summaries.iterrows():
+                # Get patterns for this test
+                patterns_for_test = pd.read_sql_query(
+                    """
+                    SELECT facet as pattern
+                    FROM facets
+                    WHERE node_id = ? AND type = 'pattern'
+                    ORDER BY id
+                    """,
+                    db._conn,
+                    params=[row["node_db_id"]],
+                )
 
-                    # Get domains for this test
-                    domains_for_test = pd.read_sql_query(
-                        """
-                        SELECT facet as domain
-                        FROM facets
-                        WHERE node_id = ? AND type = 'domain'
-                        ORDER BY id
-                        """,
-                        conn,
-                        params=[row["node_db_id"]],
-                    )
+                # Get domains for this test
+                domains_for_test = pd.read_sql_query(
+                    """
+                    SELECT facet as domain
+                    FROM facets
+                    WHERE node_id = ? AND type = 'domain'
+                    ORDER BY id
+                    """,
+                    db._conn,
+                    params=[row["node_db_id"]],
+                )
 
-                    with st.expander(f"📝 {row['test_name']}", expanded=False):
-                        col1, col2 = st.columns([3, 1])
+                with st.expander(f"📝 {row['test_name']}", expanded=False):
+                    col1, col2 = st.columns([3, 1])
 
-                        with col1:
-                            st.markdown("**Summary:**")
-                            st.write(row["summary"])
+                    with col1:
+                        st.markdown("**Summary:**")
+                        st.write(row["summary"])
 
-                            if not patterns_for_test.empty:
-                                st.markdown("**Property Patterns:**")
-                                for pat_row in patterns_for_test.iterrows():
-                                    st.markdown(f"- {pat_row[1]['pattern']}")
+                        if not patterns_for_test.empty:
+                            st.markdown("**Property Patterns:**")
+                            for pat_row in patterns_for_test.iterrows():
+                                st.markdown(f"- {pat_row[1]['pattern']}")
 
-                            if not domains_for_test.empty:
-                                st.markdown("**Domains:**")
-                                for dom_row in domains_for_test.iterrows():
-                                    st.markdown(f"- {dom_row[1]['domain']}")
+                        if not domains_for_test.empty:
+                            st.markdown("**Domains:**")
+                            for dom_row in domains_for_test.iterrows():
+                                st.markdown(f"- {dom_row[1]['domain']}")
 
-                        with col2:
-                            st.markdown("**Details:**")
-                            st.write(f"File: `{row['file_path']}`")
-                            if row["class_name"]:
-                                st.write(f"Class: `{row['class_name']}`")
-                            st.write(f"Length: {row['summary_length']} chars")
-                            if not patterns_for_test.empty:
-                                st.write(f"Patterns: {len(patterns_for_test)}")
-                            if not domains_for_test.empty:
-                                st.write(f"Domains: {len(domains_for_test)}")
-                            if row["created_at"]:
-                                st.write(f"Created: {row['created_at']}")
-            else:
-                st.info("No summaries available for this repository.")
+                    with col2:
+                        st.markdown("**Details:**")
+                        st.write(f"File: `{row['file_path']}`")
+                        if row["class_name"]:
+                            st.write(f"Class: `{row['class_name']}`")
+                        st.write(f"Length: {row['summary_length']} chars")
+                        if not patterns_for_test.empty:
+                            st.write(f"Patterns: {len(patterns_for_test)}")
+                        if not domains_for_test.empty:
+                            st.write(f"Domains: {len(domains_for_test)}")
+                        if row["created_at"]:
+                            st.write(f"Created: {row['created_at']}")
+        else:
+            st.info("No summaries available for this repository.")
 
 
 if __name__ == "__main__":

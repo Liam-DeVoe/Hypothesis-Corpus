@@ -40,31 +40,30 @@ def load_data():
     """Load data from database."""
     db = get_database()
 
-    with db.connection() as conn:
-        # Repository stats
-        repo_stats = conn.execute(
-            """
-            SELECT
-                COUNT(*) as total
-            FROM core_repository
-            """
-        ).fetchone()
+    # Repository stats
+    repo_stats = db.fetchone(
+        """
+        SELECT
+            COUNT(*) as total
+        FROM core_repository
+        """
+    )
 
-        # Node stats
-        node_stats = conn.execute(
-            """
-            SELECT
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
-            FROM core_node
-            """
-        ).fetchone()
+    # Node stats
+    node_stats = db.fetchone(
+        """
+        SELECT
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful,
+            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
+        FROM core_node
+        """
+    )
 
-        return {
-            "repositories": dict(repo_stats),
-            "core_node": dict(node_stats),
-        }
+    return {
+        "repositories": dict(repo_stats),
+        "core_node": dict(node_stats),
+    }
 
 
 def render_overview_metrics(stats: dict[str, Any]):

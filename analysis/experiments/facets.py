@@ -138,46 +138,45 @@ class FacetsExperiment(Experiment):
 
     @staticmethod
     def store_to_database(db: Any, repo_id: int, node_id: int, data: dict[str, Any]):
-        with db.connection() as conn:
-            conn.execute(
+        db.execute(
+            """
+            INSERT INTO facets (node_id, type, facet)
+            VALUES (?, ?, ?)
+            """,
+            (
+                node_id,
+                "summary",
+                data["summary"],
+            ),
+        )
+
+        for pattern in data["patterns"]:
+            db.execute(
                 """
                 INSERT INTO facets (node_id, type, facet)
                 VALUES (?, ?, ?)
                 """,
                 (
                     node_id,
-                    "summary",
-                    data["summary"],
+                    "pattern",
+                    pattern,
                 ),
             )
 
-            for pattern in data["patterns"]:
-                conn.execute(
-                    """
-                    INSERT INTO facets (node_id, type, facet)
-                    VALUES (?, ?, ?)
-                    """,
-                    (
-                        node_id,
-                        "pattern",
-                        pattern,
-                    ),
-                )
+        for domain in data["domains"]:
+            db.execute(
+                """
+                INSERT INTO facets (node_id, type, facet)
+                VALUES (?, ?, ?)
+                """,
+                (
+                    node_id,
+                    "domain",
+                    domain,
+                ),
+            )
 
-            for domain in data["domains"]:
-                conn.execute(
-                    """
-                    INSERT INTO facets (node_id, type, facet)
-                    VALUES (?, ?, ?)
-                    """,
-                    (
-                        node_id,
-                        "domain",
-                        domain,
-                    ),
-                )
-
-            conn.commit()
+        db.commit()
 
     @staticmethod
     def delete_data(db: Any, repo_name: str):

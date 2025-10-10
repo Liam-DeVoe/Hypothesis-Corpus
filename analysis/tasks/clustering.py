@@ -209,26 +209,25 @@ class ClusteringTask(Task):
         """Run clustering on all pattern and domain facets."""
         logger.info("Starting clustering task...")
 
-        with db.connection() as conn:
-            # Fetch all unique patterns
-            patterns = conn.execute(
-                """
-                SELECT DISTINCT id, facet
-                FROM facets
-                WHERE type = 'pattern'
-                """
-            ).fetchall()
-            patterns = [(row["id"], row["facet"]) for row in patterns]
+        # Fetch all unique patterns
+        pattern_rows = db.fetchall(
+            """
+            SELECT DISTINCT id, facet
+            FROM facets
+            WHERE type = 'pattern'
+            """
+        )
+        patterns = [(row["id"], row["facet"]) for row in pattern_rows]
 
-            # Fetch all unique domains
-            domains = conn.execute(
-                """
-                SELECT DISTINCT id, facet
-                FROM facets
-                WHERE type = 'domain'
-                """
-            ).fetchall()
-            domains = [(row["id"], row["facet"]) for row in domains]
+        # Fetch all unique domains
+        domain_rows = db.fetchall(
+            """
+            SELECT DISTINCT id, facet
+            FROM facets
+            WHERE type = 'domain'
+            """
+        )
+        domains = [(row["id"], row["facet"]) for row in domain_rows]
 
         logger.info(
             f"Found {len(patterns)} unique patterns and {len(domains)} unique domains"
@@ -252,66 +251,65 @@ class ClusteringTask(Task):
         """Store clustering results to database."""
         logger.info("Storing clustering results to database...")
 
-        with db.connection() as conn:
-            # Store pattern clusters
-            for cluster_id, cluster_info in data["pattern_clusters"].items():
-                # Store cluster metadata
-                conn.execute(
+        # Store pattern clusters
+        for cluster_id, cluster_info in data["pattern_clusters"].items():
+            # Store cluster metadata
+            db.execute(
+                """
+                INSERT OR REPLACE INTO facet_clusters
+                (facet_type, cluster_id, cluster_name, cluster_description, num_items)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "pattern",
+                    cluster_id,
+                    cluster_info["name"],
+                    cluster_info["description"],
+                    cluster_info["num_items"],
+                ),
+            )
+
+            # Store cluster assignments
+            for facet_id, facet_text in cluster_info["facets"]:
+                db.execute(
                     """
-                    INSERT OR REPLACE INTO facet_clusters
-                    (facet_type, cluster_id, cluster_name, cluster_description, num_items)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT OR REPLACE INTO facet_cluster_assignment
+                    (facet_id, facet_text, facet_type, cluster_id)
+                    VALUES (?, ?, ?, ?)
                     """,
-                    (
-                        "pattern",
-                        cluster_id,
-                        cluster_info["name"],
-                        cluster_info["description"],
-                        cluster_info["num_items"],
-                    ),
+                    (facet_id, facet_text, "pattern", cluster_id),
                 )
 
-                # Store cluster assignments
-                for facet_id, facet_text in cluster_info["facets"]:
-                    conn.execute(
-                        """
-                        INSERT OR REPLACE INTO facet_cluster_assignment
-                        (facet_id, facet_text, facet_type, cluster_id)
-                        VALUES (?, ?, ?, ?)
-                        """,
-                        (facet_id, facet_text, "pattern", cluster_id),
-                    )
+        # Store domain clusters
+        for cluster_id, cluster_info in data["domain_clusters"].items():
+            # Store cluster metadata
+            db.execute(
+                """
+                INSERT OR REPLACE INTO facet_clusters
+                (facet_type, cluster_id, cluster_name, cluster_description, num_items)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "domain",
+                    cluster_id,
+                    cluster_info["name"],
+                    cluster_info["description"],
+                    cluster_info["num_items"],
+                ),
+            )
 
-            # Store domain clusters
-            for cluster_id, cluster_info in data["domain_clusters"].items():
-                # Store cluster metadata
-                conn.execute(
+            # Store cluster assignments
+            for facet_id, facet_text in cluster_info["facets"]:
+                db.execute(
                     """
-                    INSERT OR REPLACE INTO facet_clusters
-                    (facet_type, cluster_id, cluster_name, cluster_description, num_items)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT OR REPLACE INTO facet_cluster_assignment
+                    (facet_id, facet_text, facet_type, cluster_id)
+                    VALUES (?, ?, ?, ?)
                     """,
-                    (
-                        "domain",
-                        cluster_id,
-                        cluster_info["name"],
-                        cluster_info["description"],
-                        cluster_info["num_items"],
-                    ),
+                    (facet_id, facet_text, "domain", cluster_id),
                 )
 
-                # Store cluster assignments
-                for facet_id, facet_text in cluster_info["facets"]:
-                    conn.execute(
-                        """
-                        INSERT OR REPLACE INTO facet_cluster_assignment
-                        (facet_id, facet_text, facet_type, cluster_id)
-                        VALUES (?, ?, ?, ?)
-                        """,
-                        (facet_id, facet_text, "domain", cluster_id),
-                    )
-
-            conn.commit()
+        db.commit()
 
         logger.info(
             f"Stored {data['num_pattern_clusters']} pattern clusters and "
@@ -323,9 +321,8 @@ class ClusteringTask(Task):
         """Delete all clustering data."""
         logger.info("Deleting clustering data...")
 
-        with db.connection() as conn:
-            conn.execute("DELETE FROM facet_cluster_assignment")
-            conn.execute("DELETE FROM facet_clusters")
-            conn.commit()
+        db.execute("DELETE FROM facet_cluster_assignment")
+        db.execute("DELETE FROM facet_clusters")
+        db.commit()
 
         logger.info("Clustering data deleted")

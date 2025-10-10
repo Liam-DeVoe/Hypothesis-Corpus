@@ -30,10 +30,8 @@ def main():
     db = get_database()
 
     # Check if clustering has been run
-    with db.connection() as conn:
-        cluster_count = conn.execute(
-            "SELECT COUNT(*) as count FROM facet_clusters"
-        ).fetchone()["count"]
+    result = db.fetchone("SELECT COUNT(*) as count FROM facet_clusters")
+    cluster_count = result["count"] if result else 0
 
     if cluster_count == 0:
         st.info(
@@ -56,23 +54,22 @@ def main():
 
 def display_clusters(db: Database, facet_type: str):
     """Display clusters for a given facet type."""
-    with db.connection() as conn:
-        # Get cluster summaries
-        clusters = pd.read_sql_query(
-            """
-            SELECT
-                cluster_id,
-                cluster_name,
-                cluster_description,
-                num_items,
-                created_at
-            FROM facet_clusters
-            WHERE facet_type = ?
-            ORDER BY num_items DESC
-            """,
-            conn,
-            params=[facet_type],
-        )
+    # Get cluster summaries
+    clusters = pd.read_sql_query(
+        """
+        SELECT
+            cluster_id,
+            cluster_name,
+            cluster_description,
+            num_items,
+            created_at
+        FROM facet_clusters
+        WHERE facet_type = ?
+        ORDER BY num_items DESC
+        """,
+        db._conn,
+        params=[facet_type],
+    )
 
     if clusters.empty:
         st.info(f"No {facet_type} clusters found.")
@@ -144,21 +141,20 @@ def display_clusters(db: Database, facet_type: str):
         st.markdown(f"**Size:** {cluster_info['num_items']} items")
 
         # Get items in this cluster
-        with db.connection() as conn:
-            cluster_items = pd.read_sql_query(
-                """
-                SELECT
-                    fca.facet_text,
-                    COUNT(f.node_id) as usage_count
-                FROM facet_cluster_assignment fca
-                JOIN facets f ON fca.facet_text = f.facet AND fca.facet_type = f.type
-                WHERE fca.cluster_id = ? AND fca.facet_type = ?
-                GROUP BY fca.facet_text
-                ORDER BY usage_count DESC
-                """,
-                conn,
-                params=[int(cluster_info["cluster_id"]), facet_type],
-            )
+        cluster_items = pd.read_sql_query(
+            """
+            SELECT
+                fca.facet_text,
+                COUNT(f.node_id) as usage_count
+            FROM facet_cluster_assignment fca
+            JOIN facets f ON fca.facet_text = f.facet AND fca.facet_type = f.type
+            WHERE fca.cluster_id = ? AND fca.facet_type = ?
+            GROUP BY fca.facet_text
+            ORDER BY usage_count DESC
+            """,
+            db._conn,
+            params=[int(cluster_info["cluster_id"]), facet_type],
+        )
 
         if not cluster_items.empty:
             st.markdown("**Items in this cluster:**")
@@ -170,21 +166,20 @@ def display_clusters(db: Database, facet_type: str):
                     expanded=False,
                 ):
                     # Get tests using this facet
-                    with db.connection() as conn:
-                        tests = pd.read_sql_query(
-                            """
-                            SELECT DISTINCT
-                                n.node_id,
-                                r.repo_name as repository
-                            FROM facets f
-                            JOIN core_node n ON f.node_id = n.id
-                            JOIN repositories r ON n.repo_id = r.id
-                            WHERE f.facet = ? AND f.type = ?
-                            LIMIT 10
-                            """,
-                            conn,
-                            params=[item["facet_text"], facet_type],
-                        )
+                    tests = pd.read_sql_query(
+                        """
+                        SELECT DISTINCT
+                            n.node_id,
+                            r.full_name as repository
+                        FROM facets f
+                        JOIN core_node n ON f.node_id = n.id
+                        JOIN core_repository r ON n.repo_id = r.id
+                        WHERE f.facet = ? AND f.type = ?
+                        LIMIT 10
+                        """,
+                        db._conn,
+                        params=[item["facet_text"], facet_type],
+                    )
 
                     if not tests.empty:
                         st.markdown("**Example tests using this facet:**")

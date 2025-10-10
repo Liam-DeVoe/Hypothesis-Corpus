@@ -35,75 +35,74 @@ def main():
     db = get_database()
 
     # Get overall coverage statistics
-    with db.connection() as conn:
-        # Overall coverage stats
-        overall_stats = pd.read_sql_query(
-            """
-            SELECT
-                COUNT(DISTINCT rs.node_id) as nodes_with_coverage,
-                SUM(rs.total_lines_covered) as total_lines_covered,
-                AVG(rs.total_lines_covered) as avg_lines_per_node
-            FROM runtime_summary rs
-            WHERE rs.coverage IS NOT NULL
-            """,
-            conn,
-        )
+    # Overall coverage stats
+    overall_stats = pd.read_sql_query(
+        """
+        SELECT
+            COUNT(DISTINCT rs.node_id) as nodes_with_coverage,
+            SUM(rs.total_lines_covered) as total_lines_covered,
+            AVG(rs.total_lines_covered) as avg_lines_per_node
+        FROM runtime_summary rs
+        WHERE rs.coverage IS NOT NULL
+        """,
+        db._conn,
+    )
 
-        # Coverage by repository
-        repo_coverage = pd.read_sql_query(
-            """
-            SELECT
-                r.full_name as repository,
-                COUNT(DISTINCT t.id) as total_nodes,
-                COUNT(DISTINCT rs.node_id) as nodes_with_coverage,
-                SUM(rs.total_lines_covered) as total_lines_covered
-            FROM core_repository r
-            LEFT JOIN core_node t ON r.id = t.repo_id
-            LEFT JOIN runtime_summary rs ON t.id = rs.node_id
-            GROUP BY r.id
-            HAVING nodes_with_coverage > 0
-            ORDER BY total_nodes DESC
-            LIMIT 50
-            """,
-            conn,
-        )
+    # Coverage by repository
+    repo_coverage = pd.read_sql_query(
+        """
+        SELECT
+            r.full_name as repository,
+            COUNT(DISTINCT t.id) as total_nodes,
+            COUNT(DISTINCT rs.node_id) as nodes_with_coverage,
+            SUM(rs.total_lines_covered) as total_lines_covered
+        FROM core_repository r
+        LEFT JOIN core_node t ON r.id = t.repo_id
+        LEFT JOIN runtime_summary rs ON t.id = rs.node_id
+        GROUP BY r.id
+        HAVING nodes_with_coverage > 0
+        ORDER BY total_nodes DESC
+        LIMIT 50
+        """,
+        db._conn,
+    )
 
-        # Coverage over time
-        coverage_timeline = pd.read_sql_query(
-            """
-            SELECT
-                DATE(rs.executed_at) as date,
-                COUNT(DISTINCT rs.node_id) as nodes_count,
-                SUM(rs.total_lines_covered) as lines_covered
-            FROM runtime_summary rs
-            WHERE rs.coverage IS NOT NULL
-            GROUP BY DATE(rs.executed_at)
-            ORDER BY date
-            """,
-            conn,
-        )
+    # Coverage over time
+    coverage_timeline = pd.read_sql_query(
+        """
+        SELECT
+            DATE(rs.executed_at) as date,
+            COUNT(DISTINCT rs.node_id) as nodes_count,
+            SUM(rs.total_lines_covered) as lines_covered
+        FROM runtime_summary rs
+        WHERE rs.coverage IS NOT NULL
+        GROUP BY DATE(rs.executed_at)
+        ORDER BY date
+        """,
+        db._conn,
+    )
 
-        # Test execution results
-        test_results = pd.read_sql_query(
-            """
-            SELECT
-                COUNT(*) as total_executions,
-                SUM(CASE WHEN passed = 1 THEN 1 ELSE 0 END) as passed,
-                SUM(CASE WHEN passed = 0 THEN 1 ELSE 0 END) as failed
-            FROM runtime_summary
-            """,
-            conn,
-        )
+    # Test execution results
+    test_results = pd.read_sql_query(
+        """
+        SELECT
+            COUNT(*) as total_executions,
+            SUM(CASE WHEN passed = 1 THEN 1 ELSE 0 END) as passed,
+            SUM(CASE WHEN passed = 0 THEN 1 ELSE 0 END) as failed
+        FROM runtime_summary
+        """,
+        db._conn,
+    )
 
-        # Execution time distribution
-        execution_times = pd.read_sql_query(
-            """
-            SELECT execution_time
-            FROM runtime_summary
-            WHERE execution_time IS NOT NULL
-            """,
-            conn,
-        )
+    # Execution time distribution
+    execution_times = pd.read_sql_query(
+        """
+        SELECT execution_time
+        FROM runtime_summary
+        WHERE execution_time IS NOT NULL
+        """,
+        db._conn,
+    )
 
     # Display overall metrics
     col1, col2 = st.columns(2)
@@ -227,23 +226,22 @@ def main():
         st.subheader("Cumulative coverage")
 
         # Get cumulative coverage data
-        with db.connection() as conn:
-            cumulative_data = pd.read_sql_query(
-                """
-                SELECT
-                    t.node_id,
-                    tc.testcase_number,
-                    tc.cumulative_lines,
-                    r.full_name as repository
-                FROM runtime_testcase tc
-                JOIN core_node t ON tc.node_id = t.id
-                JOIN core_repository r ON t.repo_id = r.id
-                WHERE r.full_name = ?
-                ORDER BY t.id, tc.testcase_number
-                """,
-                conn,
-                params=[selected_repo],
-            )
+        cumulative_data = pd.read_sql_query(
+            """
+            SELECT
+                t.node_id,
+                tc.testcase_number,
+                tc.cumulative_lines,
+                r.full_name as repository
+            FROM runtime_testcase tc
+            JOIN core_node t ON tc.node_id = t.id
+            JOIN core_repository r ON t.repo_id = r.id
+            WHERE r.full_name = ?
+            ORDER BY t.id, tc.testcase_number
+            """,
+            db._conn,
+            params=[selected_repo],
+        )
 
         if not cumulative_data.empty:
             # Create cumulative coverage chart
@@ -282,22 +280,21 @@ def main():
         # Line execution frequency histograms
         st.subheader("Line execution frequency distribution")
 
-        with db.connection() as conn:
-            line_execution_data = pd.read_sql_query(
-                """
-                SELECT
-                    t.node_id,
-                    rs.line_execution_counts,
-                    rs.examples_count
-                FROM runtime_summary rs
-                JOIN core_node t ON rs.node_id = t.id
-                JOIN core_repository r ON t.repo_id = r.id
-                WHERE r.full_name = ?
-                AND rs.line_execution_counts IS NOT NULL
-                """,
-                conn,
-                params=[selected_repo],
-            )
+        line_execution_data = pd.read_sql_query(
+            """
+            SELECT
+                t.node_id,
+                rs.line_execution_counts,
+                rs.examples_count
+            FROM runtime_summary rs
+            JOIN core_node t ON rs.node_id = t.id
+            JOIN core_repository r ON t.repo_id = r.id
+            WHERE r.full_name = ?
+            AND rs.line_execution_counts IS NOT NULL
+            """,
+            db._conn,
+            params=[selected_repo],
+        )
 
         if not line_execution_data.empty:
             import json
@@ -359,46 +356,45 @@ def main():
 
         # Detailed test coverage view
         st.subheader("Details")
-        with db.connection() as conn:
-            # Get test coverage details for selected repository
-            runtime_summary_details = pd.read_sql_query(
-                """
-                SELECT
-                    t.node_id,
-                    rs.total_lines_covered,
-                    rs.passed,
-                    rs.execution_time
-                FROM core_node t
-                JOIN core_repository r ON t.repo_id = r.id
-                LEFT JOIN runtime_summary rs ON t.id = rs.node_id
-                WHERE r.full_name = ?
-                AND rs.coverage IS NOT NULL
-                ORDER BY rs.total_lines_covered DESC
-                """,
-                conn,
-                params=[selected_repo],
-            )
+        # Get test coverage details for selected repository
+        runtime_summary_details = pd.read_sql_query(
+            """
+            SELECT
+                t.node_id,
+                rs.total_lines_covered,
+                rs.passed,
+                rs.execution_time
+            FROM core_node t
+            JOIN core_repository r ON t.repo_id = r.id
+            LEFT JOIN runtime_summary rs ON t.id = rs.node_id
+            WHERE r.full_name = ?
+            AND rs.coverage IS NOT NULL
+            ORDER BY rs.total_lines_covered DESC
+            """,
+            db._conn,
+            params=[selected_repo],
+        )
 
-            if not runtime_summary_details.empty:
-                st.dataframe(
-                    runtime_summary_details,
-                    width="stretch",
-                    hide_index=True,
-                    column_config={
-                        "node_id": st.column_config.TextColumn("Test", width="large"),
-                        "total_lines_covered": st.column_config.NumberColumn(
-                            "Lines Covered", width="small"
-                        ),
-                        "passed": st.column_config.CheckboxColumn(
-                            "Passed", width="small"
-                        ),
-                        "execution_time": st.column_config.NumberColumn(
-                            "Time (s)", format="%.2f", width="small"
-                        ),
-                    },
-                )
-            else:
-                st.info("No coverage data available for this repository.")
+        if not runtime_summary_details.empty:
+            st.dataframe(
+                runtime_summary_details,
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    "node_id": st.column_config.TextColumn("Test", width="large"),
+                    "total_lines_covered": st.column_config.NumberColumn(
+                        "Lines Covered", width="small"
+                    ),
+                    "passed": st.column_config.CheckboxColumn(
+                        "Passed", width="small"
+                    ),
+                    "execution_time": st.column_config.NumberColumn(
+                        "Time (s)", format="%.2f", width="small"
+                    ),
+                },
+            )
+        else:
+            st.info("No coverage data available for this repository.")
 
 
 if __name__ == "__main__":
