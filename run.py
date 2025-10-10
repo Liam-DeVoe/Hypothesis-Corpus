@@ -77,7 +77,7 @@ def experiment(
 
     for experiment_name in experiment:
         assert (
-            experiment in Experiment.experiments
+            experiment_name in Experiment.experiments
         ), f"Unrecognized experiment {experiment_name}. Options: {list(Experiment.experiments.keys())}"
 
     experiments = (
