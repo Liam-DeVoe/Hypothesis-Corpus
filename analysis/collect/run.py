@@ -8,6 +8,7 @@ from analysis.database import Database
 
 from .github_repos import collect_repos, filter_repos
 from .minhash import minhash_repository, remove_duplicates
+from .utils import Reject
 
 
 def process_minhashes(db: Database):
@@ -20,6 +21,13 @@ def process_minhashes(db: Database):
 
         try:
             minhash_repository(db, repo_name)
+        except Reject as e:
+            print(f"rejected: {e}")
+            db.execute(
+                "UPDATE core_repository SET status = ? WHERE full_name = ?",
+                ("invalid", repo_name),
+            )
+            db.commit()
         except Exception as e:
             # I've seen this happen for repos that were deleted
             print(f"error: {traceback.format_exception(e)}")

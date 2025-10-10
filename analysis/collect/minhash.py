@@ -11,11 +11,14 @@
 
 import pickle
 import random
+import re
 import subprocess
 import tempfile
 from pathlib import Path
 
 from datasketch import MinHash
+
+from .utils import Reject
 
 num_perm = 128
 # skip hashing files with fewer lines than this
@@ -73,16 +76,10 @@ def _is_vendored_directory(name: str) -> bool:
     """Check if directory name looks like vendored code (e.g., has commit hash)."""
     # Check for commit hash pattern (40 hex chars) in directory name
     # e.g., fairseq-a54021305d6b3c4c5959ac9395135f63202db8f1
-    import re
-
-    if re.search(r"-[0-9a-f]{40}$", name):
-        return True
-    if re.search(r"-[0-9a-f]{7,}", name):  # Also catch shorter hashes
-        return True
-    return False
+    return bool(re.search(r"-[0-9a-f]{40}$", name))
 
 
-def _python_files(path: Path) -> list[Path]:
+def _reasonable_paths(path: Path) -> list[Path]:
     python_files = []
 
     for item in path.iterdir():
@@ -92,8 +89,8 @@ def _python_files(path: Path) -> list[Path]:
             continue
 
         if item.is_dir():
-            python_files += _python_files(item)
-        elif item.is_file() and item.suffix == ".py":
+            python_files += _reasonable_paths(item)
+        elif item.is_file():
             python_files.append(item)
     return python_files
 
@@ -107,6 +104,28 @@ def _repo_exists(repo_name: str) -> bool:
         ).returncode
         == 0
     )
+
+
+def _valid_repo(clone_path: Path) -> bool:
+    reasonable_paths = _reasonable_paths(clone_path)
+
+    if not (
+        any(p.name == "pytest.init" for p in reasonable_paths)
+        or any(p.name == "conftest.py" for p in reasonable_paths)
+        or any(
+            p.name.startswith("test_") and p.suffix == ".py" for p in reasonable_paths
+        )
+    ):
+        return False
+
+    common_packages = {"pip", "requests", "numpy", "setuptools"}
+    for sitepackages_p in clone_path.rglob("site-packages"):
+        if sitepackages_p.is_dir():
+            dirnames = {p.name for p in sitepackages_p.iterdir() if p.is_dir()}
+            if dirnames & common_packages:
+                return False
+
+    return True
 
 
 def compute_minhashes(repo_name: str) -> list[MinHash]:
@@ -133,10 +152,16 @@ def compute_minhashes(repo_name: str) -> list[MinHash]:
             check=True,
         )
 
+        if not _valid_repo(clone_path):
+            raise Reject("not a valid repo")
+
         python_files = []
-        for file_path in _python_files(clone_path):
+        reasonable_paths = [
+            p for p in _reasonable_paths(clone_path) if p.suffix == ".py"
+        ]
+        for p in reasonable_paths:
             try:
-                content = file_path.read_text(encoding="utf-8", errors="ignore")
+                content = p.read_text(encoding="utf-8", errors="ignore")
                 lines = content.splitlines()
                 if len(lines) >= min_file_lines:
                     python_files.append(lines)
