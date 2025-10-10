@@ -155,7 +155,8 @@ def analysis(
 @cli.command()
 @click.option("--db-path", default="analysis/data.db", help="Path to database file")
 @click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
-def install(db_path: str, limit: int):
+@click.option("--debug", is_flag=True, help="Enable debug mode with container logs")
+def install(db_path: str, limit: int, debug: bool):
     """Install repositories and collect test node IDs."""
     from analysis.collect.install_repos import install_repository
     from analysis.database import Database
@@ -191,7 +192,7 @@ def install(db_path: str, limit: int):
         console.print(f"[{i}/{len(repos)}] Processing [cyan]{repo_name}[/cyan]...")
 
         try:
-            result = install_repository(repo_name)
+            result = install_repository(repo_name, debug=debug)
         except Exception as e:
             console.print(f"  ✗ Failed: [red]{traceback.format_exception(e)}[/red]\n")
             _reject(repo_name)
@@ -215,7 +216,7 @@ def install(db_path: str, limit: int):
         db.commit()
 
         console.print(
-            f"  ✓ Successfully processed ([green]{len(result['node_ids'])} test nodes[/green], commit: [cyan]{result.get('commit_hash', 'unknown')[:7]}[/cyan])\n"
+            f"  ✓ Successfully processed ([green]{len(result['node_ids'])} nodes[/green], commit: [cyan]{result.get('commit_hash', 'unknown')[:7]}[/cyan])\n"
         )
         successful += 1
 

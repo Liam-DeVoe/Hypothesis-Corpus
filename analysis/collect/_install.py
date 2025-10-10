@@ -79,6 +79,12 @@ packages = [
     if not (line.startswith("-e") or " @ file:" in line)
 ]
 
+# Configure git to trust /app directory (fixes dubious ownership error)
+subprocess.run(
+    ["git", "config", "--global", "--add", "safe.directory", "/app"],
+    capture_output=True,
+)
+
 commit_hash = subprocess.run(
     ["git", "rev-parse", "HEAD"],
     capture_output=True,

@@ -19,7 +19,7 @@ POST_INSTALL = [
 
 
 def install_repository(
-    repo_name: str, docker_image: str = "pbt-analysis:latest"
+    repo_name: str, docker_image: str = "pbt-analysis:latest", debug: bool = False
 ) -> dict:
     """Process a single repository: install and collect tests using Docker."""
     container = None
@@ -76,6 +76,10 @@ def install_repository(
         # Wait for completion (30 minute timeout)
         result = container.wait(timeout=30 * 60)
         logs = container.logs(stdout=True, stderr=True).decode("utf-8")
+
+        if debug:
+            print(f"Container logs:\n{logs}")
+
         assert result.get("StatusCode") == 0, logs
 
         # Extract results
