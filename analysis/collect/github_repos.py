@@ -104,45 +104,44 @@ def repos_from_api():
     return repos
 
 
-def filter_repos(db_path):
-    from analysis.database import Database
-
-    db = Database(db_path=db_path)
+def filter_repos(db):
     repos = db.fetchall(
         "SELECT full_name, size_bytes, stargazers_count, is_fork FROM core_repository"
     )
-    repos_to_delete = []
+    repos_to_reject = []
 
     for repo in repos:
         size_gb = repo["size_bytes"] / 1_000_000
 
         if size_gb > limit_gb:
             print(f"  Rejected {repo['full_name']}: too large ({size_gb:.2f}gb)")
-            repos_to_delete.append(repo["full_name"])
+            repos_to_reject.append(repo["full_name"])
             continue
 
         if repo["is_fork"] and repo["stargazers_count"] < limit_forked_stars:
             print(
                 f"  Rejected {repo['full_name']}: fork with {repo['stargazers_count']} < {limit_forked_stars} stars"
             )
-            repos_to_delete.append(repo["full_name"])
+            repos_to_reject.append(repo["full_name"])
             continue
 
-    for full_name in repos_to_delete:
-        db.execute("DELETE FROM core_repository WHERE full_name = ?", (full_name,))
+    for full_name in repos_to_reject:
+        db.execute(
+            "UPDATE core_repository SET status = ? WHERE full_name = ?",
+            ("invalid", full_name),
+        )
     db.commit()
 
-    remaining_count = db.fetchone("SELECT COUNT(*) FROM core_repository")[0]
+    valid_count = db.fetchone(
+        "SELECT COUNT(*) FROM core_repository WHERE status IS NULL OR status = 'valid'"
+    )[0]
     print(
-        f"Deleted {len(repos_to_delete)} repositories, {remaining_count} remaining in {db_path}"
+        f"Rejected {len(repos_to_reject)} repositories, {valid_count} valid/unprocessed remaining"
     )
 
 
-def collect_repos(db_path):
-    from analysis.database import Database
-
+def collect_repos(db):
     repos = repos_from_api()
-    db = Database(db_path=db_path)
 
     db.execute("DELETE FROM core_repository")
     db.commit()
@@ -158,4 +157,4 @@ def collect_repos(db_path):
 
     db.commit()
     count = db.fetchone("SELECT COUNT(*) FROM core_repository")[0]
-    print(f"Stored {count} repositories in {db_path}")
+    print(f"Stored {count} repositories")

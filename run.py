@@ -240,9 +240,11 @@ def task():
 @click.argument("task_name")
 @click.option("--db-path", default="analysis/data.db", help="Path to database")
 def run(task_name: str, db_path: str):
+    from analysis.database import Database
     from analysis.tasks import run_task
 
-    run_task(task_name, db_path=db_path)
+    db = Database(db_path=db_path)
+    run_task(task_name, db=db)
 
 
 @task.command()

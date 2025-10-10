@@ -96,7 +96,7 @@ def minhash_repository(db, repo_name: str):
         "SELECT id FROM core_repository WHERE full_name = ?",
         (repo_name,),
     )
-    assert result, f"Repository {repo_name} not found"
+    assert result
     repo_id = result["id"]
 
     db.execute("DELETE FROM core_minhashes WHERE repo_id = ?", (repo_id,))
@@ -133,11 +133,8 @@ def count_duplicates(
     return count
 
 
-def remove_duplicates(db_path):
+def remove_duplicates(db):
     """Identify and remove duplicate repositories based on minhash similarity."""
-    from analysis.database import Database
-
-    db = Database(db_path=db_path)
     repos = db.fetchall("SELECT id, full_name, stargazers_count FROM core_repository")
     print(f"Removing duplicates among {len(repos)} repositories...")
 
