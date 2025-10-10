@@ -113,7 +113,9 @@ def experiment(
     console.print("[bold]Starting analysis...[/bold]")
 
     with WorkerPool(
-        num_workers=workers,
+        # if there are less work items than workers, only launch as many workers
+        # as work items
+        num_workers=min(workers, len(work_items)),
         db_path=db_path,
         docker_image=docker_image,
         experiments=experiments,

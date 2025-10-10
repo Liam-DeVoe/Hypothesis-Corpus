@@ -136,7 +136,7 @@ class TestRunner:
                 tar.add(item, arcname=f"/app/{item.name}")
         tar_stream.seek(0)
 
-        secrets_path = Path(__file__).parent.parent / "secrets.json"
+        secrets_path = Path(__file__).parent / "secrets.json"
         with open(secrets_path) as f:
             secrets = json.load(f)
 
