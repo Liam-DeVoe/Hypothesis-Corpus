@@ -10,26 +10,26 @@ This is a Property-Based Testing (PBT) Corpus Analysis system that analyzes Hypo
 
 ### Collecting Repositories
 ```bash
-# Step 1: Collect repositories from GitHub
+# Step 1: Collect repositories from GitHub and store in database
 python run.py collect
 
-# Step 2: Install repositories and collect test node IDs from a limit number of repos
+# Step 2: Install repositories and collect test node IDs
 python run.py install --limit 10
+
+# Install with debug output (shows container logs)
+python run.py install --limit 10 --debug
 ```
 
-### Running Experiment
+### Running Experiments
 ```bash
-# Run experiment (pulls from database)
+# Run experiments (reads from database, requires 'valid' status repos)
 python run.py experiment --workers 4
 
-# Run sample test with MarkCBell/bigger repository
-python run.py experiment --sample
+# Run specific experiment(s)
+python run.py experiment -e runtime -e facets
 
 # Run with limited repositories
 python run.py experiment --limit 10 --workers 2
-
-# Start visualization dashboard
-streamlit run dashboard/Overview.py
 ```
 
 ### Running Tasks
@@ -41,24 +41,40 @@ python run.py task run clustering
 python run.py task clear --task-name clustering
 ```
 
-### Rebuilding Docker
+### Dashboard
 ```bash
-docker build -f analysis/Dockerfile -t pbt-analysis .
+# Start visualization dashboard
+python run.py dashboard
+
+# Use different database or port
+python run.py dashboard --db-path test.db --port 8502
 ```
 
-### Development & Debugging
+### Docker & Development
 ```bash
+# Rebuild Docker image
+./build.sh image
+
 # Check database contents
 sqlite3 analysis/data.db ".tables"
 sqlite3 analysis/data.db "SELECT * FROM core_repository LIMIT 5;"
+
+# Add commit_hash column to existing database (migration)
+sqlite3 analysis/data.db "ALTER TABLE core_repository ADD COLUMN commit_hash TEXT"
 ```
 
 ## Architecture
 
 ### Core Flow
 1. **python run.py collect** collects repositories from GitHub and stores in `core_repository` table
-2. **python run.py install** clones repos, installs dependencies, collects test nodes, updates database
-3. **python run.py experiment** reads from database and orchestrates the analysis pipeline
+2. **python run.py install** processes repositories:
+   - Clones repository to temporary directory
+   - Copies `_install.py` script into repository
+   - Creates tar archive and sends to Docker container
+   - Container installs dependencies and runs pytest plugin to collect node IDs
+   - Captures git commit hash for reproducibility
+   - Updates database with `requirements`, `node_ids`, `commit_hash`, and `status='valid'`
+3. **python run.py experiment** reads valid repos from database and orchestrates analysis pipeline
 4. **WorkerPool** (analysis/worker.py) distributes repositories across multiple processes
 5. Each worker uses **TestRunner** (analysis/test_runner.py) to:
    - Clone repository into temporary directory
@@ -77,6 +93,12 @@ sqlite3 analysis/data.db "SELECT * FROM core_repository LIMIT 5;"
 - Each Docker container provides isolation - dependencies installed directly into container Python environment
 - Network access is required for pip installation of repository dependencies
 - Container runs runner.py which reads config.json, installs dependencies, and runs the specified experiment
+
+#### Installation & Node Collection
+- Uses custom pytest plugin approach (not subprocess text parsing) for collecting test node IDs
+- Plugin hooks into `pytest_collection_finish` to get clean node IDs from `session.items`
+- Git commit hash captured via `git rev-parse HEAD` after configuring safe.directory to avoid dubious ownership errors
+- Docker container may have different user/ownership than host, requiring `git config --global --add safe.directory /app`
 
 #### Experiment System
 **Experiments** run in Docker containers to analyze tests. Each experiment:
@@ -111,7 +133,7 @@ Clustering implementation:
 The unified database (`analysis/data.db`) contains collection and analysis tables:
 
 **Collection tables** (for GitHub repository discovery):
-- `core_repository`: Collected repositories from GitHub search (includes `full_name`, `requirements`, metadata)
+- `core_repository`: Collected repositories from GitHub search (includes `full_name`, `requirements`, `node_ids`, `commit_hash`, `status`, metadata)
 - `core_minhashes`: MinHash data for deduplication
 
 **Analysis tables** (for test analysis):
@@ -124,6 +146,19 @@ Experiment-specific tables are defined by each experiment's `get_schema_sql()`:
 Task-specific tables are defined by each task's `get_schema_sql()`:
 - `clustering` task: `facet_clusters`, `facet_cluster_assignment`
 
+#### Database API
+The Database class maintains a **single persistent connection** per db_path (singleton pattern):
+- `db.execute(query, params)` - execute query, returns cursor
+- `db.fetchone(query, params)` - execute and return single row
+- `db.fetchall(query, params)` - execute and return all rows
+- `db.commit()` - commit transaction
+- `db._conn` - direct connection access (for pandas queries only)
+
+For pandas SQL queries:
+```python
+df = pd.read_sql_query("SELECT ...", db._conn)
+```
+
 ### Configuration
 
 The system uses **CLI arguments** for configuration (no config files):
@@ -131,7 +166,7 @@ The system uses **CLI arguments** for configuration (no config files):
 - `--workers` (default: `4`): Number of worker processes
 - `--docker-image` (default: `pbt-analysis:latest`): Docker image for analysis
 
-The system uses `analysis/secrets.json` for API tokens:
+The system uses a top-level `secrets.json` file for API tokens:
 ```json
 {
   "claude_code_oauth_token": "your-token-here",
@@ -139,25 +174,23 @@ The system uses `analysis/secrets.json` for API tokens:
 }
 ```
 
-See `analysis/secrets.json.example` for a template.
-
 ### Database-Driven Workflow
 
 The analysis system pulls repositories directly from the `core_repository` table in `analysis/data.db`:
 - **Step 1**: Repositories are collected via `python run.py collect` and stored in `core_repository`
-- **Step 2**: `python run.py install` processes each repo:
+- **Step 2**: `python run.py install` processes repos with `status IS NULL`:
   - Clones the repository
-  - Runs installation in Docker container (isolated, reproducible)
-  - Installs dependencies (guessing at common extras and requirements files)
-  - Collects pytest node IDs via `pytest --collect-only`
-  - Updates `requirements` and `node_ids` columns in database
-- **Step 3**: `python run.py experiment` reads from the database and runs experiments
-- Test discovery happens automatically if `node_ids` are not pre-specified
+  - Runs `_install.py` in Docker container (isolated, reproducible)
+  - Installs dependencies (tries editable install, common extras, and requirements files)
+  - Collects pytest node IDs using custom plugin (not text parsing)
+  - Captures git commit hash
+  - Updates `requirements`, `node_ids`, `commit_hash` columns, sets `status='valid'`
+- **Step 3**: `python run.py experiment` selects repos `WHERE status = 'valid'` and runs experiments
 
 ## Common Issues & Solutions
 
 ### Analysis Failing
-1. Check Docker container logs are being captured properly
+1. Check Docker container logs with `--debug` flag
 2. Ensure Python version in runner.py matches Docker image (currently 3.13)
 3. Verify network access is enabled for pip installations
 4. Check that experiment modules are being copied correctly
@@ -178,20 +211,33 @@ The analysis system pulls repositories directly from the `core_repository` table
 5. Export from analysis/tasks/__init__.py
 
 ### Database Operations
-The database uses context managers for all operations:
+The database uses a singleton pattern with persistent connections:
 ```python
-with db.connection() as conn:
-    cursor = conn.execute(query, params)
-    conn.commit()
+db = Database(db_path="analysis/data.db")
+
+# Execute queries
+db.execute("INSERT INTO ...", (val1, val2))
+db.commit()
+
+# Fetch data
+row = db.fetchone("SELECT * FROM ... WHERE id = ?", (id,))
+rows = db.fetchall("SELECT * FROM ...")
+
+# For pandas
+import pandas as pd
+
+df = pd.read_sql_query("SELECT ...", db._conn)
 ```
 
 ## Key Files to Understand
 
-- **run.py**: Unified CLI interface with collect/analysis/task subcommands
-- **analysis/test_runner.py**: Orchestrates cloning, environment setup, and Docker execution
+- **run.py**: Unified CLI interface with collect/install/experiment/task/dashboard commands
+- **analysis/collect/install_repos.py**: Repository installation orchestration (cloning, Docker execution)
+- **analysis/collect/_install.py**: Script that runs inside Docker to install deps and collect nodes
+- **analysis/test_runner.py**: Orchestrates cloning, environment setup, and Docker execution for experiments
 - **analysis/worker.py**: Multiprocessing orchestration and error handling
 - **analysis/experiments/runner.py**: Entry point that runs inside Docker containers
-- **analysis/database.py**: Schema definition and data persistence
+- **analysis/database.py**: Schema definition and data persistence with singleton connection pattern
 
 ### Experiments & Tasks
 - **analysis/experiments/**: Experiment implementations (runtime, facets)

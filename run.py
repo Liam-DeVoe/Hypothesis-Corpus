@@ -75,6 +75,11 @@ def experiment(
     from analysis.experiments import Experiment
     from analysis.worker import WorkerPool, WorkItem
 
+    for experiment_name in experiment:
+        assert (
+            experiment in Experiment.experiments
+        ), f"Unrecognized experiment {experiment_name}. Options: {list(Experiment.experiments.keys())}"
+
     experiments = (
         list(experiment) if experiment else list(Experiment.experiments.keys())
     )
