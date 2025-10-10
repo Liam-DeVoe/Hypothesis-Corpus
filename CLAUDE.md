@@ -17,16 +17,16 @@ python run.py collect
 python run.py install --limit 10
 ```
 
-### Running Analysis
+### Running Experiment
 ```bash
-# Run analysis (pulls from database)
-python run.py analysis --workers 4
+# Run experiment (pulls from database)
+python run.py experiment --workers 4
 
 # Run sample test with MarkCBell/bigger repository
-python run.py analysis --sample
+python run.py experiment --sample
 
 # Run with limited repositories
-python run.py analysis --limit 10 --workers 2
+python run.py experiment --limit 10 --workers 2
 
 # Start visualization dashboard
 streamlit run dashboard/Overview.py
@@ -58,7 +58,7 @@ sqlite3 analysis/data.db "SELECT * FROM core_repository LIMIT 5;"
 ### Core Flow
 1. **python run.py collect** collects repositories from GitHub and stores in `core_repository` table
 2. **python run.py install** clones repos, installs dependencies, collects test nodes, updates database
-3. **python run.py analysis** reads from database and orchestrates the analysis pipeline
+3. **python run.py experiment** reads from database and orchestrates the analysis pipeline
 4. **WorkerPool** (analysis/worker.py) distributes repositories across multiple processes
 5. Each worker uses **TestRunner** (analysis/test_runner.py) to:
    - Clone repository into temporary directory
@@ -151,7 +151,7 @@ The analysis system pulls repositories directly from the `core_repository` table
   - Installs dependencies (guessing at common extras and requirements files)
   - Collects pytest node IDs via `pytest --collect-only`
   - Updates `requirements` and `node_ids` columns in database
-- **Step 3**: `python run.py analysis` reads from the database and runs experiments
+- **Step 3**: `python run.py experiment` reads from the database and runs experiments
 - Test discovery happens automatically if `node_ids` are not pre-specified
 
 ## Common Issues & Solutions
