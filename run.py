@@ -47,7 +47,7 @@ def collect(db_path: str):
 
 
 # ==============================================================================
-# ANALYSIS COMMAND
+# EXPERIMENT COMMAND
 # ==============================================================================
 
 
@@ -62,7 +62,7 @@ def collect(db_path: str):
     "--experiment", "-e", multiple=True, help="Experiments to run (default: all)"
 )
 @click.option("--debug", is_flag=True, help="Enable debug mode with verbose logging")
-def analysis(
+def experiment(
     db_path: str,
     workers: int,
     limit: int,
@@ -70,7 +70,7 @@ def analysis(
     experiment: tuple[str, ...],
     debug: bool,
 ):
-    """Run analysis on repositories in the database."""
+    """Run experiments on repositories in the database."""
     from analysis.database import Database
     from analysis.experiments import Experiment
     from analysis.worker import WorkerPool, WorkItem
