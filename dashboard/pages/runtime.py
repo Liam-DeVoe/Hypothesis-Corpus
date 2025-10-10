@@ -385,9 +385,7 @@ def main():
                     "total_lines_covered": st.column_config.NumberColumn(
                         "Lines Covered", width="small"
                     ),
-                    "passed": st.column_config.CheckboxColumn(
-                        "Passed", width="small"
-                    ),
+                    "passed": st.column_config.CheckboxColumn("Passed", width="small"),
                     "execution_time": st.column_config.NumberColumn(
                         "Time (s)", format="%.2f", width="small"
                     ),

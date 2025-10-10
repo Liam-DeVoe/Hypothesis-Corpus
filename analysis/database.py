@@ -57,6 +57,7 @@ class Database:
                 status TEXT,  -- NULL (not processed), 'valid' (installed successfully), 'invalid' (installation failed)
                 requirements TEXT,
                 node_ids TEXT,
+                commit_hash TEXT,  -- Git commit hash at time of install_repos.py
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 

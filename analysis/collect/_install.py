@@ -79,27 +79,38 @@ packages = [
     if not (line.startswith("-e") or " @ file:" in line)
 ]
 
-# we've done our best to install the package and its dependencies. now
-# try collecting tests with pytest
-result = subprocess.run(
-    [sys.executable, "-m", "pytest", "--collect-only", "-q", "/app"],
+commit_hash = subprocess.run(
+    ["git", "rev-parse", "HEAD"],
     capture_output=True,
     text=True,
     cwd="/app",
 )
+assert commit_hash.returncode == 0
+commit_hash = commit_hash.stdout.strip()
 
-node_ids = []
-for line in result.stdout.splitlines():
-    line = line.strip()
-    if "::" in line and not line.startswith("<"):
-        node_ids.append(line)
+# we've done our best to install the package and its dependencies. now
+# try collecting tests with pytest
 
-node_ids.append(result.stdout)
-# Write results
+# this deferred import is important: we haven't installed pytest until this point,
+# in POST_INSTALL
+import pytest
+
+
+class CollectionPlugin:
+    def __init__(self):
+        self.node_ids = []
+
+    def pytest_collection_finish(self, session):
+        self.node_ids = [item.nodeid for item in session.items]
+
+
+plugin = CollectionPlugin()
+collection_returncode = pytest.main(["--collect-only", "/app"], plugins=[plugin])
 output = {
     "requirements": "\n".join(packages),
-    "node_ids": node_ids,
-    "collection_returncode": result.returncode,
+    "node_ids": plugin.node_ids,
+    "commit_hash": commit_hash,
+    "collection_returncode": collection_returncode,
 }
 
 with open("/app/_install_results.json", "w") as f:

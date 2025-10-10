@@ -89,12 +89,8 @@ def main():
                     width="stretch",
                     hide_index=True,
                     column_config={
-                        "node_id": st.column_config.TextColumn(
-                            "Test", width="large"
-                        ),
-                        "status": st.column_config.TextColumn(
-                            "Status", width="small"
-                        ),
+                        "node_id": st.column_config.TextColumn("Test", width="large"),
+                        "status": st.column_config.TextColumn("Status", width="small"),
                     },
                 )
 
