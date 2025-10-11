@@ -12,7 +12,13 @@ from .utils import Reject
 
 
 def process_minhashes(db: Database):
-    repos = db.fetchall("SELECT id, full_name FROM core_repository")
+    repos = db.fetchall(
+        """
+        SELECT id, full_name FROM core_repository
+        WHERE (status IS NULL OR status != 'invalid')
+        AND id NOT IN (SELECT repo_id FROM core_minhashes)
+    """
+    )
 
     print(f"Processing minhashes for {len(repos)} repositories...")
     for i, repo in enumerate(repos, 1):
