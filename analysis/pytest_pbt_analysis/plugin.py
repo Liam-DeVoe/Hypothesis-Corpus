@@ -82,7 +82,7 @@ def pytest_runtest_call(item):
     yield
     execution_time = time.time() - start_time
 
-    timing_file = Path("/app/.hypothesis/execution_time.json")
+    timing_file = Path("/app/execution_time.json")
     timing_file.parent.mkdir(parents=True, exist_ok=True)
     timing_file.write_text(
         json.dumps({"nodeid": item.nodeid, "execution_time": execution_time})

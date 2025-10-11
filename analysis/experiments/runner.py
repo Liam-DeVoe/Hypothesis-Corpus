@@ -66,8 +66,9 @@ def main():
             node_results = {}
 
             try:
-                exp_data = experiment_class.run(node_id, debug=debug)
-                node_results[experiment_name] = exp_data
+                node_results[experiment_name] = experiment_class.run(
+                    node_id, debug=debug
+                )
             except Exception as e:
                 print(f"ERROR: Experiment failed: {e}", flush=True)
                 print(f"Traceback: {traceback.format_exc()}", flush=True)

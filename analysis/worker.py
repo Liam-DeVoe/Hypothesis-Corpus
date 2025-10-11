@@ -191,25 +191,15 @@ class Worker(Process):
                     if node_id == "error":
                         continue
 
-                    # Parse node_id
-                    # TODO this is stupid and wrong
-                    parts = node_id.split("::")
-                    file_path = parts[0]
-                    class_name = parts[1] if len(parts) > 1 else None
-                    node_name = parts[2] if len(parts) > 2 else parts[-1]
-
                     # Add node to database
                     db.execute(
                         """
-                        INSERT OR IGNORE INTO core_node (repo_id, node_id, file_path, class_name, node_name)
-                        VALUES (?, ?, ?, ?, ?)
+                        INSERT OR IGNORE INTO core_node (repo_id, node_id)
+                        VALUES (?, ?)
                         """,
                         (
                             work_item.repo_id,
                             node_id,
-                            file_path,
-                            class_name,
-                            node_name,
                         ),
                     )
                     db.commit()

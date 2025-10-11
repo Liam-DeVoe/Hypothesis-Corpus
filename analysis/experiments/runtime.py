@@ -101,7 +101,7 @@ class RuntimeExperiment(Experiment):
         if obs_dir.exists():
             observability_data = parse_observability_data(obs_dir)
 
-        timing_file = Path("/app/.hypothesis/execution_time.json")
+        timing_file = Path("/app/execution_time.json")
         assert timing_file.exists()
         execution_time = json.loads(timing_file.read_text())["execution_time"]
 

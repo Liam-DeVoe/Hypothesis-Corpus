@@ -8,6 +8,7 @@ import streamlit as st
 # Add parent directory to path so we can import analysis
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from analysis.experiments.utils import filepath_from_node
 from dashboard.utils import get_database, render_sidebar
 
 # Page configuration
@@ -268,9 +269,6 @@ def main():
             SELECT
                 n.id as node_db_id,
                 n.node_id as test_name,
-                n.file_path,
-                n.class_name,
-                n.node_name,
                 s.facet as summary,
                 LENGTH(s.facet) as summary_length,
                 s.created_at
@@ -334,9 +332,8 @@ def main():
 
                     with col2:
                         st.markdown("**Details:**")
-                        st.write(f"File: `{row['file_path']}`")
-                        if row["class_name"]:
-                            st.write(f"Class: `{row['class_name']}`")
+                        file_path = filepath_from_node(row["test_name"])
+                        st.write(f"File: `{file_path}`")
                         st.write(f"Length: {row['summary_length']} chars")
                         if not patterns_for_test.empty:
                             st.write(f"Patterns: {len(patterns_for_test)}")
