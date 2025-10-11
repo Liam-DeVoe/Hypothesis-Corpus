@@ -6,6 +6,7 @@ It receives configuration through a config.json file that should be present in /
 """
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -97,24 +98,41 @@ commit_hash = commit_hash.stdout.strip()
 # we've done our best to install the package and its dependencies. now
 # try collecting tests with pytest
 
-# this deferred import is important: we haven't installed pytest until this point,
-# in POST_INSTALL
+# this deferred import is important: we haven't installed pytest or hypothesis until
+# this point, in POST_INSTALL
 import pytest
+from hypothesis import is_hypothesis_test
 
 
 class CollectionPlugin:
     def __init__(self):
-        self.node_ids = []
+        self.nodeids = []
 
     def pytest_collection_finish(self, session):
-        self.node_ids = [item.nodeid for item in session.items]
+        items = []
+        for item in session.items:
+            # item is likely some custom pytest Item, not a Function item. skip.
+            # happens for:
+            # * https://github.com/DKISTDC/dkist
+            #   * uses https://github.com/asdf-format/asdf (AsdfSchemaItem)
+            # * https://github.com/avengerpenguin/kropotkin
+            #   * uses https://github.com/realpython/pytest-mypy (MypyItem)
+            # * https://github.com/stephen-bunn/groveco_challenge
+            #   * uses https://github.com/tholo/pytest-flake8 (Flake8Item)
+            if not hasattr(item, "obj"):
+                continue
+            if not is_hypothesis_test(item.obj):
+                continue
+            items.append(item)
+        self.nodeids = [item.nodeid for item in items]
 
 
 plugin = CollectionPlugin()
-collection_returncode = pytest.main(["--collect-only", "/app/repo"], plugins=[plugin])
+os.chdir("/app/repo")
+collection_returncode = pytest.main(["--collect-only"], plugins=[plugin])
 output = {
     "requirements": "\n".join(packages),
-    "node_ids": plugin.node_ids,
+    "node_ids": plugin.nodeids,
     "commit_hash": commit_hash,
     "collection_returncode": collection_returncode,
 }

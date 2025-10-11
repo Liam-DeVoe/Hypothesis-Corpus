@@ -85,6 +85,9 @@ def _reasonable_paths(path: Path) -> list[Path]:
     for item in path.iterdir():
         if item.name in EXCLUDE_DIRS:
             continue
+        # bad/silly symlinks can cause infinite loops. skip them
+        if item.is_symlink():
+            continue
         if item.is_dir() and _is_vendored_directory(item.name):
             continue
 

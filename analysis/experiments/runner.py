@@ -5,9 +5,9 @@ import traceback
 from pathlib import Path
 
 try:
-    from .utils import filepath_from_node, pip_install
+    from .utils import pip_install
 except ImportError:
-    from utils import filepath_from_node, pip_install
+    from utils import pip_install
 
 
 def main():
