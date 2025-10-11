@@ -7,7 +7,7 @@ from typing import Any
 
 def filepath_from_node(nodeid: str) -> Path:
     assert ".py" in nodeid
-    return Path("/app/repo") / nodeid.split("::")[0]
+    return Path(nodeid.split("::")[0])
 
 
 # require a timeout so we don't forget to specify one and leave a trivial command

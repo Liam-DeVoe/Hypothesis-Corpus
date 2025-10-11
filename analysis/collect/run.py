@@ -30,16 +30,16 @@ def process_minhashes(db: Database):
         except Reject as e:
             print(f"rejected: {e}")
             db.execute(
-                "UPDATE core_repository SET status = ? WHERE full_name = ?",
-                ("invalid", repo_name),
+                "UPDATE core_repository SET status = ?, status_reason = ? WHERE full_name = ?",
+                ("invalid", str(e), repo_name),
             )
             db.commit()
         except Exception as e:
             # I've seen this happen for repos that were deleted
             print(f"error: {traceback.format_exception(e)}")
             db.execute(
-                "UPDATE core_repository SET status = ? WHERE full_name = ?",
-                ("invalid", repo_name),
+                "UPDATE core_repository SET status = ?, status_reason = ? WHERE full_name = ?",
+                ("invalid", "minhash_error", repo_name),
             )
             db.commit()
 

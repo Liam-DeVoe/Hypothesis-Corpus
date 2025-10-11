@@ -55,6 +55,7 @@ class Database:
                 stargazers_count INTEGER NOT NULL,
                 is_fork BOOLEAN NOT NULL,
                 status TEXT,  -- NULL (not processed), 'valid' (installed successfully), 'invalid' (installation failed)
+                status_reason TEXT,
                 requirements TEXT,
                 node_ids TEXT,
                 commit_hash TEXT,  -- Git commit hash at time of install_repos.py

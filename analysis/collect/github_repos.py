@@ -105,38 +105,44 @@ def repos_from_api():
 
 
 def filter_repos(db):
-    repos = db.fetchall(
-        "SELECT full_name, size_bytes, stargazers_count, is_fork FROM core_repository"
+    too_large_repos = db.fetchall(
+        f"SELECT full_name, size_bytes FROM core_repository WHERE size_bytes > {limit_gb * 1_000_000}"
     )
-    repos_to_reject = []
+    fork_repos = db.fetchall(
+        f"SELECT full_name, stargazers_count FROM core_repository WHERE is_fork = 1 AND stargazers_count < {limit_forked_stars}"
+    )
 
-    for repo in repos:
+    for repo in too_large_repos:
         size_gb = repo["size_bytes"] / 1_000_000
+        print(f"  Rejected {repo['full_name']}: too large ({size_gb:.2f}gb)")
 
-        if size_gb > limit_gb:
-            print(f"  Rejected {repo['full_name']}: too large ({size_gb:.2f}gb)")
-            repos_to_reject.append(repo["full_name"])
-            continue
-
-        if repo["is_fork"] and repo["stargazers_count"] < limit_forked_stars:
-            print(
-                f"  Rejected {repo['full_name']}: fork with {repo['stargazers_count']} < {limit_forked_stars} stars"
-            )
-            repos_to_reject.append(repo["full_name"])
-            continue
-
-    for full_name in repos_to_reject:
-        db.execute(
-            "UPDATE core_repository SET status = ? WHERE full_name = ?",
-            ("invalid", full_name),
+    for repo in fork_repos:
+        print(
+            f"  Rejected {repo['full_name']}: fork with {repo['stargazers_count']} < {limit_forked_stars} stars"
         )
+
+    db.execute(
+        f"""
+        UPDATE core_repository
+        SET status = 'invalid', status_reason = 'too_large'
+        WHERE size_bytes > {limit_gb * 1_000_000}
+        """
+    )
+
+    db.execute(
+        f"""
+        UPDATE core_repository
+        SET status = 'invalid', status_reason = 'fork'
+        WHERE is_fork = 1 AND stargazers_count < {limit_forked_stars}
+        """
+    )
     db.commit()
 
     valid_count = db.fetchone(
         "SELECT COUNT(*) FROM core_repository WHERE status IS NULL OR status = 'valid'"
     )[0]
     print(
-        f"Rejected {len(repos_to_reject)} repositories, {valid_count} valid/unprocessed remaining"
+        f"Rejected {len(too_large_repos) + len(fork_repos)} repositories ({len(too_large_repos)} too large, {len(fork_repos)} forks), {valid_count} valid/unprocessed remaining"
     )
 
 

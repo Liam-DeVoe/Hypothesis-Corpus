@@ -54,7 +54,7 @@ class RuntimeExperiment(Experiment):
         from utils import parse_observability_data
 
         # Clear any previous observability data
-        obs_dir = Path("/app/.hypothesis/observed")
+        obs_dir = Path("/app/repo/.hypothesis/observed")
         if obs_dir.exists():
             shutil.rmtree(obs_dir)
 
@@ -75,7 +75,7 @@ class RuntimeExperiment(Experiment):
 
         result = subprocess_run(
             pytest_args,
-            cwd="/app",
+            cwd="/app/repo",
             timeout=timeout,
         )
 

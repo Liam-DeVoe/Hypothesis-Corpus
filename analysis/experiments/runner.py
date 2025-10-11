@@ -61,13 +61,9 @@ def main():
         total_tests = len(node_ids)
 
         for i, node_id in enumerate(node_ids, 1):
-            file_path = filepath_from_node(node_id)
-
             print(f"\nProcessing test {i}/{total_tests}: {node_id}", flush=True)
-            assert file_path.exists(), f"file not found: {file_path}"
-            node_results = {"file_path": str(file_path)}
-
             print(f"Running {experiment_name} experiment...", flush=True)
+            node_results = {}
 
             try:
                 exp_data = experiment_class.run(node_id, debug=debug)

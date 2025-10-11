@@ -153,7 +153,7 @@ def compute_minhashes(repo_name: str) -> list[MinHash]:
         )
 
         if not _valid_repo(clone_path):
-            raise Reject("not a valid repo")
+            raise Reject("invalid_repo")
 
         python_files = []
         reasonable_paths = [

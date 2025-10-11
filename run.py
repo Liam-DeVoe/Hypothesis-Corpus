@@ -182,12 +182,12 @@ def install(db_path: str, limit: int, debug: bool):
     successful = 0
     failed = 0
 
-    def _reject(repo_name: str):
+    def _reject(repo_name: str, *, reason):
         nonlocal failed
         failed += 1
         db.execute(
-            "UPDATE core_repository SET status = ? WHERE full_name = ?",
-            ("invalid", repo_name),
+            "UPDATE core_repository SET status = ?, status_reason = ? WHERE full_name = ?",
+            ("invalid", reason, repo_name),
         )
         db.commit()
 
@@ -202,12 +202,12 @@ def install(db_path: str, limit: int, debug: bool):
             result = install_repository(repo_name, debug=debug)
         except Exception as e:
             console.print(f"  ✗ Failed: [red]{traceback.format_exception(e)}[/red]\n")
-            _reject(repo_name)
+            _reject(repo_name, reason="install_error")
             continue
 
         if not is_clean_install(result):
             console.print(f"  ✗ Failed: [red]not a clean install ({result})[/red]\n")
-            _reject(repo_name)
+            _reject(repo_name, reason="invalid_install")
             continue
 
         db.execute(
