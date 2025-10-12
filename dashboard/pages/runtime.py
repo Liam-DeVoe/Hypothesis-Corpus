@@ -257,13 +257,12 @@ def main():
                     for lines in coverage.values():
                         cumulative_coverage.update(lines)
                     cumulative_lines.append(len(cumulative_coverage))
-                group = group.copy()
                 group["cumulative_lines"] = cumulative_lines
                 return group
 
-            cumulative_df = testcase_data.groupby("node_id", group_keys=False).apply(
-                calc_cumulative, include_groups=True
-            )
+            cumulative_df = testcase_data.groupby("node_id", group_keys=False)[
+                ["node_id", "testcase_number", "coverage_parsed"]
+            ].apply(calc_cumulative, include_groups=False)
 
             # Create cumulative coverage chart
             fig = go.Figure()
