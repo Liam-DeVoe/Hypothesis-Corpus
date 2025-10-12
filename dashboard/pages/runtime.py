@@ -261,7 +261,7 @@ def main():
                 return group
 
             cumulative_df = testcase_data.groupby("node_id", group_keys=False).apply(
-                calc_cumulative
+                calc_cumulative, include_groups=False
             )
 
             # Create cumulative coverage chart
