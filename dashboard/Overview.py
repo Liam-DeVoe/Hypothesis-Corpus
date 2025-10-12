@@ -9,6 +9,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dashboard.utils import get_database, render_sidebar
 
+st.session_state.db_path = "analysis/data.db"  # default
+if "--db-path" in sys.argv:
+    idx = sys.argv.index("--db-path")
+    if idx + 1 < len(sys.argv):
+        st.session_state.db_path = sys.argv[idx + 1]
+
 # Page configuration
 st.set_page_config(
     page_title="PBT Corpus Analysis Dashboard",
@@ -49,14 +55,16 @@ def load_data():
         """
     )
 
-    # Node stats
+    # Node stats (based on runtime experiment results)
     node_stats = db.fetchone(
         """
         SELECT
             COUNT(*) as total,
-            SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful,
-            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
-        FROM core_node
+            SUM(CASE WHEN rs.id IS NOT NULL THEN 1 ELSE 0 END) as analyzed,
+            SUM(CASE WHEN rs.passed = 1 THEN 1 ELSE 0 END) as passed,
+            SUM(CASE WHEN rs.passed = 0 THEN 1 ELSE 0 END) as failed
+        FROM core_node cn
+        LEFT JOIN runtime_summary rs ON cn.id = rs.node_id
         """
     )
 
@@ -79,22 +87,22 @@ def render_overview_metrics(stats: dict[str, Any]):
         )
 
     with col2:
+        analyzed = stats["core_node"]["analyzed"] or 0
+        total = stats["core_node"]["total"] or 0
         st.metric(
             "Nodes Analyzed",
-            stats["core_node"]["total"],
-            f"{stats['core_node']['successful']} successful",
+            analyzed,
+            f"{total} total nodes",
         )
 
     with col3:
-        success_rate = (
-            stats["core_node"]["successful"] / stats["core_node"]["total"] * 100
-            if stats["core_node"]["total"] > 0
-            else 0
-        )
+        passed = stats["core_node"]["passed"] or 0
+        failed = stats["core_node"]["failed"] or 0
+        pass_rate = (passed / analyzed * 100) if analyzed > 0 else 0
         st.metric(
-            "Success Rate",
-            f"{success_rate:.1f}%",
-            f"{stats['core_node']['failed']} failed",
+            "Pass Rate",
+            f"{pass_rate:.1f}%",
+            f"{failed} failed",
         )
 
 

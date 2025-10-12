@@ -1,6 +1,6 @@
+import json
 import sys
 from pathlib import Path
-import json
 
 import pandas as pd
 import plotly.express as px
@@ -245,7 +245,9 @@ def main():
         )
 
         if not testcase_data.empty:
-            testcase_data["coverage_parsed"] = testcase_data["coverage"].apply(json.loads)
+            testcase_data["coverage_parsed"] = testcase_data["coverage"].apply(
+                json.loads
+            )
 
             def calc_cumulative(group):
                 cumulative_coverage = set()
@@ -258,7 +260,9 @@ def main():
                 group["cumulative_lines"] = cumulative_lines
                 return group
 
-            cumulative_df = testcase_data.groupby("node_id", group_keys=False).apply(calc_cumulative)
+            cumulative_df = testcase_data.groupby("node_id", group_keys=False).apply(
+                calc_cumulative
+            )
 
             # Create cumulative coverage chart
             fig = go.Figure()
@@ -283,7 +287,7 @@ def main():
 
             fig.update_layout(
                 title=f"{selected_repo}",
-                xaxis_title="Input count",
+                xaxis_title="Test case count",
                 yaxis_title="Line coverage",
                 hovermode="x unified",
                 height=600,
@@ -300,7 +304,7 @@ def main():
             SELECT
                 t.node_id,
                 rs.line_execution_counts,
-                rs.examples_count
+                rs.count_test_cases
             FROM runtime_summary rs
             JOIN core_node t ON rs.node_id = t.id
             JOIN core_repository r ON t.repo_id = r.id
@@ -333,16 +337,8 @@ def main():
                 if not all_counts:
                     continue
 
-                # Get total examples for this node (use max line execution count as proxy if examples_count not available)
-                total_examples = (
-                    row["examples_count"]
-                    if pd.notna(row["examples_count"])
-                    else max(all_counts)
-                )
-
-                # Calculate execution frequencies as percentages
-                frequencies = [count / total_examples * 100 for count in all_counts]
-
+                total_test_cases = row["count_test_cases"]
+                frequencies = [count / total_test_cases * 100 for count in all_counts]
                 test_name = node_id.lstrip(prefix)
 
                 fig.add_trace(

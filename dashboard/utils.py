@@ -8,12 +8,11 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from analysis.database import Database
+from analysis.database import get_database as _get_database
 
 
-@st.cache_resource
 def get_database():
-    return Database(db_path="analysis/data.db")
+    return _get_database(st.session_state["db_path"])
 
 
 def render_sidebar():
@@ -108,7 +107,7 @@ def execution_frequency_histogram():
         """
         SELECT
             rs.line_execution_counts,
-            rs.examples_count
+            rs.count_test_cases
         FROM runtime_summary rs
         WHERE rs.line_execution_counts IS NOT NULL
         """,
@@ -135,15 +134,9 @@ def execution_frequency_histogram():
         if not all_counts:
             continue
 
-        # Get total examples for this node
-        total_examples = (
-            row["examples_count"]
-            if pd.notna(row["examples_count"])
-            else max(all_counts)
-        )
-
+        total_test_cases = row["count_test_cases"]
         # Calculate execution frequencies as percentages
-        frequencies = [count / total_examples * 100 for count in all_counts]
+        frequencies = [count / total_test_cases * 100 for count in all_counts]
         all_frequencies.extend(frequencies)
 
     if not all_frequencies:

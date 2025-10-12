@@ -4,6 +4,17 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Global cache for database instances (singleton per db_path)
+_database_cache = {}
+
+
+def get_database(db_path: str) -> "Database":
+    """Get database instance from cache, creating if needed."""
+    resolved_path = str(Path(db_path).resolve())
+    if resolved_path not in _database_cache:
+        _database_cache[resolved_path] = Database(db_path=db_path)
+    return _database_cache[resolved_path]
+
 
 class Database:
     """SQLite database for storing PBT analysis results.
@@ -12,23 +23,7 @@ class Database:
     Consumer code should use db.execute() methods rather than creating their own connections.
     """
 
-    # Class-level cache for singleton instances per db_path
-    _instances = {}
-
-    def __new__(cls, *, db_path: str):
-        """Return singleton instance for each db_path."""
-        db_path = str(Path(db_path).resolve())
-        if db_path not in cls._instances:
-            instance = super().__new__(cls)
-            cls._instances[db_path] = instance
-        return cls._instances[db_path]
-
     def __init__(self, *, db_path: str):
-        # Only initialize once per instance
-        db_path = str(Path(db_path).resolve())
-        if hasattr(self, "_initialized"):
-            return
-
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -41,8 +36,6 @@ class Database:
         self._init_core_schema()
         self._init_experiment_schemas()
         self._init_task_schemas()
-
-        self._initialized = True
 
     def _init_core_schema(self):
         self._conn.executescript(
