@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+import json
 
 import pandas as pd
 import plotly.express as px
@@ -225,13 +226,13 @@ def main():
         # Cumulative coverage over test cases
         st.subheader("Cumulative coverage")
 
-        # Get cumulative coverage data
-        cumulative_data = pd.read_sql_query(
+        # Get test case coverage data
+        testcase_data = pd.read_sql_query(
             """
             SELECT
                 t.node_id,
                 tc.testcase_number,
-                tc.cumulative_lines,
+                tc.coverage,
                 r.full_name as repository
             FROM runtime_testcase tc
             JOIN core_node t ON tc.node_id = t.id
@@ -243,16 +244,30 @@ def main():
             params=[selected_repo],
         )
 
-        if not cumulative_data.empty:
+        if not testcase_data.empty:
+            testcase_data["coverage_parsed"] = testcase_data["coverage"].apply(json.loads)
+
+            def calc_cumulative(group):
+                cumulative_coverage = set()
+                cumulative_lines = []
+                for coverage in group["coverage_parsed"]:
+                    # Add all lines from this testcase to cumulative set
+                    for lines in coverage.values():
+                        cumulative_coverage.update(lines)
+                    cumulative_lines.append(len(cumulative_coverage))
+                group["cumulative_lines"] = cumulative_lines
+                return group
+
+            cumulative_df = testcase_data.groupby("node_id", group_keys=False).apply(calc_cumulative)
+
             # Create cumulative coverage chart
             fig = go.Figure()
-
             # Get all unique tests for this repository
-            node_ids = cumulative_data["node_id"].unique()
+            node_ids = cumulative_df["node_id"].unique()
             prefix = common_prefix(node_ids.tolist())
 
             for node_id in node_ids:
-                test_data = cumulative_data[cumulative_data["node_id"] == node_id]
+                test_data = cumulative_df[cumulative_df["node_id"] == node_id]
 
                 test_name = node_id.lstrip(prefix)
 
@@ -297,7 +312,6 @@ def main():
         )
 
         if not line_execution_data.empty:
-            import json
 
             fig = go.Figure()
 

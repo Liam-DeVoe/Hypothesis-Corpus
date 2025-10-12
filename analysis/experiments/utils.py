@@ -1,4 +1,3 @@
-import json
 import subprocess
 import sys
 from pathlib import Path
@@ -58,35 +57,3 @@ def pip_install(args: list[str]):
         + args,
         timeout=60 * 15,
     )
-
-
-def parse_observability_data(obs_dir: Path) -> dict[str, Any]:
-    """Parse Hypothesis observability JSONL files."""
-    data = {"coverage": {}, "test_cases": []}
-
-    for jsonl_file in list(obs_dir.glob("**/*.jsonl")):
-        with open(jsonl_file) as f:
-            for line in f:
-                if not line.strip():
-                    continue
-
-                entry = json.loads(line)
-                if entry["type"] != "test_case":
-                    continue
-
-                data["test_cases"].append(entry)
-
-                # Aggregate coverage across all test cases
-                if entry["coverage"] is None:
-                    entry["coverage"] = {}
-                coverage = entry["coverage"]
-                for file_path, lines in coverage.items():
-                    if file_path not in data["coverage"]:
-                        data["coverage"][file_path] = set()
-                    data["coverage"][file_path].update(lines)
-
-    # Convert sets to lists for JSON serialization
-    for file_path in data["coverage"]:
-        data["coverage"][file_path] = sorted(data["coverage"][file_path])
-
-    return data

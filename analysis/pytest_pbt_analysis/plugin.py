@@ -4,14 +4,38 @@ from pathlib import Path
 import pytest
 from hypothesis import HealthCheck, Phase, settings
 from hypothesis.internal.detection import is_hypothesis_test
+from hypothesis.internal.observability import Observation, add_observability_callback
+from hypothesis.strategies._internal.utils import to_jsonable
 
 _collection_error = None
+_observations = []
+
+
+def callback(observation: Observation):
+    if observation.type != "test_case":
+        return
+    if observation.how_generated == "minimal failing example":
+        # if a test case fails, hypothesis replays it, broadcasting observations
+        # for both. We want to log the initial test case, but not the replay.
+        return
+
+    metadata = observation.metadata
+    observation = {
+        "features": observation.features,
+        "coverage": observation.coverage,
+        "timing": observation.timing,
+        "metadata": {
+            "predicates": metadata.predicates,
+            "data_status": metadata.data_status,
+        },
+    }
+    _observations.append(observation)
 
 
 def pytest_collectreport(report):
     global _collection_error
     if report.failed:
-        _collection_error = str(report.longrepr)
+        _collection_error = report.longreprtext
 
 
 def pytest_addoption(parser):
@@ -74,6 +98,8 @@ def pytest_collection_modifyitems(session, config, items):
             phases=[Phase.generate],
         )
 
+    add_observability_callback(callback)
+
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
@@ -89,6 +115,7 @@ def pytest_runtest_makereport(item, call):
         "execution_time": report.duration,
         "passed": passed,
         "error_message": None if passed else report.longreprtext,
+        "observations": to_jsonable(_observations, avoid_realization=False),
     }
     results_file = Path("/app/test_results.json")
     results_file.parent.mkdir(parents=True, exist_ok=True)

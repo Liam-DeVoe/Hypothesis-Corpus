@@ -1,5 +1,4 @@
 import json
-import shutil
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -18,6 +17,7 @@ except ImportError:
 
 class RuntimeExperiment(Experiment):
     name = "runtime"
+
     max_examples = 500
 
     @staticmethod
@@ -42,7 +42,6 @@ class RuntimeExperiment(Experiment):
                 node_id INTEGER NOT NULL,
                 testcase_number INTEGER NOT NULL,  -- Order of test case execution
                 coverage TEXT,  -- JSON mapping: {"file_path": [line_numbers], ...}
-                cumulative_lines INTEGER,  -- Count of unique lines seen so far across all files
                 FOREIGN KEY (node_id) REFERENCES core_node(id)
             );
 
@@ -52,13 +51,6 @@ class RuntimeExperiment(Experiment):
 
     @staticmethod
     def run(node_id: str, timeout: int = 300, *, debug: bool) -> dict[str, Any]:
-        from utils import parse_observability_data
-
-        # Clear any previous observability data
-        obs_dir = Path("/app/repo/.hypothesis/observed")
-        if obs_dir.exists():
-            shutil.rmtree(obs_dir)
-
         pytest_args = [
             "python",
             "-m",
@@ -91,36 +83,35 @@ class RuntimeExperiment(Experiment):
         assert results_file.exists()
         test_results = json.loads(results_file.read_text())
 
-        observability_data = {}
-        if obs_dir.exists():
-            observability_data = parse_observability_data(obs_dir)
+        observations = test_results["observations"]
 
         return {
             "test_passed": test_results["passed"],
             "execution_time": test_results["execution_time"],
             "error_message": test_results["error_message"],
-            "coverage": observability_data.get("coverage", {}),
-            "test_cases": observability_data.get("test_cases", []),
+            "observations": observations,
         }
 
     @staticmethod
     def store_to_database(db: Any, repo_id: int, node_id: int, data: dict[str, Any]):
-        """Store coverage results to database."""
-        import json
+        observations = data["observations"]
 
-        coverage = data.get("coverage", {})
-        test_cases = data.get("test_cases", [])
-
-        # Calculate line execution counts from test cases
+        # Calculate aggregate coverage and line execution counts from test cases
+        aggregate_coverage = {}
         line_counts_per_file = defaultdict(lambda: defaultdict(int))
-        for test_case in test_cases:
-            for file_path, lines in test_case["coverage"].items():
+
+        for observation in observations:
+            for file_path, lines in observation["coverage"].items():
+                if file_path not in aggregate_coverage:
+                    aggregate_coverage[file_path] = set()
+                aggregate_coverage[file_path].update(lines)
+
                 for line in lines:
                     line_counts_per_file[file_path][str(line)] += 1
 
-        # Convert coverage to serializable format (sets to lists)
+        # Convert aggregate coverage sets to lists for JSON serialization
         coverage_json = {
-            file_path: list(lines) for file_path, lines in coverage.items()
+            file_path: sorted(lines) for file_path, lines in aggregate_coverage.items()
         }
 
         # Convert line_counts_per_file to nested dict
@@ -129,10 +120,6 @@ class RuntimeExperiment(Experiment):
             for file_path, counts in line_counts_per_file.items()
         }
 
-        # Calculate aggregate stats
-        total_lines = sum(len(lines) for lines in coverage.values())
-
-        # Store runtime summary with execution metadata and coverage
         db.execute(
             """
             INSERT INTO runtime_summary (
@@ -144,52 +131,36 @@ class RuntimeExperiment(Experiment):
             """,
             (
                 node_id,
-                data.get("test_passed", False),
-                data.get("execution_time"),
-                data.get("error_message"),
-                len(test_cases),
+                data["test_passed"],
+                data["execution_time"],
+                data["error_message"],
+                len(observations),
                 json.dumps(coverage_json),
                 json.dumps(line_execution_counts_json),
-                total_lines,
+                sum(len(lines) for lines in aggregate_coverage.values()),
             ),
         )
 
-        # Store per-test-case coverage
-        if test_cases:
-            cumulative_coverage = {}
+        for case_num, observation in enumerate(observations):
+            # Convert test case coverage to JSON (sets to lists)
+            testcase_coverage_json = {
+                file_path: list(lines)
+                for file_path, lines in observation["coverage"].items()
+            }
 
-            for case_num, test_case in enumerate(test_cases):
-                # Update cumulative coverage with lines from this test case
-                for file_path, lines in test_case["coverage"].items():
-                    if file_path not in cumulative_coverage:
-                        cumulative_coverage[file_path] = set()
-                    cumulative_coverage[file_path].update(lines)
-
-                # Convert test case coverage to JSON (sets to lists)
-                testcase_coverage_json = {
-                    file_path: list(lines)
-                    for file_path, lines in test_case["coverage"].items()
-                }
-
-                # Calculate total cumulative lines across all files
-                cumulative_lines = sum(
-                    len(lines) for lines in cumulative_coverage.values()
+            db.execute(
+                """
+                INSERT INTO runtime_testcase (
+                    node_id, testcase_number, coverage
                 )
-
-                db.execute(
-                    """
-                    INSERT INTO runtime_testcase (
-                        node_id, testcase_number, coverage, cumulative_lines
-                    )
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (
-                        node_id,
-                        case_num,
-                        json.dumps(testcase_coverage_json),
-                        cumulative_lines,
-                    ),
-                )
+                VALUES (?, ?, ?)
+                """,
+                (
+                    node_id,
+                    case_num,
+                    json.dumps(testcase_coverage_json),
+                ),
+            )
 
         db.commit()
 

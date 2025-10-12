@@ -140,7 +140,6 @@ class TestRunner:
             secrets = json.load(f)
 
         environment = {
-            "HYPOTHESIS_EXPERIMENTAL_OBSERVABILITY": "1",
             "CLAUDE_CODE_OAUTH_TOKEN": secrets["claude_code_oauth_token"],
         }
 
