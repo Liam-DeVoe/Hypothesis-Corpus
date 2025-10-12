@@ -76,8 +76,6 @@ class Database:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 repo_id INTEGER NOT NULL,
                 node_id TEXT NOT NULL,
-                status TEXT,
-                error_message TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (repo_id) REFERENCES core_repository(id),
                 UNIQUE(repo_id, node_id)
@@ -86,7 +84,6 @@ class Database:
             -- Create indexes for better query performance
             CREATE INDEX IF NOT EXISTS idx_minhashes_repo ON core_minhashes(repo_id);
             CREATE INDEX IF NOT EXISTS idx_nodes_repo ON core_node(repo_id);
-            CREATE INDEX IF NOT EXISTS idx_nodes_status ON core_node(status);
             CREATE INDEX IF NOT EXISTS idx_repository_status ON core_repository(status);
         """
         )

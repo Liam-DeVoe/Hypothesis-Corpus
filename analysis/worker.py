@@ -218,11 +218,6 @@ class Worker(Process):
                             f"[w{self.worker_id}][{work_item.repo_name}] Node {node_id} failed: {error_msg}"
                         )
 
-                        db.execute(
-                            "UPDATE core_node SET status = ?, error_message = ? WHERE id = ?",
-                            ("failed", error_msg, node_db_id),
-                        )
-                        db.commit()
                         nodes_failed += 1
                         continue
 

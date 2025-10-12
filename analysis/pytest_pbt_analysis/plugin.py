@@ -1,5 +1,4 @@
 import json
-import time
 from pathlib import Path
 
 import pytest
@@ -77,13 +76,20 @@ def pytest_collection_modifyitems(session, config, items):
 
 
 @pytest.hookimpl(hookwrapper=True)
-def pytest_runtest_call(item):
-    start_time = time.time()
-    yield
-    execution_time = time.time() - start_time
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
 
-    timing_file = Path("/app/execution_time.json")
-    timing_file.parent.mkdir(parents=True, exist_ok=True)
-    timing_file.write_text(
-        json.dumps({"nodeid": item.nodeid, "execution_time": execution_time})
-    )
+    if call.when != "call":
+        return
+
+    passed = report.outcome == "passed"
+    results = {
+        "nodeid": item.nodeid,
+        "execution_time": report.duration,
+        "passed": passed,
+        "error_message": None if passed else report.longreprtext,
+    }
+    results_file = Path("/app/test_results.json")
+    results_file.parent.mkdir(parents=True, exist_ok=True)
+    results_file.write_text(json.dumps(results))

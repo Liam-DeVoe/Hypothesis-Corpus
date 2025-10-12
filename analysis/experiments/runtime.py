@@ -28,7 +28,8 @@ class RuntimeExperiment(Experiment):
                 node_id INTEGER NOT NULL,
                 passed BOOLEAN,
                 execution_time REAL,  -- seconds
-                examples_count INTEGER,
+                error_message TEXT,  -- Error message if test failed
+                count_test_cases INTEGER,
                 coverage TEXT,  -- JSON mapping: {"file_path": [line_numbers], ...}
                 line_execution_counts TEXT,  -- JSON mapping: {"file_path": {"line_num": execution_count, ...}, ...}
                 total_lines_covered INTEGER,  -- Sum of unique lines across all files
@@ -78,39 +79,26 @@ class RuntimeExperiment(Experiment):
             cwd="/app/repo",
             timeout=timeout,
         )
+        # 0 = passed
+        # 1 = test failed
+        # 3 = internal error
+        #
+        # tests either passing or failing is fine, but I want to know about any
+        # internal errors
+        assert result.returncode in {0, 1}
 
-        if debug or result.returncode != 0:
-            if result.stdout:
-                print("[RuntimeExperiment] Pytest stdout:", flush=True)
-                print(result.stdout, flush=True)
-            if result.stderr:
-                print("[RuntimeExperiment] Pytest stderr:", flush=True)
-                print(result.stderr, flush=True)
+        results_file = Path("/app/test_results.json")
+        assert results_file.exists()
+        test_results = json.loads(results_file.read_text())
 
-        assert result.returncode == 0
-
-        test_result = {
-            "exit_code": result.returncode,
-            "stdout": result.stdout[-5000:] if result.stdout else "",
-            "stderr": result.stderr[-5000:] if result.stderr else "",
-            "passed": result.returncode == 0,
-        }
-
-        # Parse observability data if it exists
         observability_data = {}
         if obs_dir.exists():
             observability_data = parse_observability_data(obs_dir)
 
-        timing_file = Path("/app/execution_time.json")
-        assert timing_file.exists()
-        execution_time = json.loads(timing_file.read_text())["execution_time"]
-
         return {
-            "test_passed": test_result.get("passed", False),
-            "exit_code": test_result.get("exit_code", -1),
-            "stdout": test_result.get("stdout", ""),
-            "stderr": test_result.get("stderr", ""),
-            "execution_time": execution_time,
+            "test_passed": test_results["passed"],
+            "execution_time": test_results["execution_time"],
+            "error_message": test_results["error_message"],
             "coverage": observability_data.get("coverage", {}),
             "test_cases": observability_data.get("test_cases", []),
         }
@@ -148,17 +136,18 @@ class RuntimeExperiment(Experiment):
         db.execute(
             """
             INSERT INTO runtime_summary (
-                node_id, passed, execution_time,
-                examples_count, coverage, line_execution_counts,
+                node_id, passed, execution_time, error_message,
+                count_test_cases, coverage, line_execution_counts,
                 total_lines_covered
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 node_id,
                 data.get("test_passed", False),
                 data.get("execution_time"),
-                None,
+                data.get("error_message"),
+                len(test_cases),
                 json.dumps(coverage_json),
                 json.dumps(line_execution_counts_json),
                 total_lines,
