@@ -212,19 +212,22 @@ def install(db_path: str, limit: int, debug: bool):
             continue
 
         db.execute(
-            "UPDATE core_repository SET status = ?, requirements = ?, node_ids = ?, commit_hash = ? WHERE full_name = ?",
+            "UPDATE core_repository SET status = ?, requirements = ?, node_ids = ?, other_node_ids = ?, commit_hash = ? WHERE full_name = ?",
             (
                 "valid",
                 result["requirements"],
                 json.dumps(result["node_ids"]),
+                json.dumps(result["other_node_ids"]),
                 result.get("commit_hash"),
                 repo_name,
             ),
         )
         db.commit()
 
+        count = len(result['node_ids'])
+        other_count = len(result['other_node_ids'])
         console.print(
-            f"  ✓ Successfully processed ([green]{len(result['node_ids'])} nodes[/green], commit: [cyan]{result.get('commit_hash', 'unknown')[:7]}[/cyan])\n"
+            f"  ✓ Successfully processed ([green]{count} hypothesis, {other_count} other nodes[/green], commit: [cyan]{result.get('commit_hash', 'unknown')[:7]}[/cyan])\n"
         )
         successful += 1
 

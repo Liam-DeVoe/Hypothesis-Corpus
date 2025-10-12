@@ -107,9 +107,11 @@ from hypothesis import is_hypothesis_test
 class CollectionPlugin:
     def __init__(self):
         self.nodeids = []
+        self.other_nodeids = []
 
     def pytest_collection_finish(self, session):
         items = []
+        other_items = []
         for item in session.items:
             # item is likely some custom pytest Item, not a Function item. skip.
             # happens for:
@@ -121,10 +123,13 @@ class CollectionPlugin:
             #   * uses https://github.com/tholo/pytest-flake8 (Flake8Item)
             if not hasattr(item, "obj"):
                 continue
-            if not is_hypothesis_test(item.obj):
-                continue
-            items.append(item)
+
+            if is_hypothesis_test(item.obj):
+                items.append(item)
+            else:
+                other_items.append(item)
         self.nodeids = [item.nodeid for item in items]
+        self.other_nodeids = [item.nodeid for item in other_items]
 
 
 plugin = CollectionPlugin()
@@ -133,6 +138,7 @@ collection_returncode = pytest.main(["--collect-only"], plugins=[plugin])
 output = {
     "requirements": "\n".join(packages),
     "node_ids": plugin.nodeids,
+    "other_node_ids": plugin.other_nodeids,
     "commit_hash": commit_hash,
     "collection_returncode": collection_returncode,
 }

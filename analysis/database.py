@@ -50,7 +50,8 @@ class Database:
                 status TEXT,  -- NULL (not processed), 'valid' (installed successfully), 'invalid' (installation failed)
                 status_reason TEXT,
                 requirements TEXT,
-                node_ids TEXT,
+                node_ids TEXT,  -- JSON list of Hypothesis test node IDs
+                other_node_ids TEXT,  -- JSON list of non-Hypothesis test node IDs
                 commit_hash TEXT,  -- Git commit hash at time of install_repos.py
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
