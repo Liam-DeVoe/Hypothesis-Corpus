@@ -231,9 +231,15 @@ def _is_subset(
     *,
     jaccard_threshold: float,
     overlap_threshold: float,
-) -> bool:
+) -> tuple[bool, float | None]:
+    # we need this many files to match in order to return True.
+    # So for example if we had 10 hashes in hashes1, and overlap_threshold=0.3 -
+    # meaning that 30% of the files must match - then threshold_count = 3, and
+    # we'll stop as soon as it's not possible to get to that threshold.
+    threshold_count = overlap_threshold * len(hashes1)
     count = 0
-    for hash1 in hashes1:
+
+    for i, hash1 in enumerate(hashes1):
         for hash2 in hashes2:
             similarity = hash1.jaccard(hash2)
             if similarity >= jaccard_threshold:
@@ -241,8 +247,15 @@ def _is_subset(
                 # maximum one match per file
                 break
 
+        # check if it's still possible to reach the required threshold, assuming
+        # all of the remaining files are duplicates.
+        remaining = len(hashes1) - (i + 1)
+        if count + remaining < threshold_count:
+            return (False, None)
+
     overlap_percentage = count / len(hashes1)
-    return overlap_percentage >= overlap_threshold
+    is_subset = overlap_percentage >= overlap_threshold
+    return (is_subset, overlap_percentage)
 
 
 def filter_duplicates(db):
@@ -279,7 +292,7 @@ def filter_duplicates(db):
             if not hashes2:
                 continue
 
-            overlap1 = _is_subset(
+            is_subset1, overlap1 = _is_subset(
                 hashes1,
                 hashes2,
                 jaccard_threshold=jaccard_threshold,
@@ -287,15 +300,15 @@ def filter_duplicates(db):
             )
             # we require both to be over the threshold. For efficiency, don't compute
             # the other direction if the first fails
-            if not overlap1:
+            if not is_subset1:
                 continue
-            overlap2 = _is_subset(
+            is_subset2, overlap2 = _is_subset(
                 hashes2,
                 hashes1,
                 jaccard_threshold=jaccard_threshold,
                 overlap_threshold=overlap_threshold,
             )
-            if overlap2:
+            if is_subset2:
                 print(
                     f"  Duplicate: {repo1_name} ↔ {repo2_name} ({overlap1:.1%}/{overlap2:.1%})"
                 )
