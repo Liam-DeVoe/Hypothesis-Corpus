@@ -14,6 +14,7 @@ import random
 import re
 import subprocess
 import tempfile
+from multiprocessing import Pool
 from pathlib import Path
 
 from datasketch import MinHash
@@ -258,74 +259,101 @@ def _is_subset(
     return (is_subset, overlap_percentage)
 
 
-def filter_duplicates(db):
-    repos = db.fetchall(
+def _compare_two_repos(args):
+    repo1, repo2, hashes1, hashes2 = args
+
+    is_subset1, overlap1 = _is_subset(
+        hashes1,
+        hashes2,
+        jaccard_threshold=jaccard_threshold,
+        overlap_threshold=overlap_threshold,
+    )
+    if not is_subset1:
+        return (repo1, repo2, False, None, None)
+
+    is_subset2, overlap2 = _is_subset(
+        hashes2,
+        hashes1,
+        jaccard_threshold=jaccard_threshold,
+        overlap_threshold=overlap_threshold,
+    )
+
+    is_duplicate = is_subset2
+    return (repo1, repo2, is_duplicate, overlap1, overlap2)
+
+
+def filter_duplicates(db, *, num_workers):
+    all_repos = db.fetchall(
         "SELECT id, full_name, stargazers_count FROM core_repository WHERE status IS NULL"
     )
-    print(f"Removing duplicates among {len(repos)} repositories...")
+    print(f"Removing duplicates among {len(all_repos)} repositories...")
 
     # note: this loads all minhashes into memory. you might OOM. my minhash size
     # was 3gb, which was manageable.
-    print(f"Loaded minhashes for {len(repos)} repositories...")
+    print(f"Loading minhashes for {len(all_repos)} repositories...")
     all_minhashes = {}
-    for repo in repos:
-        all_minhashes[repo["full_name"]] = load_minhashes(db, repo["full_name"])
-    print(f"Loaded minhashes for {len(repos)} repositories")
+    repos = []
+    for repo in all_repos:
+        repo = dict(repo)
+        hashes = load_minhashes(db, repo["full_name"])
+        # skip repos with zero minhashes
+        if not hashes:
+            continue
+        all_minhashes[repo["full_name"]] = hashes
+        repos.append(repo)
+    print(f"Loaded {len(repos)} repos with minhashes (among {len(repos)} repositories)")
 
     to_remove = set()
-    for i, repo1 in enumerate(repos):
-        print(f"[{i}/{len(repos)}] {repo1['full_name']} ... ", flush=True)
-        if repo1["full_name"] in to_remove:
-            continue
+    with Pool(num_workers) as pool:
+        for i, repo1 in enumerate(repos):
+            print(f"[{i}/{len(repos)}] {repo1['full_name']} ... ", flush=True)
 
-        repo1_name = repo1["full_name"]
-        hashes1 = all_minhashes[repo1_name]
-        if not hashes1:
-            continue
-
-        for repo2 in repos[i + 1 :]:
-            if repo2["full_name"] in to_remove:
+            repo1_name = repo1["full_name"]
+            if repo1_name in to_remove:
                 continue
 
-            repo2_name = repo2["full_name"]
-            hashes2 = all_minhashes[repo2_name]
-            if not hashes2:
-                continue
+            hashes1 = all_minhashes[repo1_name]
 
-            is_subset1, overlap1 = _is_subset(
-                hashes1,
-                hashes2,
-                jaccard_threshold=jaccard_threshold,
-                overlap_threshold=overlap_threshold,
-            )
-            # we require both to be over the threshold. For efficiency, don't compute
-            # the other direction if the first fails
-            if not is_subset1:
-                continue
-            is_subset2, overlap2 = _is_subset(
-                hashes2,
-                hashes1,
-                jaccard_threshold=jaccard_threshold,
-                overlap_threshold=overlap_threshold,
-            )
-            if is_subset2:
-                print(
-                    f"  Duplicate: {repo1_name} ↔ {repo2_name} ({overlap1:.1%}/{overlap2:.1%})"
-                )
-                # Keep the one with more stars, remove the other
-                stars1 = repo1["stargazers_count"]
-                stars2 = repo2["stargazers_count"]
-                if stars1 >= stars2:
-                    to_remove.add(repo2_name)
-                else:
-                    to_remove.add(repo1_name)
-                    break  # This repo is being removed, move to next
+            comparisons = []
+            for repo2 in repos[i + 1 :]:
+                repo2_name = repo2["full_name"]
+                if repo2_name in to_remove:
+                    continue
 
-    print(f"\nMarking {len(to_remove)} duplicate repositories...")
-    for repo_name in to_remove:
-        db.execute(
-            "UPDATE core_repository SET status = ?, status_reason = ? WHERE full_name = ?",
-            ("invalid", "minhash_duplicate", repo_name),
-        )
-    db.commit()
+                hashes2 = all_minhashes[repo2_name]
+                comparisons.append((repo1, repo2, hashes1, hashes2))
+
+            if comparisons:
+                for result in pool.imap_unordered(_compare_two_repos, comparisons):
+                    repo1, repo2, is_duplicate, overlap1, overlap2 = result
+
+                    if not is_duplicate:
+                        continue
+
+                    repo1_name = repo1["full_name"]
+                    repo2_name = repo2["full_name"]
+                    print(
+                        f"  Duplicate: {repo1_name} ↔ {repo2_name} ({overlap1:.1%}/{overlap2:.1%})"
+                    )
+
+                    # Keep the one with more stars, remove the other
+                    if repo1["stargazers_count"] >= repo2["stargazers_count"]:
+                        repo_to_remove = repo2_name
+                        repo_to_keep = repo1_name
+                    else:
+                        repo_to_remove = repo1_name
+                        repo_to_keep = repo2_name
+
+                    to_remove.add(repo_to_remove)
+                    status_reason = f"minhash_duplicate ({repo_to_keep}, {overlap1:.1%}/{overlap2:.1%})"
+                    db.execute(
+                        "UPDATE core_repository SET status = ?, status_reason = ? WHERE full_name = ?",
+                        ("invalid", status_reason, repo_to_remove),
+                    )
+                    db.commit()
+
+                    if repo_to_remove == repo1_name:
+                        break  # This repo is being removed, move to next
+
+    print(f"\nMarked {len(to_remove)} duplicate repositories")
     print(f"Kept {len(repos) - len(to_remove)} unique repositories")
