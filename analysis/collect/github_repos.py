@@ -104,7 +104,7 @@ def repos_from_api():
     return repos
 
 
-def filter_repos(db):
+def filter_github_stats(db):
     too_large_repos = db.fetchall(
         f"SELECT full_name, size_bytes FROM core_repository WHERE size_bytes > {limit_gb * 1_000_000}"
     )

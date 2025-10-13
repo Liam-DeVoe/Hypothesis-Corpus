@@ -224,8 +224,8 @@ def install(db_path: str, limit: int, debug: bool):
         )
         db.commit()
 
-        count = len(result['node_ids'])
-        other_count = len(result['other_node_ids'])
+        count = len(result["node_ids"])
+        other_count = len(result["other_node_ids"])
         console.print(
             f"  ✓ Successfully processed ([green]{count} hypothesis, {other_count} other nodes[/green], commit: [cyan]{result.get('commit_hash', 'unknown')[:7]}[/cyan])\n"
         )
