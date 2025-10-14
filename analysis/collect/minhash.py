@@ -75,6 +75,9 @@ EXCLUDE_DIRS = {
     ".vscode",
 }
 
+# eg a directory like numpy-1.19.5-py3.6-linux-x86_64.egg
+EXCLUDE_DIR_ENDINGS = {".egg"}
+
 
 def _is_vendored_directory(name: str) -> bool:
     """Check if directory name looks like vendored code (e.g., has commit hash)."""
@@ -89,6 +92,9 @@ def _reasonable_paths(path: Path) -> list[Path]:
     for item in path.iterdir():
         if item.name in EXCLUDE_DIRS:
             continue
+        if item.is_dir() and any(item.name.endswith(v) for v in EXCLUDE_DIR_ENDINGS):
+            continue
+
         # bad/silly symlinks can cause infinite loops. skip them
         if item.is_symlink():
             continue
@@ -332,9 +338,6 @@ def filter_duplicates(db, *, num_workers):
 
                     repo1_name = repo1["full_name"]
                     repo2_name = repo2["full_name"]
-                    print(
-                        f"  Duplicate: {repo1_name} ↔ {repo2_name} ({overlap1:.1%}/{overlap2:.1%})"
-                    )
 
                     # Keep the one with more stars, remove the other
                     if repo1["stargazers_count"] >= repo2["stargazers_count"]:
@@ -343,6 +346,11 @@ def filter_duplicates(db, *, num_workers):
                     else:
                         repo_to_remove = repo1_name
                         repo_to_keep = repo2_name
+
+                    print(
+                        f"  Duplicate: {repo1_name} ↔ {repo2_name} "
+                        f"({overlap1:.1%}/{overlap2:.1%}) - removing {repo_to_remove}"
+                    )
 
                     to_remove.add(repo_to_remove)
                     status_reason = f"minhash_duplicate ({repo_to_keep}, {overlap1:.1%}/{overlap2:.1%})"
