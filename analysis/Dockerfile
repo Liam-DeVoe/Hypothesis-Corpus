@@ -1,4 +1,4 @@
-FROM python:3.13
+FROM python:3.12
 
 RUN apt-get update && apt-get install -y \
     git \
@@ -6,6 +6,9 @@ RUN apt-get update && apt-get install -y \
     nodejs \
     npm \
     && rm -rf /var/lib/apt/lists/*
+
+# install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 RUN npm install -g @anthropic-ai/claude-code
 WORKDIR /app

@@ -9,6 +9,8 @@ from pathlib import Path
 
 import docker
 
+from analysis.collect.utils import CACHE_VOLUME_NAME
+
 logger = logging.getLogger(__name__)
 
 
@@ -141,6 +143,7 @@ class TestRunner:
 
         environment = {
             "CLAUDE_CODE_OAUTH_TOKEN": secrets["claude_code_oauth_token"],
+            "UV_LINK_MODE": "copy",
         }
 
         container = self.docker_client.containers.create(
@@ -149,6 +152,7 @@ class TestRunner:
             environment=environment,
             mem_limit="2g",
             security_opt=["no-new-privileges"],
+            volumes={CACHE_VOLUME_NAME: {"bind": "/root/.cache/uv", "mode": "rw"}},
         )
         container.put_archive("/", tar_stream.read())
 

@@ -208,7 +208,7 @@ def install(db_path: str, limit: int, debug: bool):
 
         if not is_clean_install(result):
             console.print(f"  ✗ Failed: [red]not a clean install ({result})[/red]\n")
-            _reject(repo_name, reason="invalid_install")
+            _reject(repo_name, reason=f"invalid_install ({json.dumps(result)})")
             continue
 
         db.execute(

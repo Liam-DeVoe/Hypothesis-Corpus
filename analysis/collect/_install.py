@@ -8,7 +8,6 @@ It receives configuration through a config.json file that should be present in /
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 # Load configuration
@@ -20,9 +19,15 @@ POST_INSTALL = config["post_install"]
 
 
 def pip_install(args):
-    """Run pip install."""
-    cmd = [sys.executable, "-m", "pip", "install", "--quiet"] + args
-    subprocess.run(cmd, cwd="/app/repo", capture_output=True)
+    cmd = ["uv", "pip", "install", "--system", "--quiet"] + args
+    r = subprocess.run(cmd, cwd="/app/repo", capture_output=True, text=True)
+
+    command_str = " ".join(cmd)
+    result = "success" if r.returncode == 0 else "failure"
+    print(f"(returncode {r.returncode}) {command_str} result: {result}")
+    if r.returncode != 0:
+        print(f"{command_str} stderr: {r.stderr}")
+        print(f"{command_str} stdout: {r.stdout}")
 
 
 def try_install_repo():
@@ -52,7 +57,11 @@ def try_install_repo():
         # as an additional safety, let's ignore any dot dirs. I think you're
         # kind of insane if you use dot dirs to store requirements files,
         # though I may quickly regret these words.
-        if p.parent.name.startswith("."):
+        if (
+            p.parent.name.startswith(".")
+            or p.parent.name.endswith(".egg-info")
+            or p.name.startswith(".")
+        ):
             continue
         pip_install(["-r", str(p)])
 
@@ -66,7 +75,7 @@ for package in POST_INSTALL:
     pip_install([package])
 
 result = subprocess.run(
-    [sys.executable, "-m", "pip", "freeze"],
+    ["uv", "pip", "freeze"],
     capture_output=True,
     text=True,
 )

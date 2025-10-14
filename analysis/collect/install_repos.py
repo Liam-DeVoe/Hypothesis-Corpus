@@ -8,6 +8,13 @@ from pathlib import Path
 
 import docker
 
+from .utils import (
+    CACHE_SIZE_LIMIT,
+    CACHE_VOLUME_NAME,
+    clean_uv_cache,
+    get_cache_volume_size,
+)
+
 PRE_INSTALL = [
     "setuptools==78.1.0",
 ]
@@ -29,6 +36,13 @@ def install_repository(
     docker_client = docker.from_env()
 
     try:
+        # Check cache size and clean if necessary
+        size_bytes = get_cache_volume_size(docker_client)
+        if size_bytes > CACHE_SIZE_LIMIT:
+            size_gb = size_bytes / (1024**3)
+            print(f"uv cache exceeded limit ({size_gb:.2f}GB), cleaning cache")
+            clean_uv_cache(docker_client)
+
         subprocess.run(
             [
                 "git",
@@ -70,6 +84,8 @@ def install_repository(
             command=["python", "/app/_install.py"],
             mem_limit="2g",
             security_opt=["no-new-privileges"],
+            volumes={CACHE_VOLUME_NAME: {"bind": "/root/.cache/uv", "mode": "rw"}},
+            environment={"UV_LINK_MODE": "copy"},
         )
         container.put_archive("/", tar_stream.read())
         container.start()
