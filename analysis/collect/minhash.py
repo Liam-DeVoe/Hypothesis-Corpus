@@ -15,6 +15,7 @@ import re
 import subprocess
 import tempfile
 from multiprocessing import Pool
+import multiprocessing
 from pathlib import Path
 
 from datasketch import MinHash
@@ -288,7 +289,9 @@ def _compare_two_repos(args):
     return (repo1, repo2, is_duplicate, overlap1, overlap2)
 
 
-def filter_duplicates(db, *, num_workers):
+def filter_duplicates(db, *, num_workers=None):
+    if num_workers is None:
+        num_workers = multiprocessing.cpu_count()
     all_repos = db.fetchall(
         "SELECT id, full_name, stargazers_count FROM core_repository WHERE status IS NULL"
     )

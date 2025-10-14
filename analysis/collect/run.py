@@ -6,8 +6,8 @@ import traceback
 
 from analysis.database import Database
 
-from .github_repos import collect_repos, filter_repos
-from .minhash import minhash_repository, remove_duplicates
+from .github_repos import collect_repos, filter_github_stats
+from .minhash import minhash_repository, filter_duplicates
 from .utils import Reject
 
 
@@ -47,6 +47,6 @@ def process_minhashes(db: Database):
 def run_collection(db_path: str):
     db = Database(db_path=db_path)
     collect_repos(db)
-    filter_repos(db)
+    filter_github_stats(db)
     process_minhashes(db)
-    remove_duplicates(db)
+    filter_duplicates(db, num_workers=8)
