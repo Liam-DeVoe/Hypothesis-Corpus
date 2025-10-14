@@ -7,7 +7,7 @@ import traceback
 from analysis.database import Database
 
 from .github_repos import collect_repos, filter_github_stats
-from .minhash import minhash_repository, filter_duplicates
+from .minhash import filter_duplicates, minhash_repository
 from .utils import Reject
 
 

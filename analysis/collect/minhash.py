@@ -9,13 +9,13 @@
 # between two repos by looking at bruteforce pairwise-combinations of the minhash
 # jaccard similarity, at a given threshold level.
 
+import multiprocessing
 import pickle
 import random
 import re
 import subprocess
 import tempfile
 from multiprocessing import Pool
-import multiprocessing
 from pathlib import Path
 
 from datasketch import MinHash
