@@ -51,7 +51,6 @@ def pip_install(args: list[str]):
             "-m",
             "pip",
             "install",
-            "--quiet",
             "--disable-pip-version-check",
         ]
         + args,

@@ -159,7 +159,6 @@ def compute_minhashes(repo_name: str) -> list[MinHash]:
                 "clone",
                 "--depth",
                 "1",
-                "--quiet",
                 f"https://github.com/{repo_name}.git",
                 str(clone_path),
             ],

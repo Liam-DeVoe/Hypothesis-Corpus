@@ -193,11 +193,16 @@ def install(db_path: str, limit: int, debug: bool):
         db.commit()
 
     def is_clean_install(result):
-        return result["collection_returncode"] == 0 and len(result["node_ids"]) > 0
+        """Returns (success: bool, reason: str | None)."""
+        if result["collection_returncode"] != 0:
+            return False, f"pytest collection failed (returncode {result['collection_returncode']})"
+        if len(result["node_ids"]) == 0:
+            return False, "no hypothesis tests found"
+        return True, None
 
     for i, repo in enumerate(repos, 1):
         repo_name = repo["full_name"]
-        console.print(f"[{i}/{len(repos)}] Processing [cyan]{repo_name}[/cyan]...")
+        console.print(f"[{i}/{len(repos)}] Processing [cyan]{repo_name}[/cyan] ...")
 
         try:
             result = install_repository(repo_name, debug=debug)
@@ -206,8 +211,9 @@ def install(db_path: str, limit: int, debug: bool):
             _reject(repo_name, reason="install_error")
             continue
 
-        if not is_clean_install(result):
-            console.print(f"  ✗ Failed: [red]not a clean install ({result})[/red]\n")
+        success, reason_msg = is_clean_install(result)
+        if not success:
+            console.print(f"  ✗ Failed: [red]{reason_msg}[/red]\n")
             _reject(repo_name, reason=f"invalid_install ({json.dumps(result)})")
             continue
 

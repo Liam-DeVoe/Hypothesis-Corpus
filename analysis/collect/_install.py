@@ -35,10 +35,11 @@ def try_install_repo():
     source_root = Path("/app/repo")
 
     # first, try installing through the happy path.
-    pip_install(["-e", str(source_root)])
+    # Use non-editable install to avoid pytest plugin entry point issues
+    pip_install([str(source_root)])
 
     for extra in ["dev", "test", "tests"]:
-        pip_install(["-e", f"{source_root}[{extra}]"])
+        pip_install([f"{source_root}[{extra}]"])
 
     # regardless of whether this succeeded or not, try installing all requirements
     # we can find, up to one level deep. We need to be able to find eg:
@@ -48,7 +49,7 @@ def try_install_repo():
     #
     # TODO try parsing as a requirements file first and don't install if not valid syntax
     for p in list(source_root.glob("*.txt")) + list(source_root.glob("*/*.txt")):
-        # installing as editable results in some egg dirs being created which
+        # installing the package results in some egg/dist dirs being created which
         # may contain text files which are interpreted as "valid" requirements files.
         # avoid these.
         #
@@ -80,9 +81,9 @@ result = subprocess.run(
     text=True,
 )
 
-# remove the top level package, which was installed as editable from a path.
-# We should only be triggering the -e check here, but I've left @ file: just
-# in case.
+# remove the top level package, which was installed from a local path.
+# We should only be triggering the @ file: check here, but I've left the -e check
+# just in case.
 packages = [
     line
     for line in result.stdout.strip().split("\n")
@@ -114,6 +115,16 @@ from hypothesis import is_hypothesis_test
 
 
 class CollectionPlugin:
+    # see pytest_configure in pytest_pbt_analysis/plugin.py
+    def pytest_configure(self, config):
+        cov_plugin = config.pluginmanager.get_plugin("_cov")
+        if cov_plugin is None:
+            return
+
+        cov_plugin.options.no_cov = True
+        if cov_plugin.cov_controller:
+            cov_plugin.cov_controller.pause()
+
     def __init__(self):
         self.nodeids = []
         self.other_nodeids = []

@@ -37,6 +37,23 @@ def pytest_collectreport(report):
     if report.failed:
         _collection_error = report.longreprtext
 
+# disable pytest-cov entirely if present. This prevents eg --fail-under from
+# erroring and giving the false interpretation of a fatal crash which gives up
+# on the node/repo.
+#
+# --fail-under only makes sense when running the entire repo suite, and we
+# dynamically disable all but one test.
+#
+# https://github.com/pytest-dev/pytest-cov/issues/418#issuecomment-657219659
+def pytest_configure(config):
+    cov_plugin = config.pluginmanager.get_plugin("_cov")
+    if cov_plugin is None:
+        return
+
+    cov_plugin.options.no_cov = True
+    if cov_plugin.cov_controller:
+        cov_plugin.cov_controller.pause()
+
 
 def pytest_addoption(parser):
     group = parser.getgroup("pbt-analysis", "PBT analysis control options")
