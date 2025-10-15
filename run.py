@@ -209,7 +209,7 @@ def install(db_path: str, limit: int, debug: bool):
         db.execute(
             """UPDATE core_repository
                SET status = ?, status_reason = ?, requirements = ?, node_ids = ?,
-                   other_node_ids = ?, commit_hash = ?, collection_returncode = ?
+                   other_node_ids = ?, commit_hash = ?, collection_returncode = ?, collection_output = ?
                WHERE full_name = ?""",
             (
                 status,
@@ -219,6 +219,7 @@ def install(db_path: str, limit: int, debug: bool):
                 json.dumps(result["other_node_ids"]),
                 result["commit_hash"],
                 result["collection_returncode"],
+                result["collection_output"],
                 repo_name,
             ),
         )

@@ -115,6 +115,7 @@ def install_repository(
             results_file = tar.extractfile("_install_results.json")
             results = json.loads(results_file.read().decode("utf-8"))
 
+        results["collection_output"] = logs
         return results
     finally:
         # Clean up
