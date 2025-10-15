@@ -195,7 +195,10 @@ def install(db_path: str, limit: int, debug: bool):
     def is_clean_install(result):
         """Returns (success: bool, reason: str | None)."""
         if result["collection_returncode"] != 0:
-            return False, f"pytest collection failed (returncode {result['collection_returncode']})"
+            return (
+                False,
+                f"pytest collection failed (returncode {result['collection_returncode']})",
+            )
         if len(result["node_ids"]) == 0:
             return False, "no hypothesis tests found"
         return True, None

@@ -37,6 +37,7 @@ def pytest_collectreport(report):
     if report.failed:
         _collection_error = report.longreprtext
 
+
 # disable pytest-cov entirely if present. This prevents eg --fail-under from
 # erroring and giving the false interpretation of a fatal crash which gives up
 # on the node/repo.
