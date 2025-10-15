@@ -1,5 +1,6 @@
 *.pyc
-*.db
+data.db
+test.db
 .cursor
 secrets.json
 .claude
