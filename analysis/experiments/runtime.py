@@ -42,6 +42,12 @@ class RuntimeExperiment(Experiment):
                 node_id INTEGER NOT NULL,
                 testcase_number INTEGER NOT NULL,  -- Order of test case execution
                 coverage TEXT,  -- JSON mapping: {"file_path": [line_numbers], ...}
+                timing TEXT,  -- JSON: observation.timing
+                predicates TEXT,  -- JSON: observation.predicates
+                features TEXT,  -- JSON: observation.features
+                data_status INTEGER,  -- observation.data_status
+                status_reason TEXT,  -- observation.status_reason
+                choices_size INTEGER,  -- choices_size(observation.metadata.choice_nodes)
                 FOREIGN KEY (node_id) REFERENCES core_node(id)
             );
 
@@ -148,17 +154,36 @@ class RuntimeExperiment(Experiment):
                 for file_path, lines in observation["coverage"].items()
             }
 
+            # round timing values to nanosecond precision (9 decimal places)
+            # to reduce db size.
+            #
+            # time.perf_counter only has 1ns precision on linux, so this is
+            # within the order of measurement error.
+            timing = {
+                key: round(value, 9) for key, value in observation["timing"].items()
+            }
+            predicates = observation["predicates"]
+            features = observation["features"]
+            data_status = int(observation["data_status"])
+            status_reason = observation["status_reason"]
+
             db.execute(
                 """
                 INSERT INTO runtime_testcase (
-                    node_id, testcase_number, coverage
+                    node_id, testcase_number, coverage, timing, predicates, features,
+                    data_status, status_reason
                 )
-                VALUES (?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     node_id,
                     case_num,
                     json.dumps(testcase_coverage_json),
+                    json.dumps(timing),
+                    json.dumps(predicates),
+                    json.dumps(features),
+                    data_status,
+                    status_reason,
                 ),
             )
 
