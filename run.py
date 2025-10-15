@@ -193,7 +193,8 @@ def install(db_path: str, limit: int, debug: bool):
         db.commit()
 
     def is_clean_install(result):
-        """Returns (success: bool, reason: str | None)."""
+        if result["timed_out"]:
+            return False, "pytest timed out"
         if result["collection_returncode"] != 0:
             return (
                 False,

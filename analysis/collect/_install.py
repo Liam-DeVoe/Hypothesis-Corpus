@@ -7,6 +7,7 @@ It receives configuration through a config.json file that should be present in /
 
 import json
 import os
+import signal
 import subprocess
 from pathlib import Path
 
@@ -16,6 +17,7 @@ with open("/app/_install_config.json") as f:
 
 PRE_INSTALL = config["pre_install"]
 POST_INSTALL = config["post_install"]
+PYTEST_COLLECTION_TIMEOUT = config["pytest_collection_timeout"]
 
 
 def pip_install(args):
@@ -152,15 +154,36 @@ class CollectionPlugin:
         self.other_nodeids = [item.nodeid for item in other_items]
 
 
+# If this triggers, it will do so in the middle of pytest collection, which will be
+# caught by pyest and then pytest will exit with exit code 2. Even though it might
+# look like this is going to crash this script, it won't.
+#
+# We therefore track and report a separate timed_out state.
+timed_out = False
+def timeout_handler(_signum, _frame):
+    global timed_out
+    timed_out = True
+    raise TimeoutError(
+        f"pytest collection timed out after {PYTEST_COLLECTION_TIMEOUT} seconds"
+    )
+
+
 plugin = CollectionPlugin()
 os.chdir("/app/repo")
+
+signal.signal(signal.SIGALRM, timeout_handler)
+signal.alarm(PYTEST_COLLECTION_TIMEOUT)
 collection_returncode = pytest.main(["--collect-only"], plugins=[plugin])
+# clear the alarm
+signal.alarm(0)
+
 output = {
     "requirements": "\n".join(packages),
     "node_ids": plugin.nodeids,
     "other_node_ids": plugin.other_nodeids,
     "commit_hash": commit_hash,
     "collection_returncode": collection_returncode,
+    "timed_out": timed_out,
 }
 
 with open("/app/_install_results.json", "w") as f:

@@ -24,6 +24,10 @@ POST_INSTALL = [
     "hypothesis==6.140.3",
 ]
 
+# seconds to allow `pytest --collect-only` to run for during installation before
+# timing out
+PYTEST_COLLECTION_TIMEOUT = 5 * 60  # 5 minutes
+
 
 def install_repository(
     repo_name: str, docker_image: str = "pbt-analysis:latest", debug: bool = False
@@ -67,6 +71,7 @@ def install_repository(
         config = {
             "pre_install": PRE_INSTALL,
             "post_install": POST_INSTALL,
+            "pytest_collection_timeout": PYTEST_COLLECTION_TIMEOUT,
         }
         config_path = app_dir / "_install_config.json"
         config_path.write_text(json.dumps(config))
