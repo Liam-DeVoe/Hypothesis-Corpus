@@ -53,6 +53,7 @@ class Database:
                 node_ids TEXT,  -- JSON list of Hypothesis test node IDs
                 other_node_ids TEXT,  -- JSON list of non-Hypothesis test node IDs
                 commit_hash TEXT,  -- Git commit hash at time of install_repos.py
+                collection_returncode INTEGER,  -- pytest collection return code
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 

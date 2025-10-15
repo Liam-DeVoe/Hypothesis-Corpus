@@ -183,27 +183,6 @@ def install(db_path: str, limit: int, debug: bool):
     successful = 0
     failed = 0
 
-    def _reject(repo_name: str, *, reason):
-        nonlocal failed
-        failed += 1
-        db.execute(
-            "UPDATE core_repository SET status = ?, status_reason = ? WHERE full_name = ?",
-            ("invalid", reason, repo_name),
-        )
-        db.commit()
-
-    def is_clean_install(result):
-        if result["timed_out"]:
-            return False, "pytest timed out"
-        if result["collection_returncode"] != 0:
-            return (
-                False,
-                f"pytest collection failed (returncode {result['collection_returncode']})",
-            )
-        if len(result["node_ids"]) == 0:
-            return False, "no hypothesis tests found"
-        return True, None
-
     for i, repo in enumerate(repos, 1):
         repo_name = repo["full_name"]
         console.print(f"[{i}/{len(repos)}] Processing [cyan]{repo_name}[/cyan] ...")
@@ -212,23 +191,34 @@ def install(db_path: str, limit: int, debug: bool):
             result = install_repository(repo_name, debug=debug)
         except Exception as e:
             console.print(f"  ✗ Failed: [red]{traceback.format_exception(e)}[/red]\n")
-            _reject(repo_name, reason="install_error")
+            failed += 1
+            db.execute(
+                "UPDATE core_repository SET status = ?, status_reason = ? WHERE full_name = ?",
+                ("invalid", "install_error", repo_name),
+            )
+            db.commit()
             continue
 
-        success, reason_msg = is_clean_install(result)
-        if not success:
-            console.print(f"  ✗ Failed: [red]{reason_msg}[/red]\n")
-            _reject(repo_name, reason=f"invalid_install ({json.dumps(result)})")
-            continue
+        if result["timed_out"]:
+            status, status_reason = "invalid", "invalid_install (timed_out)"
+        elif len(result["node_ids"]) == 0:
+            status, status_reason = "invalid", "invalid_install (no_hypothesis_tests)"
+        else:
+            status, status_reason = "valid", None
 
         db.execute(
-            "UPDATE core_repository SET status = ?, requirements = ?, node_ids = ?, other_node_ids = ?, commit_hash = ? WHERE full_name = ?",
+            """UPDATE core_repository
+               SET status = ?, status_reason = ?, requirements = ?, node_ids = ?,
+                   other_node_ids = ?, commit_hash = ?, collection_returncode = ?
+               WHERE full_name = ?""",
             (
-                "valid",
+                status,
+                status_reason,
                 result["requirements"],
                 json.dumps(result["node_ids"]),
                 json.dumps(result["other_node_ids"]),
-                result.get("commit_hash"),
+                result["commit_hash"],
+                result["collection_returncode"],
                 repo_name,
             ),
         )
@@ -236,10 +226,22 @@ def install(db_path: str, limit: int, debug: bool):
 
         count = len(result["node_ids"])
         other_count = len(result["other_node_ids"])
-        console.print(
-            f"  ✓ Successfully processed ([green]{count} hypothesis, {other_count} other nodes[/green], commit: [cyan]{result.get('commit_hash', 'unknown')[:7]}[/cyan])\n"
-        )
-        successful += 1
+
+        if status == "valid":
+            console.print(
+                f"  ✓ Successfully processed ([green]{count} hypothesis nodes, "
+                f"{other_count} other nodes[/green], returncode: "
+                f"[green]{result['collection_returncode']}[/green], commit: "
+                f"[cyan]{result['commit_hash'][:7]}[/cyan])\n"
+            )
+            successful += 1
+        else:
+            console.print(
+                f"  ✗ Rejected: [red]{status_reason}[/red] ([yellow]{count} "
+                f"hypothesis nodes, {other_count} other nodes, returncode: "
+                f"{result['collection_returncode']}[/yellow])\n"
+            )
+            failed += 1
 
     # Print summary
     console.print("\n[bold]Installation Complete![/bold]")

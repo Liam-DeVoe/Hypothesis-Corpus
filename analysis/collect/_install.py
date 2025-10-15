@@ -160,6 +160,8 @@ class CollectionPlugin:
 #
 # We therefore track and report a separate timed_out state.
 timed_out = False
+
+
 def timeout_handler(_signum, _frame):
     global timed_out
     timed_out = True
