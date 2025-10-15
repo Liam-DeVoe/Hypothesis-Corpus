@@ -102,7 +102,10 @@ def install_repository(
         if debug:
             print(f"Container logs:\n{logs}")
 
-        assert result.get("StatusCode") == 0, logs
+        if result.get("StatusCode") != 0:
+            raise RuntimeError(
+                f"container exit code {result.get("StatusCode")}. Container logs:: {logs}"
+            )
 
         # Extract results
         bits, _ = container.get_archive("/app/_install_results.json")
