@@ -191,18 +191,6 @@ class Worker(Process):
                     if node_id == "error":
                         continue
 
-                    # Add node to database
-                    db.execute(
-                        """
-                        INSERT OR IGNORE INTO core_node (repo_id, node_id)
-                        VALUES (?, ?)
-                        """,
-                        (
-                            work_item.repo_id,
-                            node_id,
-                        ),
-                    )
-                    db.commit()
                     result = db.fetchone(
                         "SELECT id FROM core_node WHERE repo_id = ? AND node_id = ?",
                         (work_item.repo_id, node_id),

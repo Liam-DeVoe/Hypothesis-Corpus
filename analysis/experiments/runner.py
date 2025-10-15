@@ -61,7 +61,7 @@ def main():
         total_tests = len(node_ids)
 
         for i, node_id in enumerate(node_ids, 1):
-            print(f"\nProcessing test {i}/{total_tests}: {node_id}", flush=True)
+            print(f"Processing test {i}/{total_tests}: {node_id}", flush=True)
             print(f"Running {experiment_name} experiment...", flush=True)
             node_results = {}
 

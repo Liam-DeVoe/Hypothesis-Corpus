@@ -89,8 +89,11 @@ def experiment(
 
     db = Database(db_path=db_path)
 
-    # Load work items directly from database
-    query = "SELECT full_name, requirements, node_ids FROM core_repository WHERE status = 'valid'"
+    query = """
+        SELECT core_repository.id, core_repository.full_name, core_repository.requirements
+        FROM core_repository
+        WHERE core_repository.status = 'valid'
+    """
     if limit:
         query += f" LIMIT {limit}"
 
@@ -98,9 +101,16 @@ def experiment(
 
     work_items = []
     for repo in repos:
+        nodes = db.fetchall(
+            "SELECT node_id FROM core_node WHERE repo_id = ?", (repo["id"],)
+        )
+        node_ids = [node["node_id"] for node in nodes]
+        # should have been marked invalid if there are no node ids
+        assert node_ids
+
         work_item = WorkItem(
             repo_name=repo["full_name"],
-            node_ids=json.loads(repo["node_ids"]),
+            node_ids=node_ids,
             requirements=repo["requirements"] or "",
         )
         work_items.append(work_item)
@@ -160,12 +170,7 @@ def experiment(
 # ==============================================================================
 
 
-@cli.command()
-@click.option("--db-path", default="analysis/data.db", help="Path to database file")
-@click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
-@click.option("--debug", is_flag=True, help="Enable debug mode with container logs")
-def install(db_path: str, limit: int, debug: bool):
-    """Install repositories and collect test node IDs."""
+def _install(*, db_path, limit, debug):
     from analysis.collect.install_repos import install_repository
     from analysis.database import Database
 
@@ -244,11 +249,64 @@ def install(db_path: str, limit: int, debug: bool):
             )
             failed += 1
 
-    # Print summary
     console.print("\n[bold]Installation Complete![/bold]")
     console.print(f"Successful: [green]{successful}[/green]")
     console.print(f"Failed: [red]{failed}[/red]")
     console.print(f"Total: {len(repos)}")
+
+
+def _populate_collected_nodes(db_path: str):
+    from analysis.database import Database
+
+    console.print("[bold]Populating node table...[/bold]")
+
+    db = Database(db_path=db_path)
+    repos = db.fetchall(
+        """
+        SELECT id, full_name, node_ids
+        FROM core_repository
+        WHERE status = 'valid' AND node_ids IS NOT NULL
+        """
+    )
+
+    total_nodes_inserted = 0
+    for repo in repos:
+        repo_id = repo["id"]
+        repo_name = repo["full_name"]
+        node_ids_json = repo["node_ids"]
+        node_ids = json.loads(node_ids_json)
+        if not node_ids:
+            continue
+
+        # replace any existing nodes for this repository
+        db.execute(
+            "DELETE FROM core_node WHERE repo_id = ?",
+            (repo_id,),
+        )
+        for node_id in node_ids:
+            db.execute(
+                "INSERT INTO core_node (repo_id, node_id) VALUES (?, ?)",
+                (repo_id, node_id),
+            )
+
+        total_nodes_inserted += len(node_ids)
+        logger.debug(f"Populated {len(node_ids)} nodes for repository {repo_name}")
+
+    db.commit()
+
+    if total_nodes_inserted > 0:
+        logger.info(
+            f"Populated {total_nodes_inserted} total nodes into core_node table"
+        )
+
+
+@cli.command()
+@click.option("--db-path", default="analysis/data.db", help="Path to database file")
+@click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
+@click.option("--debug", is_flag=True, help="Enable debug mode with container logs")
+def install(db_path: str, limit: int, debug: bool):
+    # _install(db_path=db_path, limit=limit, debug=debug)
+    _populate_collected_nodes(db_path=db_path)
 
 
 # ==============================================================================
