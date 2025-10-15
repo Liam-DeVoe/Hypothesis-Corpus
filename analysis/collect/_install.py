@@ -110,10 +110,9 @@ commit_hash = commit_hash.stdout.strip()
 # we've done our best to install the package and its dependencies. now
 # try collecting tests with pytest
 
-# this deferred import is important: we haven't installed pytest or hypothesis until
+# this deferred import is important: we haven't installed pytest until
 # this point, in POST_INSTALL
 import pytest
-from hypothesis import is_hypothesis_test
 
 
 class CollectionPlugin:
@@ -132,6 +131,10 @@ class CollectionPlugin:
         self.other_nodeids = []
 
     def pytest_collection_finish(self, session):
+        # defer import to avoid pytest warning about being unable to rewrite an
+        # already-imported module (ie, _hypothesis_globals.py).
+        from hypothesis import is_hypothesis_test
+
         items = []
         other_items = []
         for item in session.items:
