@@ -1,8 +1,10 @@
 import json
 from pathlib import Path
 
+import hypothesis.internal.observability
 import pytest
 from hypothesis import HealthCheck, Phase, settings
+from hypothesis.internal.conjecture.choice import choices_size
 from hypothesis.internal.detection import is_hypothesis_test
 from hypothesis.internal.observability import Observation, add_observability_callback
 from hypothesis.strategies._internal.utils import to_jsonable
@@ -28,6 +30,8 @@ def callback(observation: Observation):
             "predicates": metadata.predicates,
             "data_status": metadata.data_status,
         },
+        "status_reason": observation.status_reason,
+        "choices_size": choices_size([node.value for node in metadata.choice_nodes]),
     }
     _observations.append(observation)
 
@@ -116,6 +120,8 @@ def pytest_collection_modifyitems(session, config, items):
             phases=[Phase.generate],
         )
 
+    # enable choice_nodes and choice_spans
+    hypothesis.internal.observability.OBSERVABILITY_CHOICES = True
     add_observability_callback(callback)
 
 

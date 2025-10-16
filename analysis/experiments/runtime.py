@@ -162,18 +162,22 @@ class RuntimeExperiment(Experiment):
             timing = {
                 key: round(value, 9) for key, value in observation["timing"].items()
             }
-            predicates = observation["predicates"]
+
+            metadata = observation["metadata"]
+            predicates = metadata["predicates"]
+            data_status = int(metadata["data_status"])
+
             features = observation["features"]
-            data_status = int(observation["data_status"])
             status_reason = observation["status_reason"]
+            choices_size = observation["choices_size"]
 
             db.execute(
                 """
                 INSERT INTO runtime_testcase (
                     node_id, testcase_number, coverage, timing, predicates, features,
-                    data_status, status_reason
+                    data_status, status_reason, choices_size
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     node_id,
@@ -184,6 +188,7 @@ class RuntimeExperiment(Experiment):
                     json.dumps(features),
                     data_status,
                     status_reason,
+                    choices_size,
                 ),
             )
 

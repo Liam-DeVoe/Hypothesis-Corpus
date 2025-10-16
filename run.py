@@ -305,7 +305,7 @@ def _populate_collected_nodes(db_path: str):
 @click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
 @click.option("--debug", is_flag=True, help="Enable debug mode with container logs")
 def install(db_path: str, limit: int, debug: bool):
-    # _install(db_path=db_path, limit=limit, debug=debug)
+    _install(db_path=db_path, limit=limit, debug=debug)
     _populate_collected_nodes(db_path=db_path)
 
 
