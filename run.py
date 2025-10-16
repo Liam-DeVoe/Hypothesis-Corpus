@@ -187,6 +187,7 @@ def _install(*, db_path, limit, debug):
 
     successful = 0
     failed = 0
+    consecutive_fatal_errors = 0
 
     for i, repo in enumerate(repos, 1):
         repo_name = repo["full_name"]
@@ -194,9 +195,19 @@ def _install(*, db_path, limit, debug):
 
         try:
             result = install_repository(repo_name, debug=debug)
+            consecutive_fatal_errors = 0
         except Exception as e:
             console.print(f"  ✗ Failed: [red]{traceback.format_exception(e)}[/red]\n")
             failed += 1
+            consecutive_fatal_errors += 1
+
+            if consecutive_fatal_errors >= 10:
+                console.print(
+                    f"\n[bold red]ABORTING: {consecutive_fatal_errors} fatal "
+                    "errors in a row.[/bold red]"
+                )
+                break
+
             db.execute(
                 "UPDATE core_repository SET status = ?, status_reason = ? WHERE full_name = ?",
                 ("invalid", "install_error", repo_name),

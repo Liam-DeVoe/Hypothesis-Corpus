@@ -39,7 +39,7 @@ def main():
 
         pip_install(["--no-dependencies", "-r", str(requirements_file)])
         pip_install(["--no-dependencies", "/app/repo"])
-        pip_install(["-e", str(pbt_analysis_dir)])
+        pip_install([str(pbt_analysis_dir)])
 
         import experiment
 
