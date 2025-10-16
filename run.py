@@ -187,7 +187,9 @@ def _install(*, db_path, limit, debug):
 
     successful = 0
     failed = 0
-    consecutive_fatal_errors = 0
+    # safeguard against fatal docker errors, host system running out of storage,
+    # etc.
+    consecutive_failed_repos = []
 
     for i, repo in enumerate(repos, 1):
         repo_name = repo["full_name"]
@@ -195,16 +197,26 @@ def _install(*, db_path, limit, debug):
 
         try:
             result = install_repository(repo_name, debug=debug)
-            consecutive_fatal_errors = 0
+            consecutive_failed_repos = []
         except Exception as e:
             console.print(f"  ✗ Failed: [red]{traceback.format_exception(e)}[/red]\n")
             failed += 1
-            consecutive_fatal_errors += 1
+            consecutive_failed_repos.append(repo_name)
 
-            if consecutive_fatal_errors >= 10:
+            if len(consecutive_failed_repos) >= 7:
                 console.print(
-                    f"\n[bold red]ABORTING: {consecutive_fatal_errors} fatal "
+                    f"\n[bold red]ABORTING: {len(consecutive_failed_repos)} fatal "
                     "errors in a row.[/bold red]"
+                )
+                console.print(
+                    "[yellow]Failed repositories that were marked as install_error:[/yellow]"
+                )
+                for failed_repo in consecutive_failed_repos:
+                    console.print(f"  - {failed_repo}")
+                console.print(
+                    f"\n[yellow]To reset these repos, run:[/yellow]\n"
+                    f"  sqlite3 {db_path or 'analysis/data.db'} \"UPDATE core_repository SET status = NULL, status_reason = NULL "
+                    f"WHERE full_name IN ({', '.join(repr(r) for r in consecutive_failed_repos)});\""
                 )
                 break
 
