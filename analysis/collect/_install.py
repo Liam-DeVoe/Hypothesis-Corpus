@@ -70,6 +70,9 @@ def try_install_repo():
             print(f"rejecting possible requirements file {p}", flush=True)
             continue
 
+        if not p.is_file():
+            continue
+
         lines = p.read_text(encoding="utf-8", errors="ignore").splitlines()
         lines = [line for line in lines if not line.strip().startswith("#")]
         if len(lines) > 1000:
