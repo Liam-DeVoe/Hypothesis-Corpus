@@ -95,6 +95,12 @@ def install_repository(
         container.put_archive("/", tar_stream.read())
         container.start()
 
+        if debug:
+            # Stream logs in real-time
+            print("Container logs (streaming):")
+            for log_line in container.logs(stream=True, follow=True):
+                print(log_line.decode("utf-8", errors="replace"), end="", flush=True)
+
         # Wait for completion (30 minute timeout)
         result = container.wait(timeout=30 * 60)
         logs = container.logs(stdout=True, stderr=True).decode("utf-8")

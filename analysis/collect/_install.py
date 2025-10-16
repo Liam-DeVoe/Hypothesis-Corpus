@@ -22,14 +22,16 @@ PYTEST_COLLECTION_TIMEOUT = config["pytest_collection_timeout"]
 
 def pip_install(args):
     cmd = ["uv", "pip", "install", "--system", "--quiet"] + args
+    command_str = " ".join(cmd)
+    print(f"running: {command_str}", flush=True)
+
     r = subprocess.run(cmd, cwd="/app/repo", capture_output=True, text=True)
 
-    command_str = " ".join(cmd)
     result = "success" if r.returncode == 0 else "failure"
-    print(f"(returncode {r.returncode}) {command_str} result: {result}")
+    print(f"(returncode {r.returncode}) {command_str} result: {result}", flush=True)
     if r.returncode != 0:
-        print(f"{command_str} stderr: {r.stderr}")
-        print(f"{command_str} stdout: {r.stdout}")
+        print(f"{command_str} stderr: {r.stderr}", flush=True)
+        print(f"{command_str} stdout: {r.stdout}", flush=True)
 
 
 def try_install_repo():
@@ -65,6 +67,15 @@ def try_install_repo():
             or p.parent.name.endswith(".egg-info")
             or p.name.startswith(".")
         ):
+            print(f"rejecting possible requirements file {p}", flush=True)
+            continue
+
+        lines = p.read_text(encoding="utf-8", errors="ignore").splitlines()
+        lines = [line for line in lines if not line.strip().startswith("#")]
+        if len(lines) > 1000:
+            print(f"rejecting possible requirements file {p} with {len(lines)} lines", flush=True)
+            # requirement files with more than 1k lines of non-comments are more
+            # likely to be wordlists or etc.
             continue
         pip_install(["-r", str(p)])
 
