@@ -39,7 +39,7 @@ def cli():
 
 
 @cli.command()
-@click.option("--db-path", default="analysis/data.db", help="Path to database file")
+@click.option("--db-path", help="Path to database file")
 def collect(db_path: str):
     """Collect repositories from GitHub and store in database."""
     from analysis.collect.run import run_collection
@@ -53,7 +53,7 @@ def collect(db_path: str):
 
 
 @cli.command()
-@click.option("--db-path", default="analysis/data.db", help="Path to database file")
+@click.option("--db-path", help="Path to database file")
 @click.option("--workers", "-w", type=int, default=4, help="Number of worker processes")
 @click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
 @click.option(
@@ -301,7 +301,7 @@ def _populate_collected_nodes(db_path: str):
 
 
 @cli.command()
-@click.option("--db-path", default="analysis/data.db", help="Path to database file")
+@click.option("--db-path", help="Path to database file")
 @click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
 @click.option("--debug", is_flag=True, help="Enable debug mode with container logs")
 def install(db_path: str, limit: int, debug: bool):
@@ -322,7 +322,7 @@ def task():
 
 @task.command()
 @click.argument("task_name")
-@click.option("--db-path", default="analysis/data.db", help="Path to database")
+@click.option("--db-path", help="Path to database")
 def run(task_name: str, db_path: str):
     from analysis.database import Database
     from analysis.tasks import run_task
@@ -332,7 +332,7 @@ def run(task_name: str, db_path: str):
 
 
 @task.command()
-@click.option("--db-path", default="analysis/data.db", help="Path to database")
+@click.option("--db-path", help="Path to database")
 @click.option("--task-name", help="Specific task to clear (default: all)")
 def clear(db_path: str, task_name: str):
     """Clear task data from the database."""
@@ -363,7 +363,7 @@ def clear(db_path: str, task_name: str):
 
 
 @cli.command()
-@click.option("--db-path", default="analysis/data.db", help="Path to database file")
+@click.option("--db-path", help="Path to database file")
 @click.option("--port", default=8501, help="Port to run dashboard on")
 def dashboard(db_path: str, port: int):
     """Start the Streamlit dashboard."""

@@ -52,6 +52,8 @@ class Database:
                 requirements TEXT,
                 node_ids TEXT,  -- JSON list of Hypothesis test node IDs
                 other_node_ids TEXT,  -- JSON list of non-Hypothesis test node IDs
+                node_count INTEGER GENERATED ALWAYS AS (json_array_length(node_ids)) STORED,
+                other_node_count INTEGER GENERATED ALWAYS AS (json_array_length(other_node_ids)) STORED,
                 commit_hash TEXT,  -- Git commit hash at time of install_repos.py
                 collection_returncode INTEGER,  -- pytest collection return code
                 collection_output TEXT,  -- Container logs from pytest collection
