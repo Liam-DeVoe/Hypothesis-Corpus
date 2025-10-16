@@ -11,6 +11,7 @@ from hypothesis.strategies._internal.utils import to_jsonable
 
 _collection_error = None
 _observations = []
+_test_settings = None
 
 
 def callback(observation: Observation):
@@ -80,6 +81,7 @@ def pytest_addoption(parser):
 
 
 def pytest_collection_modifyitems(session, config, items):
+    global _test_settings
     nodeid = config.getoption("experiment_nodeid")
     max_examples = config.getoption("pbt_max_examples")
 
@@ -100,6 +102,7 @@ def pytest_collection_modifyitems(session, config, items):
         TestCase = item.obj._hypothesis_state_machine_class.TestCase
         # keep this in sync with the second settings() creation below. not worth
         # abstracting this to a _new_settings method for sharing
+        _test_settings = TestCase.settings
         TestCase.settings = settings(
             parent=TestCase.settings,
             database=None,
@@ -111,6 +114,7 @@ def pytest_collection_modifyitems(session, config, items):
     else:
         # support instance methods of classes
         inner_function = getattr(item.obj, "__func__", item.obj)
+        _test_settings = inner_function._hypothesis_internal_use_settings
         inner_function._hypothesis_internal_use_settings = settings(
             parent=inner_function._hypothesis_internal_use_settings,
             database=None,
@@ -134,11 +138,25 @@ def pytest_runtest_makereport(item, call):
         return
 
     passed = report.outcome == "passed"
+    s = _test_settings
     results = {
         "nodeid": item.nodeid,
         "execution_time": report.duration,
         "passed": passed,
         "error_message": None if passed else report.longreprtext,
+        "settings": {
+            "backend": s.backend,
+            "database": str(type(s.database)),
+            "deadline": s.deadline.total_seconds(),
+            "derandomize": s.derandomize,
+            "max_examples": s.max_examples,
+            "phases": [phase.value for phase in s.phasee],
+            "print_blob": s.print_blob,
+            "report_multiple_bugs": s.report_multiple_bugs,
+            "stateful_step_count": s.stateful_step_count,
+            "suppress_health_check": s.suppress_health_check,
+            "verbosity": s.verbosity.value,
+        },
         "observations": to_jsonable(_observations, avoid_realization=False),
     }
     results_file = Path("/app/test_results.json")

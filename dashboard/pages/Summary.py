@@ -90,9 +90,9 @@ def hypothesis_test_count_histogram():
         """
         SELECT
             full_name as repo_name,
-            node_count
+            json_array_length(node_ids) as node_count
         FROM core_repository
-        WHERE node_count > 0
+        WHERE json_array_length(node_ids) > 0
         """,
         db._conn,
     )
@@ -114,10 +114,9 @@ def unique_test_count_histogram():
         """
         SELECT
             full_name as repo_name,
-            node_count,
             node_ids
         FROM core_repository
-        WHERE node_count > 0
+        WHERE json_array_length(node_ids) > 0
         """,
         db._conn,
     )
@@ -139,8 +138,8 @@ def unique_test_count_histogram():
 
     return histogram_with_kde(
         data=unique_counts,
-        title="Hypothesis test count by repository (parametrizations grouped)",
-        xaxis_title="# of Hypothesis tests (parametrizations grouped)",
+        title="Hypothesis test count by repository (grouping @pytest.mark.parametrize)",
+        xaxis_title="# of Hypothesis tests (grouping @pytest.mark.parametrize)",
         yaxis_title="Repository count",
         bin_size=1,
     )
@@ -151,21 +150,19 @@ def hypothesis_percentage_histogram():
         """
         SELECT
             full_name as repo_name,
-            node_count,
-            other_node_count
+            json_array_length(node_ids) as node_count,
+            json_array_length(other_node_ids) as other_node_count,
+            CAST(json_array_length(node_ids) AS FLOAT) /
+                (json_array_length(node_ids) + json_array_length(other_node_ids)) * 100
+                as hypothesis_percentage
         FROM core_repository
-        WHERE node_count > 0 OR other_node_count > 0
+        WHERE json_array_length(node_ids) > 0 OR json_array_length(other_node_ids) > 0
         """,
         db._conn,
     )
 
     if repo_data.empty:
         return None
-
-    repo_data["total_tests"] = repo_data["node_count"] + repo_data["other_node_count"]
-    repo_data["hypothesis_percentage"] = (
-        repo_data["node_count"] / repo_data["total_tests"] * 100
-    )
 
     return histogram_with_kde(
         data=repo_data["hypothesis_percentage"].tolist(),
