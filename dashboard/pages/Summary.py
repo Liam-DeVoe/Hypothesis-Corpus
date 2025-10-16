@@ -57,22 +57,24 @@ def histogram_with_kde(
         )
     )
 
-    # Add KDE overlay
-    kde = stats.gaussian_kde(data)
-    x_range = np.linspace(min(data), max(data), 200)
-    kde_values = kde(x_range)
-    # Scale KDE to match histogram counts
-    kde_scaled = kde_values * len(data) * bin_size
+    # Add KDE overlay (only if we have enough unique values)
+    unique_values = len(set(data))
+    if unique_values > 1:
+        kde = stats.gaussian_kde(data)
+        x_range = np.linspace(min(data), max(data), 200)
+        kde_values = kde(x_range)
+        # Scale KDE to match histogram counts
+        kde_scaled = kde_values * len(data) * bin_size
 
-    fig.add_trace(
-        go.Scatter(
-            x=x_range,
-            y=kde_scaled,
-            mode="lines",
-            name="KDE",
-            line={"color": "rgba(255, 127, 14, 0.8)", "width": 1.5},
+        fig.add_trace(
+            go.Scatter(
+                x=x_range,
+                y=kde_scaled,
+                mode="lines",
+                name="KDE",
+                line={"color": "rgba(255, 127, 14, 0.8)", "width": 1.5},
+            )
         )
-    )
 
     fig.update_layout(
         title=title,
@@ -188,9 +190,9 @@ def timing_histogram():
 
     return histogram_with_kde(
         data=execution_times["execution_time"].tolist(),
-        title="Nodes by execution time",
+        title="Tests by execution time",
         xaxis_title="Execution time (seconds)",
-        yaxis_title="Node count",
+        yaxis_title="Test count",
         bin_size=1,
     )
 
@@ -246,6 +248,134 @@ def execution_frequency_histogram():
     )
 
 
+def max_examples_histogram():
+    settings_data = pd.read_sql_query(
+        """
+        SELECT json_extract(settings, '$.max_examples') as max_examples
+        FROM runtime_summary
+        WHERE settings IS NOT NULL
+        """,
+        db._conn,
+    )
+    if settings_data.empty:
+        return None
+
+    return histogram_with_kde(
+        data=settings_data["max_examples"].tolist(),
+        title="Distribution of max_examples",
+        xaxis_title="max_examples",
+        yaxis_title="Test count",
+        bin_size=10,
+    )
+
+
+def deadline_histogram():
+    settings_data = pd.read_sql_query(
+        """
+        SELECT json_extract(settings, '$.deadline') as deadline
+        FROM runtime_summary
+        WHERE settings IS NOT NULL
+        """,
+        db._conn,
+    )
+    if settings_data.empty:
+        return None
+
+    return histogram_with_kde(
+        data=settings_data["deadline"].tolist(),
+        title="Distribution of deadline",
+        xaxis_title="deadline (seconds)",
+        yaxis_title="Test count",
+        bin_size=0.05,
+    )
+
+
+def stateful_step_count_histogram():
+    settings_data = pd.read_sql_query(
+        """
+        SELECT json_extract(settings, '$.stateful_step_count') as stateful_step_count
+        FROM runtime_summary
+        WHERE settings IS NOT NULL
+        """,
+        db._conn,
+    )
+    if settings_data.empty:
+        return None
+
+    return histogram_with_kde(
+        data=settings_data["stateful_step_count"].tolist(),
+        title="Distribution of stateful_step_count",
+        xaxis_title="stateful_step_count",
+        yaxis_title="Test count",
+        bin_size=5,
+    )
+
+
+def derandomize_bar_chart():
+    settings_data = pd.read_sql_query(
+        """
+        SELECT
+            json_extract(settings, '$.derandomize') as derandomize,
+            COUNT(*) as count
+        FROM runtime_summary
+        WHERE settings IS NOT NULL
+        GROUP BY derandomize
+        """,
+        db._conn,
+    )
+    if settings_data.empty:
+        return None
+
+    settings_data["derandomize_label"] = settings_data["derandomize"].apply(
+        lambda x: "True" if x else "False"
+    )
+
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=settings_data["derandomize_label"],
+                y=settings_data["count"],
+                marker_color="steelblue",
+            )
+        ]
+    )
+
+    fig.update_layout(
+        title="Distribution of derandomize",
+        xaxis_title="derandomize",
+        yaxis_title="Test count",
+        height=400,
+        showlegend=False,
+    )
+
+    return fig
+
+
+def median_choices_size_histogram():
+    choices_data = pd.read_sql_query(
+        """
+        SELECT node_id, choices_size
+        FROM runtime_testcase
+        WHERE choices_size IS NOT NULL
+        """,
+        db._conn,
+    )
+    if choices_data.empty:
+        return None
+
+    median_per_node = choices_data.groupby("node_id")["choices_size"].median()
+    if median_per_node.empty:
+        return None
+
+    return histogram_with_kde(
+        data=median_per_node.tolist(),
+        title="Median choices_size by test",
+        xaxis_title="Median choices_size",
+        yaxis_title="Test count",
+        bin_size=5,
+    )
+
+
 def main():
     """Summary page with key research findings."""
     # Sidebar
@@ -282,6 +412,36 @@ def main():
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No line execution frequency data available.")
+
+    fig = max_examples_histogram()
+    if fig:
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No max_examples data available.")
+
+    fig = deadline_histogram()
+    if fig:
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No deadline data available.")
+
+    fig = stateful_step_count_histogram()
+    if fig:
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No stateful_step_count data available.")
+
+    fig = derandomize_bar_chart()
+    if fig:
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No derandomize data available.")
+
+    fig = median_choices_size_histogram()
+    if fig:
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No choices_size data available.")
 
 
 if __name__ == "__main__":

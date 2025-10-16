@@ -125,18 +125,18 @@ class RuntimeExperiment(Experiment):
                 count_test_cases, coverage, line_execution_counts,
                 total_lines_covered, settings
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 node_id,
-                data["test_passed"],
+                data["passed"],
                 data["execution_time"],
                 data["error_message"],
                 len(observations),
                 json.dumps(coverage_json),
                 json.dumps(line_execution_counts_json),
                 sum(len(lines) for lines in aggregate_coverage.values()),
-                json.dumps(data["settings"])
+                json.dumps(data["settings"]),
             ),
         )
 
