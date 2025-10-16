@@ -140,7 +140,6 @@ def pytest_runtest_makereport(item, call):
     passed = report.outcome == "passed"
     s = _test_settings
     results = {
-        "nodeid": item.nodeid,
         "execution_time": report.duration,
         "passed": passed,
         "error_message": None if passed else report.longreprtext,
@@ -150,7 +149,7 @@ def pytest_runtest_makereport(item, call):
             "deadline": s.deadline.total_seconds(),
             "derandomize": s.derandomize,
             "max_examples": s.max_examples,
-            "phases": [phase.value for phase in s.phasee],
+            "phases": [phase.value for phase in s.phases],
             "print_blob": s.print_blob,
             "report_multiple_bugs": s.report_multiple_bugs,
             "stateful_step_count": s.stateful_step_count,

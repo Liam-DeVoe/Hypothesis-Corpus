@@ -33,6 +33,7 @@ class RuntimeExperiment(Experiment):
                 coverage TEXT,  -- JSON mapping: {"file_path": [line_numbers], ...}
                 line_execution_counts TEXT,  -- JSON mapping: {"file_path": {"line_num": execution_count, ...}, ...}
                 total_lines_covered INTEGER,  -- Sum of unique lines across all files
+                settings TEXT,  -- JSON mapping of Hypothesis settings
                 executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (node_id) REFERENCES core_node(id)
             );
@@ -87,16 +88,7 @@ class RuntimeExperiment(Experiment):
 
         results_file = Path("/app/test_results.json")
         assert results_file.exists()
-        test_results = json.loads(results_file.read_text())
-
-        observations = test_results["observations"]
-
-        return {
-            "test_passed": test_results["passed"],
-            "execution_time": test_results["execution_time"],
-            "error_message": test_results["error_message"],
-            "observations": observations,
-        }
+        return json.loads(results_file.read_text())
 
     @staticmethod
     def store_to_database(db: Any, repo_id: int, node_id: int, data: dict[str, Any]):
@@ -131,7 +123,7 @@ class RuntimeExperiment(Experiment):
             INSERT INTO runtime_summary (
                 node_id, passed, execution_time, error_message,
                 count_test_cases, coverage, line_execution_counts,
-                total_lines_covered
+                total_lines_covered, settings
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
@@ -144,6 +136,7 @@ class RuntimeExperiment(Experiment):
                 json.dumps(coverage_json),
                 json.dumps(line_execution_counts_json),
                 sum(len(lines) for lines in aggregate_coverage.values()),
+                json.dumps(data["settings"])
             ),
         )
 
