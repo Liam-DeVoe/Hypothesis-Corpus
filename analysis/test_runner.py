@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import traceback
 from io import BytesIO
 from pathlib import Path
 
@@ -76,6 +77,7 @@ class TestRunner:
         experiment_name: str = "coverage",
         *,
         debug: bool,
+        repo_name: str,
     ) -> bool:
         """Set up environment by copying experiment modules and config to app_dir."""
         # Write requirements to file if provided
@@ -121,6 +123,7 @@ class TestRunner:
             "repo_dir": "/app/repo",
             "experiment_name": experiment_name,
             "debug": debug,
+            "repo_name": repo_name,
         }
         config_file = app_dir / "config.json"
         config_file.write_text(json.dumps(config, indent=2))
@@ -201,7 +204,12 @@ class TestRunner:
 
             self.clone_repository(repo_name, repo_dir)
             self.setup_environment(
-                app_dir, requirements, node_ids, experiment_name, debug=debug
+                app_dir,
+                requirements,
+                node_ids,
+                experiment_name,
+                debug=debug,
+                repo_name=repo_name,
             )
             results = self.run_in_container(repo_name, work_dir, node_ids, debug)
             assert results is not None
@@ -210,7 +218,10 @@ class TestRunner:
             logger.error(
                 f"[w{self.worker_id}][{repo_name}] Failed to process repository: {e}"
             )
-            return {"error": str(e)}
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            }
         finally:
             if work_dir and work_dir.exists():
                 shutil.rmtree(work_dir, ignore_errors=True)

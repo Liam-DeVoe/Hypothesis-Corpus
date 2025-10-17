@@ -27,6 +27,30 @@ class Experiment(ABC):
         pass
 
     @staticmethod
+    def run_repository(repo_name: str, node_ids: list[str]) -> dict[str, Any]:
+        """Run repository-level analysis. Optional method that runs once per repository.
+
+        Args:
+            repo_name: Full name of the repository (e.g., 'owner/repo')
+            node_ids: List of all test node IDs in this repository
+
+        Returns:
+            Dictionary of results to store, or None if not implemented
+        """
+        return None
+
+    @staticmethod
+    def store_repository_to_database(db: Any, repo_id: int, data: dict[str, Any]):
+        """Store repository-level results to the database. Optional method.
+
+        Args:
+            db: Database instance
+            repo_id: Repository ID in the database
+            data: Repository-level data returned from run_repository()
+        """
+        pass
+
+    @staticmethod
     @abstractmethod
     def delete_data(db: Any, repo_name: str):
         """Delete this experiment's data from the database."""

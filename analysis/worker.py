@@ -108,6 +108,7 @@ class Worker(Process):
                             "repo_name": work_item.repo_name,
                             "success": False,
                             "error": str(e),
+                            "traceback": traceback.format_exc(),
                         }
                     )
 
@@ -183,36 +184,44 @@ class Worker(Process):
                     )
                     continue
 
-                # Process each node result using the experiment
+                repository_results = results["repository"]
+                if "error" in repository_results:
+                    error_msg = f"Repository-level analysis failed: {repository_results['error']}"
+                    logger.error(
+                        f"[w{self.worker_id}][{work_item.repo_name}] {error_msg}"
+                    )
+                elif (
+                    "data" in repository_results
+                    and repository_results["data"] is not None
+                ):
+                    # Store repository-level results if present
+                    experiment.store_repository_to_database(
+                        db, work_item.repo_id, repository_results["data"]
+                    )
+
                 nodes_processed = 0
                 nodes_failed = 0
-
-                for node_id, test_results in results.items():
-                    if node_id == "error":
-                        continue
-
+                for node_id, node_result in results["nodes"].items():
                     result = db.fetchone(
                         "SELECT id FROM core_node WHERE repo_id = ? AND node_id = ?",
                         (work_item.repo_id, node_id),
                     )
                     node_db_id = result["id"]
 
-                    if "error" in test_results:
-                        error_msg = test_results["error"]
-                        if "traceback" in test_results:
-                            error_msg = f"{error_msg}\n\nTraceback:\n{test_results['traceback']}"
-
-                        logger.error(
-                            f"[w{self.worker_id}][{work_item.repo_name}] Node {node_id} failed: {error_msg}"
+                    if "error" in node_result:
+                        error_msg = (
+                            f"Node {node_id} failed: {node_result['error']}"
+                            f"\n\nTraceback:{node_result['traceback']}"
                         )
-
+                        logger.error(
+                            f"[w{self.worker_id}][{work_item.repo_name}] {error_msg}"
+                        )
                         nodes_failed += 1
                         continue
 
                     try:
                         # Extract experiment data using the experiment name as key
-                        experiment_data = test_results.get(experiment.name, {})
-
+                        experiment_data = node_result[experiment.name]
                         if not experiment_data:
                             logger.warning(
                                 f"[w{self.worker_id}][{work_item.repo_name}] "
@@ -254,7 +263,11 @@ class Worker(Process):
                 f"[w{self.worker_id}][{work_item.repo_name}] Error processing: "
                 f"{traceback.format_exception(e)}"
             )
-            return {"success": False, "error": str(e)}
+            return {
+                "success": False,
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            }
 
 
 class WorkerPool:

@@ -56,29 +56,39 @@ def main():
             )
             sys.exit(1)
 
-        # Process all test nodes
-        results = {}
-        total_tests = len(node_ids)
+        # Run repository-level analysis
+        repo_name = config["repo_name"]
+        repository_results = {}
+        print(f"Running repository-level analysis for {repo_name}...", flush=True)
+        try:
+            repository_results["data"] = experiment_class.run_repository(
+                repo_name, node_ids
+            )
+        except Exception as e:
+            print(f"ERROR: Repository-level analysis failed: {e}", flush=True)
+            print(f"Traceback: {traceback.format_exc()}", flush=True)
+            repository_results["error"] = str(e)
+            repository_results["traceback"] = traceback.format_exc()
 
+        # Process all test nodes
+        node_results = {}
         for i, node_id in enumerate(node_ids, 1):
-            print(f"Processing test {i}/{total_tests}: {node_id}", flush=True)
+            print(f"Processing test {i}/{len(node_ids)}: {node_id}", flush=True)
             print(f"Running {experiment_name} experiment...", flush=True)
-            node_results = {}
+            node_data = {}
 
             try:
-                node_results[experiment_name] = experiment_class.run(
-                    node_id, debug=debug
-                )
+                node_data[experiment_name] = experiment_class.run(node_id, debug=debug)
             except Exception as e:
                 print(f"ERROR: Experiment failed: {e}", flush=True)
                 print(f"Traceback: {traceback.format_exc()}", flush=True)
-                node_results["error"] = str(e)
-                node_results["traceback"] = traceback.format_exc()
-
-            results[node_id] = node_results
+                node_data["error"] = str(e)
+                node_data["traceback"] = traceback.format_exc()
+            node_results[node_id] = node_data
 
         # Write results
         print("\nWriting results to results.json", flush=True)
+        results = {"repository": repository_results, "nodes": node_results}
         with open("/app/results.json", "w") as f:
             json.dump(results, f, indent=2, default=str)
 

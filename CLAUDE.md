@@ -43,11 +43,14 @@ python run.py task clear --task-name clustering
 
 ### Dashboard
 ```bash
-# Start visualization dashboard
+# Start visualization dashboard (default port: 8501)
 python run.py dashboard
 
 # Use different database or port
 python run.py dashboard --db-path test.db --port 8502
+
+# Direct streamlit command (alternative)
+streamlit run dashboard/Overview.py -- --db-path analysis/data.db
 ```
 
 ### Docker & Development
@@ -83,7 +86,7 @@ sqlite3 analysis/data.db "ALTER TABLE core_repository ADD COLUMN commit_hash TEX
    - Execute runner.py in Docker container with network access
    - Parse results.json output
 6. Results stored in SQLite database (analysis/database.py)
-7. **dashboard/Overview.py** provides real-time Streamlit visualization
+7. **dashboard/overview.py** provides real-time Streamlit visualization
 
 ### Critical Implementation Details
 
@@ -243,3 +246,8 @@ df = pd.read_sql_query("SELECT ...", db._conn)
 - **analysis/experiments/**: Experiment implementations (runtime, facets)
 - **analysis/tasks/**: Task implementations (clustering) and runner logic
 - **analysis/collect/**: GitHub repository collection scripts
+
+### Dashboard
+- **dashboard/overview.py**: Main dashboard entry point (Streamlit app)
+- **dashboard/pages/**: Individual dashboard pages (repositories, runtime, facets, clusters, summary)
+- **dashboard/utils.py**: Shared utilities for dashboard pages

@@ -71,13 +71,19 @@ def try_install_repo():
             continue
 
         if not p.is_file():
-            print(f"rejecting possible requirements file {p} because it's not a file", flush=True)
+            print(
+                f"rejecting possible requirements file {p} because it's not a file",
+                flush=True,
+            )
             continue
 
         lines = p.read_text(encoding="utf-8", errors="ignore").splitlines()
         lines = [line for line in lines if not line.strip().startswith("#")]
         if len(lines) > 1000:
-            print(f"rejecting possible requirements file {p} with {len(lines)} lines", flush=True)
+            print(
+                f"rejecting possible requirements file {p} with {len(lines)} lines",
+                flush=True,
+            )
             # requirement files with more than 1k lines of non-comments are more
             # likely to be wordlists or etc.
             continue

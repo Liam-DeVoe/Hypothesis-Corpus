@@ -10,6 +10,19 @@ except ImportError:
     from utils import subprocess_run
 
 
+REPOSITORY_SUMMARY_PROMPT = """Your job is to summarize what this GitHub repository does. Describe the repository's purpose, domain, and primary functionality. Be clear, concise, and get to the point in at most two sentences. Focus on what the repository provides or implements.
+
+<examples>
+* This repository implements a finite automata library for Python, providing classes and utilities for creating, manipulating, and querying deterministic and non-deterministic finite automata.
+* This repository provides cryptographic primitives and utilities for Python, including implementations of various encryption algorithms, hash functions, and key generation utilities.
+* This repository is a data serialization library supporting multiple formats (JSON, YAML, XML) with schema validation and type conversion capabilities.
+* This repository provides date and time utilities for Python, offering timezone-aware datetime manipulation, parsing, formatting, and arithmetic operations.
+</examples>
+
+If necessary, explore the repository codebase before answering. The repository's name is {repo_name}.
+
+Output your answer in English inside <answer> tags."""
+
 SUMMARY_PROMPT = """Your job is to summarize what this property-based test is testing. Describe both the testing pattern/relationship being verified and the domain/technology being tested. Be clear, concise, and get to the point in at most two sentences. Focus on what is being tested and how, not on implementation details.
 
 <examples>
@@ -66,7 +79,16 @@ class FacetsExperiment(Experiment):
     @staticmethod
     def get_schema_sql() -> str:
         return """
-            CREATE TABLE IF NOT EXISTS facets (
+            CREATE TABLE IF NOT EXISTS facets_repository (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repo_id INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                facet TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (repo_id) REFERENCES core_repository(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS facets_nodes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 node_id INTEGER NOT NULL,
                 type TEXT NOT NULL,
@@ -75,7 +97,8 @@ class FacetsExperiment(Experiment):
                 FOREIGN KEY (node_id) REFERENCES core_node(id)
             );
 
-            CREATE INDEX IF NOT EXISTS idx_facets_node ON facets(node_id);
+            CREATE INDEX IF NOT EXISTS idx_facets_repository_repo ON facets_repository(repo_id);
+            CREATE INDEX IF NOT EXISTS idx_facets_nodes_node ON facets_nodes(node_id);
         """
 
     @staticmethod
@@ -139,7 +162,7 @@ class FacetsExperiment(Experiment):
     def store_to_database(db: Any, repo_id: int, node_id: int, data: dict[str, Any]):
         db.execute(
             """
-            INSERT INTO facets (node_id, type, facet)
+            INSERT INTO facets_nodes (node_id, type, facet)
             VALUES (?, ?, ?)
             """,
             (
@@ -152,7 +175,7 @@ class FacetsExperiment(Experiment):
         for pattern in data["patterns"]:
             db.execute(
                 """
-                INSERT INTO facets (node_id, type, facet)
+                INSERT INTO facets_nodes (node_id, type, facet)
                 VALUES (?, ?, ?)
                 """,
                 (
@@ -165,7 +188,7 @@ class FacetsExperiment(Experiment):
         for domain in data["domains"]:
             db.execute(
                 """
-                INSERT INTO facets (node_id, type, facet)
+                INSERT INTO facets_nodes (node_id, type, facet)
                 VALUES (?, ?, ?)
                 """,
                 (
@@ -175,6 +198,28 @@ class FacetsExperiment(Experiment):
                 ),
             )
 
+        db.commit()
+
+    @staticmethod
+    def run_repository(repo_name: str, node_ids: list[str]) -> dict[str, Any]:
+        prompt = REPOSITORY_SUMMARY_PROMPT.format(repo_name=repo_name)
+        summary = FacetsExperiment._run_claude(prompt)
+        return {"summary": summary}
+
+    @staticmethod
+    def store_repository_to_database(db: Any, repo_id: int, data: dict[str, Any]):
+        """Store repository-level results to the database."""
+        db.execute(
+            """
+            INSERT INTO facets_repository (repo_id, type, facet)
+            VALUES (?, ?, ?)
+            """,
+            (
+                repo_id,
+                "summary",
+                data["summary"],
+            ),
+        )
         db.commit()
 
     @staticmethod
