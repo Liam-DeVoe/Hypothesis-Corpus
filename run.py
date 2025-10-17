@@ -63,6 +63,9 @@ def collect(db_path: str):
     "--experiments", "-e", multiple=True, help="Experiments to run (default: all)"
 )
 @click.option("--debug", is_flag=True, help="Enable debug mode with verbose logging")
+@click.option(
+    "--overwrite", is_flag=True, help="Re-run experiments even if already completed"
+)
 def experiment(
     db_path: str,
     workers: int,
@@ -70,6 +73,7 @@ def experiment(
     docker_image: str,
     experiments: tuple[str, ...],
     debug: bool,
+    overwrite: bool,
 ):
     """Run experiments on repositories in the database."""
     from analysis.database import Database
@@ -90,7 +94,7 @@ def experiment(
     db = Database(db_path=db_path)
 
     query = """
-        SELECT core_repository.id, core_repository.full_name, core_repository.requirements
+        SELECT core_repository.id, core_repository.full_name, core_repository.requirements, core_repository.experiments_ran
         FROM core_repository
         WHERE core_repository.status = 'valid'
     """
@@ -98,6 +102,13 @@ def experiment(
         query += f" LIMIT {limit}"
 
     repos = db.fetchall(query)
+
+    if not overwrite:
+        repos = [
+            repo
+            for repo in repos
+            if not set(experiments) <= set(json.loads(repo["experiments_ran"]))
+        ]
 
     work_items = []
     for repo in repos:

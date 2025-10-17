@@ -1,3 +1,4 @@
+import json
 import logging
 import multiprocessing as mp
 import time
@@ -244,6 +245,19 @@ class Worker(Process):
                     f"[w{self.worker_id}][{work_item.repo_name}] Experiment {experiment.name}: "
                     f"{nodes_processed} processed, {nodes_failed} failed"
                 )
+
+            result = db.fetchone(
+                "SELECT experiments_ran FROM core_repository WHERE id = ?",
+                (work_item.repo_id,),
+            )
+            experiments_ran = set(json.loads(result["experiments_ran"]))
+            experiments_ran |= {experiment.name for experiment in experiments}
+
+            db.execute(
+                "UPDATE core_repository SET experiments_ran = ? WHERE id = ?",
+                (json.dumps(list(experiments_ran)), work_item.repo_id),
+            )
+            db.commit()
 
             return {
                 "success": True,

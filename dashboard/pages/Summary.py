@@ -2,11 +2,9 @@ import json
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from scipy import stats
 
 # Add parent directory to path so we can import analysis
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))

@@ -1,4 +1,5 @@
 """Shared utility functions for dashboard pages."""
+
 import json
 
 import numpy as np

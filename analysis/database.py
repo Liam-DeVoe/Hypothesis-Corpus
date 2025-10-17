@@ -55,6 +55,7 @@ class Database:
                 commit_hash TEXT,  -- Git commit hash at time of install_repos.py
                 collection_returncode INTEGER,  -- pytest collection return code
                 collection_output TEXT,  -- Container logs from pytest collection
+                experiments_ran TEXT DEFAULT '[]',  -- JSON list of experiment names that have been run
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
