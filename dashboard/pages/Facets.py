@@ -39,7 +39,7 @@ def main():
             AVG(LENGTH(s.facet)) as avg_summary_length,
             MIN(LENGTH(s.facet)) as min_summary_length,
             MAX(LENGTH(s.facet)) as max_summary_length
-        FROM facets s
+        FROM facets_nodes s
         JOIN core_node n ON s.node_id = n.id
         JOIN core_repository r ON n.repo_id = r.id
         WHERE s.type = 'summary'
@@ -53,7 +53,7 @@ def main():
         SELECT
             COUNT(DISTINCT node_id) as nodes_with_patterns,
             COUNT(*) as total_patterns
-        FROM facets
+        FROM facets_nodes
         WHERE type = 'pattern'
         """,
         db._conn,
@@ -65,7 +65,7 @@ def main():
             facet as pattern,
             COUNT(*) as count,
             COUNT(DISTINCT node_id) as unique_tests
-        FROM facets
+        FROM facets_nodes
         WHERE type = 'pattern'
         GROUP BY facet
         ORDER BY count DESC
@@ -79,7 +79,7 @@ def main():
         SELECT
             COUNT(DISTINCT node_id) as nodes_with_domains,
             COUNT(*) as total_domains
-        FROM facets
+        FROM facets_nodes
         WHERE type = 'domain'
         """,
         db._conn,
@@ -91,7 +91,7 @@ def main():
             facet as domain,
             COUNT(*) as count,
             COUNT(DISTINCT node_id) as unique_tests
-        FROM facets
+        FROM facets_nodes
         WHERE type = 'domain'
         GROUP BY facet
         ORDER BY count DESC
@@ -109,7 +109,7 @@ def main():
             AVG(LENGTH(s.facet)) as avg_summary_length
         FROM core_repository r
         LEFT JOIN core_node n ON r.id = n.repo_id
-        LEFT JOIN facets s ON n.id = s.node_id
+        LEFT JOIN facets_nodes s ON n.id = s.node_id
         GROUP BY r.id
         HAVING nodes_with_summaries > 0
         ORDER BY nodes_with_summaries DESC
@@ -125,7 +125,7 @@ def main():
             DATE(s.created_at) as date,
             COUNT(*) as summaries_created,
             AVG(LENGTH(s.facet)) as avg_length
-        FROM facets s
+        FROM facets_nodes s
         GROUP BY DATE(s.created_at)
         ORDER BY date
         """,
@@ -253,8 +253,40 @@ def main():
     else:
         st.info("No domain data available yet.")
 
-    # Repository selector for detailed view
-    st.subheader("Summaries")
+    # Repository Summaries Section
+    st.subheader("Repository Summaries")
+
+    # Get repository-level summaries
+    repo_level_summaries = pd.read_sql_query(
+        """
+        SELECT
+            r.full_name as repository,
+            s.facet as summary,
+            LENGTH(s.facet) as summary_length,
+            s.created_at
+        FROM facets_repository s
+        JOIN core_repository r ON s.repo_id = r.id
+        WHERE s.type = 'summary'
+        ORDER BY r.full_name
+        """,
+        db._conn,
+    )
+
+    if not repo_level_summaries.empty:
+        st.write(f"**{len(repo_level_summaries)}** repositories with summaries")
+
+        for _idx, row in repo_level_summaries.iterrows():
+            with st.expander(f"🗂️ {row['repository']}", expanded=False):
+                st.markdown("**Repository Summary:**")
+                st.write(row["summary"])
+                st.markdown(f"*Length: {row['summary_length']} chars*")
+                if row["created_at"]:
+                    st.markdown(f"*Created: {row['created_at']}*")
+    else:
+        st.info("No repository-level summaries available yet.")
+
+    # Test-level Summaries Section
+    st.subheader("Test Summaries")
 
     selected_repo = st.selectbox(
         "Select repository",
@@ -272,7 +304,7 @@ def main():
                 s.facet as summary,
                 LENGTH(s.facet) as summary_length,
                 s.created_at
-            FROM facets s
+            FROM facets_nodes s
             JOIN core_node n ON s.node_id = n.id
             JOIN core_repository r ON n.repo_id = r.id
             WHERE r.full_name = ?
@@ -293,7 +325,7 @@ def main():
                 patterns_for_test = pd.read_sql_query(
                     """
                     SELECT facet as pattern
-                    FROM facets
+                    FROM facets_nodes
                     WHERE node_id = ? AND type = 'pattern'
                     ORDER BY id
                     """,
@@ -305,7 +337,7 @@ def main():
                 domains_for_test = pd.read_sql_query(
                     """
                     SELECT facet as domain
-                    FROM facets
+                    FROM facets_nodes
                     WHERE node_id = ? AND type = 'domain'
                     ORDER BY id
                     """,
