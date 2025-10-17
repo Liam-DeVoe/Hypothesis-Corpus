@@ -223,5 +223,16 @@ class FacetsExperiment(Experiment):
         db.commit()
 
     @staticmethod
-    def delete_data(db: Any, repo_name: str):
-        db.delete_experiment_data(repo_name, ["facets"])
+    def delete_data(db: Any, repo_id: int):
+        db.execute("DELETE FROM facets_repository WHERE repo_id = ?", (repo_id,))
+
+        node_ids = db.fetchall("SELECT id FROM core_node WHERE repo_id = ?", (repo_id,))
+        node_id_list = [row["id"] for row in node_ids]
+        if node_id_list:
+            placeholders = ",".join("?" * len(node_id_list))
+            db.execute(
+                f"DELETE FROM facets_nodes WHERE node_id IN ({placeholders})",
+                node_id_list,
+            )
+
+        db.commit()

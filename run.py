@@ -60,7 +60,7 @@ def collect(db_path: str):
     "--docker-image", default="pbt-analysis:latest", help="Docker image to use"
 )
 @click.option(
-    "--experiment", "-e", multiple=True, help="Experiments to run (default: all)"
+    "--experiments", "-e", multiple=True, help="Experiments to run (default: all)"
 )
 @click.option("--debug", is_flag=True, help="Enable debug mode with verbose logging")
 def experiment(
@@ -68,7 +68,7 @@ def experiment(
     workers: int,
     limit: int,
     docker_image: str,
-    experiment: tuple[str, ...],
+    experiments: tuple[str, ...],
     debug: bool,
 ):
     """Run experiments on repositories in the database."""
@@ -76,13 +76,13 @@ def experiment(
     from analysis.experiments import Experiment
     from analysis.worker import WorkerPool, WorkItem
 
-    for experiment_name in experiment:
+    for experiment_name in experiments:
         assert (
             experiment_name in Experiment.experiments
         ), f"Unrecognized experiment {experiment_name}. Options: {list(Experiment.experiments.keys())}"
 
     experiments = (
-        list(experiment) if experiment else list(Experiment.experiments.keys())
+        list(experiments) if experiments else list(Experiment.experiments.keys())
     )
     console.print(f"[bold]Experiments:[/bold] [green]{', '.join(experiments)}[/green]")
     console.print()
@@ -111,7 +111,8 @@ def experiment(
         work_item = WorkItem(
             repo_name=repo["full_name"],
             node_ids=node_ids,
-            requirements=repo["requirements"] or "",
+            requirements=repo["requirements"],
+            repo_id=repo["id"],
         )
         work_items.append(work_item)
 

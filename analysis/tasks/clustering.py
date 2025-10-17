@@ -58,7 +58,7 @@ class ClusteringTask(Task):
     @staticmethod
     def get_schema_sql() -> str:
         return """
-            CREATE TABLE IF NOT EXISTS facets_clusters (
+            CREATE TABLE IF NOT EXISTS facets_cluster (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 facet_type TEXT NOT NULL,  -- 'pattern' or 'domain'
                 cluster_id INTEGER NOT NULL,
@@ -256,7 +256,7 @@ class ClusteringTask(Task):
             # Store cluster metadata
             db.execute(
                 """
-                INSERT OR REPLACE INTO facets_clusters
+                INSERT OR REPLACE INTO facets_cluster
                 (facet_type, cluster_id, cluster_name, cluster_description, num_items)
                 VALUES (?, ?, ?, ?, ?)
                 """,
@@ -285,7 +285,7 @@ class ClusteringTask(Task):
             # Store cluster metadata
             db.execute(
                 """
-                INSERT OR REPLACE INTO facets_clusters
+                INSERT OR REPLACE INTO facets_cluster
                 (facet_type, cluster_id, cluster_name, cluster_description, num_items)
                 VALUES (?, ?, ?, ?, ?)
                 """,
@@ -322,7 +322,7 @@ class ClusteringTask(Task):
         logger.info("Deleting clustering data...")
 
         db.execute("DELETE FROM facets_cluster_assignment")
-        db.execute("DELETE FROM facets_clusters")
+        db.execute("DELETE FROM facets_cluster")
         db.commit()
 
         logger.info("Clustering data deleted")

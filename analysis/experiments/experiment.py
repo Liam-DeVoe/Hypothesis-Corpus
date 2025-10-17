@@ -52,7 +52,7 @@ class Experiment(ABC):
 
     @staticmethod
     @abstractmethod
-    def delete_data(db: Any, repo_name: str):
+    def delete_data(db: Any, repo_id: int):
         """Delete this experiment's data from the database."""
         pass
 

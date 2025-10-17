@@ -19,7 +19,7 @@ class WorkItem:
     repo_name: str
     node_ids: list[str]
     requirements: str
-    repo_id: int | None = None
+    repo_id: int
 
 
 class Worker(Process):
@@ -141,14 +141,7 @@ class Worker(Process):
 
             # Delete any existing data for this repository before processing
             for experiment in experiments:
-                experiment.delete_data(db, work_item.repo_name)
-
-            result = db.fetchone(
-                "SELECT id FROM core_repository WHERE full_name = ?",
-                (work_item.repo_name,),
-            )
-            assert result
-            work_item.repo_id = result["id"]
+                experiment.delete_data(db, work_item.repo_id)
 
             # Run all experiments for this repository
             all_nodes_processed = 0

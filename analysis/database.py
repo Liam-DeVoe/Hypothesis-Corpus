@@ -126,28 +126,3 @@ class Database:
     def fetchall(self, query: str, parameters=None):
         cursor = self.execute(query, parameters)
         return cursor.fetchall()
-
-    def delete_experiment_data(self, repo_name: str, tables: list[str]):
-        result = self.fetchone(
-            "SELECT id FROM core_repository WHERE full_name = ?",
-            (repo_name,),
-        )
-
-        if not result:
-            return
-
-        repo_id = result["id"]
-        node_ids = self.fetchall(
-            "SELECT id FROM core_node WHERE repo_id = ?", (repo_id,)
-        )
-        node_id_list = [row["id"] for row in node_ids]
-
-        if node_id_list:
-            placeholders = ",".join("?" * len(node_id_list))
-            for table in tables:
-                self.execute(
-                    f"DELETE FROM {table} WHERE node_id IN ({placeholders})",
-                    node_id_list,
-                )
-
-        self.commit()
