@@ -20,9 +20,9 @@ def main():
             sys.exit(1)
 
         config = json.loads(config_file.read_text())
-        node_ids = config.get("node_ids", [])
-        experiment_name = config.get("experiment_name", "coverage")
-        debug = config.get("debug", False)
+        node_ids = config["node_ids"]
+        experiment_name = config["experiment_name"]
+        debug = config["debug"]
         requirements_file = Path("/app/requirements.txt")
         assert requirements_file.exists()
 

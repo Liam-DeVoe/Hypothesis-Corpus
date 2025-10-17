@@ -74,7 +74,7 @@ class TestRunner:
         app_dir: Path,
         requirements: str,
         node_ids: list[str],
-        experiment_name: str = "coverage",
+        experiment_name: str,
         *,
         debug: bool,
         repo_name: str,
@@ -188,7 +188,7 @@ class TestRunner:
         repo_name: str,
         node_ids: list[str],
         requirements: str,
-        experiment_name: str = "coverage",
+        experiment_name: str,
         *,
         debug: bool,
     ) -> dict[str, any]:

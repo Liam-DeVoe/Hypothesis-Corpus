@@ -93,7 +93,8 @@ def experiment(
 
     db = Database(db_path=db_path)
 
-    query = """
+    repos = db.fetchall(
+        """
         SELECT
             core_repository.id,
             core_repository.full_name,
@@ -102,10 +103,7 @@ def experiment(
         FROM core_repository
         WHERE core_repository.status = 'valid'
     """
-    if limit:
-        query += f" LIMIT {limit}"
-
-    repos = db.fetchall(query)
+    )
 
     if not overwrite:
         repos = [
@@ -113,6 +111,8 @@ def experiment(
             for repo in repos
             if not set(experiments) <= set(json.loads(repo["experiments_ran"]))
         ]
+    if limit:
+        repos = repos[:limit]
 
     work_items = []
     for repo in repos:

@@ -25,7 +25,10 @@ def callback(observation: Observation):
     metadata = observation.metadata
     observation = {
         "features": observation.features,
-        "coverage": observation.coverage,
+        # even with observability coverage enabled, hypothesis returns None
+        # instead of the empty list if there is no coverage. We should probably
+        # change this.
+        "coverage": observation.coverage or {},
         "timing": observation.timing,
         "metadata": {
             "predicates": metadata.predicates,
