@@ -10,12 +10,8 @@ import streamlit as st
 # Add parent directory to path so we can import analysis
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from dashboard.utils import (
-    common_prefix,
-    execution_frequency_histogram,
-    get_database,
-    render_sidebar,
-)
+from dashboard.shared import execution_frequency_histogram
+from dashboard.utils import common_prefix, get_database, render_sidebar
 
 # Page configuration
 st.set_page_config(
