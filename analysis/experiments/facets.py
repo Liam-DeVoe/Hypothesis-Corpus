@@ -106,6 +106,7 @@ class FacetsExperiment(Experiment):
         result = subprocess_run(
             ["claude", "-p", prompt],
             timeout=60 * 10,
+            cwd="/app/repo",
         )
 
         assert result.returncode == 0
