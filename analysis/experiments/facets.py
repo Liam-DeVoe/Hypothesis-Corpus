@@ -10,7 +10,7 @@ except ImportError:
     from utils import subprocess_run
 
 
-REPOSITORY_SUMMARY_PROMPT = """Your job is to summarize what this GitHub repository does. Describe the repository's purpose, domain, and primary functionality. Be clear, concise, and get to the point in at most two sentences. Focus on what the repository provides or implements.
+REPOSITORY_SUMMARY_PROMPT = """Your job is to summarize what this GitHub repository does. Describe the repository's purpose and primary functionality. Be clear, concise, and get to the point in at most two sentences.
 
 <examples>
 * This repository implements a finite automata library for Python, providing classes and utilities for creating, manipulating, and querying deterministic and non-deterministic finite automata.

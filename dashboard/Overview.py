@@ -91,18 +91,14 @@ def render_overview_metrics(stats: dict[str, Any]):
         total = stats["core_node"]["total"] or 0
         st.metric(
             "Nodes Analyzed",
-            analyzed,
-            f"{total} total nodes",
+            f"{analyzed} / {total}",
         )
 
     with col3:
-        passed = stats["core_node"]["passed"] or 0
         failed = stats["core_node"]["failed"] or 0
-        pass_rate = (passed / analyzed * 100) if analyzed > 0 else 0
         st.metric(
-            "Pass Rate",
-            f"{pass_rate:.1f}%",
-            f"{failed} failed",
+            "Failed nodes",
+            f"{failed}",
         )
 
 
