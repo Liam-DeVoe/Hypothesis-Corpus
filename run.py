@@ -94,7 +94,11 @@ def experiment(
     db = Database(db_path=db_path)
 
     query = """
-        SELECT core_repository.id, core_repository.full_name, core_repository.requirements, core_repository.experiments_ran
+        SELECT
+            core_repository.id,
+            core_repository.full_name,
+            core_repository.requirements,
+            core_repository.experiments_ran
         FROM core_repository
         WHERE core_repository.status = 'valid'
     """
