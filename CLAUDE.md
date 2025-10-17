@@ -147,7 +147,7 @@ Experiment-specific tables are defined by each experiment's `get_schema_sql()`:
 - `facets` experiment: `facets` table with summaries, property patterns, and technical domains
 
 Task-specific tables are defined by each task's `get_schema_sql()`:
-- `clustering` task: `facet_clusters`, `facet_cluster_assignment`
+- `clustering` task: `facets_clusters`, `facets_cluster_assignment`
 
 #### Database API
 The Database class maintains a **single persistent connection** per db_path (singleton pattern):

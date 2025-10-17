@@ -30,7 +30,7 @@ def main():
     db = get_database()
 
     # Check if clustering has been run
-    result = db.fetchone("SELECT COUNT(*) as count FROM facet_clusters")
+    result = db.fetchone("SELECT COUNT(*) as count FROM facets_clusters")
     cluster_count = result["count"] if result else 0
 
     if cluster_count == 0:
@@ -63,7 +63,7 @@ def display_clusters(db: Database, facet_type: str):
             cluster_description,
             num_items,
             created_at
-        FROM facet_clusters
+        FROM facets_clusters
         WHERE facet_type = ?
         ORDER BY num_items DESC
         """,
@@ -146,7 +146,7 @@ def display_clusters(db: Database, facet_type: str):
             SELECT
                 fca.facet_text,
                 COUNT(f.node_id) as usage_count
-            FROM facet_cluster_assignment fca
+            FROM facets_cluster_assignment fca
             JOIN facets f ON fca.facet_text = f.facet AND fca.facet_type = f.type
             WHERE fca.cluster_id = ? AND fca.facet_type = ?
             GROUP BY fca.facet_text
