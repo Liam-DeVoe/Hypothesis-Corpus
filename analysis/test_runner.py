@@ -160,13 +160,17 @@ class TestRunner:
         container.put_archive("/", tar_stream.read())
 
         container.start()
-        result = container.wait(timeout=self.RUNNER_TIMEOUT)
-        logs = container.logs(stdout=True, stderr=True).decode("utf-8")
+
         if debug:
-            logger.info(f"[w{self.worker_id}][{repo_name}] Container logs:\n{logs}")
+            logger.info(f"[w{self.worker_id}][{repo_name}] Container started, streaming logs...")
+            for line in container.logs(stream=True, stdout=True, stderr=True):
+                logger.info(f"[w{self.worker_id}][{repo_name}] {line.decode('utf-8').rstrip()}")
+            result = container.wait(timeout=self.RUNNER_TIMEOUT)
             logger.info(
                 f"[w{self.worker_id}][{repo_name}] Container exit code: {result.get('StatusCode', 'unknown')}"
             )
+        else:
+            result = container.wait(timeout=self.RUNNER_TIMEOUT)
 
         bits, _ = container.get_archive("/app/results.json")
         tar_stream = BytesIO()
