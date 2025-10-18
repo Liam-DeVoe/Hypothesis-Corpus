@@ -1,6 +1,7 @@
 import json
 import logging
 import multiprocessing as mp
+import subprocess
 import time
 import traceback
 from dataclasses import dataclass
@@ -32,6 +33,7 @@ class Worker(Process):
         worker_id: int,
         task_queue: Queue,
         result_queue: Queue,
+        container_id_queue: Queue,
         db_path: str,
         docker_image: str,
         experiments: list[str],
@@ -42,6 +44,7 @@ class Worker(Process):
         self.worker_id = worker_id
         self.task_queue = task_queue
         self.result_queue = result_queue
+        self.container_id_queue = container_id_queue
         self.db_path = db_path
         self.docker_image = docker_image
         self.experiments = experiments
@@ -54,7 +57,11 @@ class Worker(Process):
 
         # Initialize components in the worker process
         db = Database(db_path=self.db_path)
-        test_runner = TestRunner(self.docker_image, worker_id=self.worker_id)
+        test_runner = TestRunner(
+            self.docker_image,
+            worker_id=self.worker_id,
+            container_id_queue=self.container_id_queue,
+        )
 
         # Load experiments
         from .experiments import Experiment
@@ -95,6 +102,9 @@ class Worker(Process):
 
             except mp.queues.Empty:
                 continue  # No work available, keep waiting
+            except KeyboardInterrupt:
+                logger.info(f"[w{self.worker_id}][{work_item.repo_name}] Interrupted")
+                return
             except Exception as e:
                 repo_name = (
                     work_item.repo_name if "work_item" in locals() else "unknown"
@@ -298,6 +308,7 @@ class WorkerPool:
         self.debug = debug
         self.task_queue = mp.Queue(maxsize=100)
         self.result_queue = mp.Queue()
+        self.container_id_queue = mp.Queue()
         self.workers = []
         self.results = []
 
@@ -310,6 +321,7 @@ class WorkerPool:
                 i,
                 self.task_queue,
                 self.result_queue,
+                self.container_id_queue,
                 self.db_path,
                 self.docker_image,
                 self.experiments,
@@ -358,19 +370,37 @@ class WorkerPool:
         return self.results
 
     def shutdown(self):
-        """Shutdown all workers."""
+        """Shutdown all workers and clean up containers."""
         logger.info("Shutting down worker pool")
 
-        # Send poison pills to all workers
-        for _ in range(self.num_workers):
-            self.task_queue.put(None)
+        # Collect all container IDs from the queue
+        container_ids = []
+        while not self.container_id_queue.empty():
+            try:
+                container_info = self.container_id_queue.get_nowait()
+                container_ids.append(container_info["container_id"])
+            except:
+                break
 
-        # Wait for workers to finish
+        # Kill and remove containers using Docker CLI
+        logger.info(f"Cleaning up {len(container_ids)} containers...")
+        # use capture_output=True to suppress printing of killed ids to stdout
+        subprocess.run(["docker", "kill"] + container_ids, capture_output=True)
+        subprocess.run(["docker", "rm", "-f"] + container_ids, capture_output=True)
+        logger.info("Containers cleaned up")
+
         for worker in self.workers:
-            worker.join(timeout=10)
             if worker.is_alive():
-                logger.warning(f"[w{worker.worker_id}] Did not stop gracefully")
                 worker.terminate()
+
+        # this feels like a hack to me, but this removes blocking calls at shutdown
+        # that allows ctrl+c to actually exit. I think the root cause of this is
+        # forcefully terminating workers, which does not give queue background threads
+        # a chance to join. I tried cleanly joining the workers and that hung
+        # forever though, so I give up for now. This is fine for now.
+        self.task_queue.cancel_join_thread()
+        self.result_queue.cancel_join_thread()
+        self.container_id_queue.cancel_join_thread()
 
         logger.info("Worker pool shutdown complete")
 
@@ -378,5 +408,5 @@ class WorkerPool:
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, _exc_type, _exc_val, _exc_tb):
         self.shutdown()

@@ -21,12 +21,16 @@ class TestRunner:
     RUNNER_TIMEOUT = 60 * 60  # 1 hour timeout
 
     def __init__(
-        self, docker_image: str = "pbt-analysis:latest", worker_id: int | None = None
+        self,
+        docker_image: str = "pbt-analysis:latest",
+        worker_id: int | None = None,
+        container_id_queue=None,
     ):
         """Initialize the test runner."""
         self.docker_client = docker.from_env()
         self.docker_image = docker_image
         self.worker_id = worker_id
+        self.container_id_queue = container_id_queue
 
     def get_git_commit_hash(self, repo_dir: Path) -> str | None:
         """Get the current git commit hash of a repository."""
@@ -200,6 +204,12 @@ class TestRunner:
             volumes={CACHE_VOLUME_NAME: {"bind": "/root/.cache/uv", "mode": "rw"}},
         )
         container.put_archive("/", tar_stream.read())
+
+        # Publish container ID so it can be stopped during shutdown
+        if self.container_id_queue is not None:
+            self.container_id_queue.put(
+                {"container_id": container.id, "worker_id": self.worker_id}
+            )
 
         container.start()
 
