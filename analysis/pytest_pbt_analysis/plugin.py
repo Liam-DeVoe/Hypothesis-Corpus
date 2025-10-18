@@ -179,7 +179,9 @@ def pytest_runtest_makereport(item, call):
             "print_blob": s.print_blob,
             "report_multiple_bugs": s.report_multiple_bugs,
             "stateful_step_count": s.stateful_step_count,
-            "suppress_health_check": s.suppress_health_check,
+            "suppress_health_check": [
+                health_check.value for health_check in s.suppress_health_check
+            ],
             "verbosity": s.verbosity.value,
         },
         "observations": to_jsonable(_observations, avoid_realization=False),
