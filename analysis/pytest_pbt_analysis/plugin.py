@@ -144,15 +144,31 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
 
+    # write results for skipped tests here, since they don't get a
+    # pytest_runtest_makereport with call.when == "call" which would write their
+    # results.
+    if call.when == "setup" and report.outcome == "skipped":
+        results = {
+            "execution_time": None,
+            "status": "skipped",
+            "error_message": report.longreprtext,
+            "settings": None,
+            "observations": [],
+        }
+        results_file = Path("/app/test_results.json")
+        results_file.parent.mkdir(parents=True, exist_ok=True)
+        results_file.write_text(json.dumps(results))
+        return
+
     if call.when != "call":
         return
 
-    passed = report.outcome == "passed"
+    status = "passed" if report.outcome == "passed" else "failed"
     s = _test_settings
     results = {
         "execution_time": report.duration,
-        "passed": passed,
-        "error_message": None if passed else report.longreprtext,
+        "status": status,
+        "error_message": None if status == "passed" else report.longreprtext,
         "settings": {
             "backend": s.backend,
             "database": str(type(s.database)),

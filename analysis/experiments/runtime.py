@@ -26,7 +26,7 @@ class RuntimeExperiment(Experiment):
             CREATE TABLE IF NOT EXISTS runtime_summary (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 node_id INTEGER NOT NULL,
-                passed BOOLEAN,
+                status TEXT,  -- "passed", "failed", or "skipped"
                 execution_time REAL,  -- seconds
                 error_message TEXT,  -- Error message if test failed
                 count_test_cases INTEGER,
@@ -126,7 +126,7 @@ class RuntimeExperiment(Experiment):
         db.execute(
             """
             INSERT INTO runtime_summary (
-                node_id, passed, execution_time, error_message,
+                node_id, status, execution_time, error_message,
                 count_test_cases, coverage, line_execution_counts,
                 total_lines_covered, settings
             )
@@ -134,7 +134,7 @@ class RuntimeExperiment(Experiment):
             """,
             (
                 node_id,
-                data["passed"],
+                data["status"],
                 data["execution_time"],
                 data["error_message"],
                 len(observations),
