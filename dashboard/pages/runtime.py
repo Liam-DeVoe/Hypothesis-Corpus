@@ -64,21 +64,6 @@ def main():
         db._conn,
     )
 
-    # Coverage over time
-    coverage_timeline = pd.read_sql_query(
-        """
-        SELECT
-            DATE(rs.executed_at) as date,
-            COUNT(DISTINCT rs.node_id) as nodes_count,
-            SUM(rs.total_lines_covered) as lines_covered
-        FROM runtime_summary rs
-        WHERE rs.coverage IS NOT NULL
-        GROUP BY DATE(rs.executed_at)
-        ORDER BY date
-        """,
-        db._conn,
-    )
-
     # Test execution results
     test_results = pd.read_sql_query(
         """
@@ -133,33 +118,6 @@ def main():
         fig.update_layout(height=600, xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
 
-    # Coverage timeline
-    if not coverage_timeline.empty and len(coverage_timeline) > 1:
-        st.subheader("Coverage Over Time")
-
-        fig = go.Figure()
-
-        # Add lines covered as primary metric
-        fig.add_trace(
-            go.Bar(
-                x=coverage_timeline["date"],
-                y=coverage_timeline["lines_covered"],
-                name="Lines Covered",
-                marker_color="lightgreen",
-                yaxis="y",
-            )
-        )
-
-        fig.update_layout(
-            title="Coverage Metrics Over Time",
-            xaxis_title="Date",
-            yaxis={"title": "Lines Covered", "side": "left"},
-            hovermode="x unified",
-            height=400,
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
     # Test execution results
     if not test_results.empty and test_results["total_executions"].iloc[0] > 0:
         col1, col2 = st.columns(2)
@@ -190,7 +148,7 @@ def main():
             fig = px.histogram(
                 execution_times,
                 x="execution_time",
-                nbins=50,
+                nbins=5000,
                 title="Nodes by execution time",
                 labels={
                     "execution_time": "Execution Time (seconds)",

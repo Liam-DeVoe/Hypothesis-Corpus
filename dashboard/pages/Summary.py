@@ -128,7 +128,7 @@ def timing_histogram():
         title="Tests by execution time",
         xaxis_title="Execution time (seconds)",
         yaxis_title="Test count",
-        bin_size=1,
+        bin_size=0.01,
     )
 
 
@@ -154,24 +154,43 @@ def max_examples_histogram():
 
 
 def deadline_histogram():
-    settings_data = pd.read_sql_query(
+    # Get counts of NULL deadlines and total
+    counts = pd.read_sql_query(
         """
-        SELECT json_extract(settings, '$.deadline') as deadline
+        SELECT
+            COUNT(*) as total,
+            SUM(CASE WHEN json_extract(settings, '$.deadline') IS NULL THEN 1 ELSE 0 END) as null_count
         FROM runtime_summary
         WHERE status IN ('passed', 'failed')
         """,
         db._conn,
     )
-    if settings_data.empty:
-        return None
 
-    return histogram_with_kde(
+    total = counts["total"].iloc[0] if not counts.empty else 0
+    null_count = counts["null_count"].iloc[0] if not counts.empty else 0
+
+    settings_data = pd.read_sql_query(
+        """
+        SELECT json_extract(settings, '$.deadline') as deadline
+        FROM runtime_summary
+        WHERE status IN ('passed', 'failed')
+        AND json_extract(settings, '$.deadline') IS NOT NULL
+        """,
+        db._conn,
+    )
+
+    if settings_data.empty:
+        return None, null_count, total
+
+    fig = histogram_with_kde(
         data=settings_data["deadline"].tolist(),
         title="Distribution of deadline",
         xaxis_title="deadline (seconds)",
         yaxis_title="Test count",
         bin_size=0.05,
     )
+
+    return fig, null_count, total
 
 
 def stateful_step_count_histogram():
@@ -302,9 +321,19 @@ def main():
     else:
         st.info("No max_examples data available.")
 
-    fig = deadline_histogram()
-    if fig:
-        st.plotly_chart(fig, use_container_width=True)
+    result = deadline_histogram()
+    if result and result[0]:
+        fig, null_count, total = result
+
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            if total > 0:
+                st.markdown("**deadline = None**")
+                st.markdown(f"{null_count:,} / {total:,}")
     else:
         st.info("No deadline data available.")
 
