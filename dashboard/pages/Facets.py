@@ -36,6 +36,8 @@ def main():
         SELECT
             COUNT(DISTINCT s.node_id) as nodes_with_summaries,
             COUNT(DISTINCT r.id) as repos_with_summaries,
+            (SELECT COUNT(*) FROM core_node) as total_nodes,
+            (SELECT COUNT(*) FROM core_repository WHERE status = 'valid') as total_repos,
             AVG(LENGTH(s.facet)) as avg_summary_length,
             MIN(LENGTH(s.facet)) as min_summary_length,
             MAX(LENGTH(s.facet)) as max_summary_length
@@ -118,50 +120,34 @@ def main():
         db._conn,
     )
 
-    # Summaries over time
-    summary_timeline = pd.read_sql_query(
-        """
-        SELECT
-            DATE(s.created_at) as date,
-            COUNT(*) as summaries_created,
-            AVG(LENGTH(s.facet)) as avg_length
-        FROM facets_nodes s
-        GROUP BY DATE(s.created_at)
-        ORDER BY date
-        """,
-        db._conn,
-    )
-
     # Display overall metrics
     if not overall_stats.empty and overall_stats["nodes_with_summaries"].iloc[0] > 0:
-        col1, col2, col4, col5, col6 = st.columns(5)
+        col1, col2, col3, col4 = st.columns(4)
 
         with col1:
+            nodes_processed = overall_stats['nodes_with_summaries'].iloc[0]
+            total_nodes = overall_stats['total_nodes'].iloc[0]
             st.metric(
-                "Nodes Analyzed",
-                f"{overall_stats['nodes_with_summaries'].iloc[0]:,}",
+                "Nodes processed",
+                f"{nodes_processed:,} / {total_nodes:,}",
             )
         with col2:
+            repos_processed = overall_stats['repos_with_summaries'].iloc[0]
+            total_repos = overall_stats['total_repos'].iloc[0]
             st.metric(
-                "Repositories",
-                f"{overall_stats['repos_with_summaries'].iloc[0]:,}",
+                "Repositories processed",
+                f"{repos_processed:,} / {total_repos:,}",
             )
-        with col4:
+        with col3:
             if not pattern_stats.empty:
                 st.metric(
-                    "Total Patterns",
-                    f"{pattern_stats['total_patterns'].iloc[0]:,}",
-                )
-        with col5:
-            if not pattern_stats.empty:
-                st.metric(
-                    "Unique Patterns",
+                    "Unique patterns",
                     f"{len(patterns):,}",
                 )
-        with col6:
+        with col4:
             if not domain_stats.empty:
                 st.metric(
-                    "Unique Domains",
+                    "Unique pomains",
                     f"{len(domains):,}",
                 )
     else:
@@ -182,24 +168,6 @@ def main():
                 "avg_summary_length": "Average Summary Length (chars)",
                 "count": "Number of Repositories",
             },
-        )
-        fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Timeline
-    if not summary_timeline.empty and len(summary_timeline) > 1:
-        st.subheader("Summaries Over Time")
-
-        fig = px.line(
-            summary_timeline,
-            x="date",
-            y="summaries_created",
-            title="Summaries Generated Over Time",
-            labels={
-                "summaries_created": "Summaries Created",
-                "date": "Date",
-            },
-            markers=True,
         )
         fig.update_layout(height=400)
         st.plotly_chart(fig, use_container_width=True)

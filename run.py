@@ -361,10 +361,18 @@ def _populate_collected_nodes(db_path: str):
 @click.option("--db-path", help="Path to database file", default="analysis/data.db")
 @click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
 @click.option("--debug", is_flag=True, help="Enable debug mode with container logs")
-@click.option("--overwrite", is_flag=True, help="Re-run installation even if already completed")
+@click.option(
+    "--overwrite", is_flag=True, help="Re-run installation even if already completed"
+)
 @click.option("--repo", "repo_name", help="Process just this repository")
 def install(db_path: str, limit: int, debug: bool, overwrite: bool, repo_name: str):
-    _install(db_path=db_path, limit=limit, debug=debug, overwrite=overwrite, repo_name=repo_name)
+    _install(
+        db_path=db_path,
+        limit=limit,
+        debug=debug,
+        overwrite=overwrite,
+        repo_name=repo_name,
+    )
     _populate_collected_nodes(db_path=db_path)
 
 
