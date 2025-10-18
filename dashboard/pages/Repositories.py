@@ -71,11 +71,7 @@ def main():
                 """
                 SELECT
                     t.node_id,
-                    CASE
-                        WHEN rs.id IS NOT NULL AND rs.passed = 1 THEN 'passed'
-                        WHEN rs.id IS NOT NULL AND rs.passed = 0 THEN 'failed'
-                        ELSE 'not analyzed'
-                    END as status
+                    COALESCE(rs.status, 'not analyzed') as status
                 FROM core_node t
                 JOIN core_repository r ON t.repo_id = r.id
                 LEFT JOIN runtime_summary rs ON t.id = rs.node_id

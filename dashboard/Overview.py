@@ -61,8 +61,8 @@ def load_data():
         SELECT
             COUNT(*) as total,
             SUM(CASE WHEN rs.id IS NOT NULL THEN 1 ELSE 0 END) as analyzed,
-            SUM(CASE WHEN rs.passed = 1 THEN 1 ELSE 0 END) as passed,
-            SUM(CASE WHEN rs.passed = 0 THEN 1 ELSE 0 END) as failed
+            SUM(CASE WHEN rs.status = 'passed' THEN 1 ELSE 0 END) as passed,
+            SUM(CASE WHEN rs.status = 'failed' THEN 1 ELSE 0 END) as failed
         FROM core_node cn
         LEFT JOIN runtime_summary rs ON cn.id = rs.node_id
         """

@@ -84,8 +84,8 @@ def main():
         """
         SELECT
             COUNT(*) as total_executions,
-            SUM(CASE WHEN passed = 1 THEN 1 ELSE 0 END) as passed,
-            SUM(CASE WHEN passed = 0 THEN 1 ELSE 0 END) as failed
+            SUM(CASE WHEN status = 'passed' THEN 1 ELSE 0 END) as passed,
+            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
         FROM runtime_summary
         """,
         db._conn,
@@ -368,7 +368,7 @@ def main():
             SELECT
                 t.node_id,
                 rs.total_lines_covered,
-                rs.passed,
+                rs.status,
                 rs.execution_time
             FROM core_node t
             JOIN core_repository r ON t.repo_id = r.id
@@ -391,7 +391,7 @@ def main():
                     "total_lines_covered": st.column_config.NumberColumn(
                         "Lines Covered", width="small"
                     ),
-                    "passed": st.column_config.CheckboxColumn("Passed", width="small"),
+                    "status": st.column_config.TextColumn("Status", width="small"),
                     "execution_time": st.column_config.NumberColumn(
                         "Time (s)", format="%.2f", width="small"
                     ),

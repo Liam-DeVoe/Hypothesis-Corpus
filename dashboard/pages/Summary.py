@@ -115,7 +115,7 @@ def timing_histogram():
         """
         SELECT execution_time
         FROM runtime_summary
-        WHERE execution_time IS NOT NULL
+        WHERE status IN ('passed', 'failed')
         """,
         db._conn,
     )
@@ -137,7 +137,7 @@ def max_examples_histogram():
         """
         SELECT json_extract(settings, '$.max_examples') as max_examples
         FROM runtime_summary
-        WHERE settings IS NOT NULL
+        WHERE status IN ('passed', 'failed')
         """,
         db._conn,
     )
@@ -158,7 +158,7 @@ def deadline_histogram():
         """
         SELECT json_extract(settings, '$.deadline') as deadline
         FROM runtime_summary
-        WHERE settings IS NOT NULL
+        WHERE status IN ('passed', 'failed')
         """,
         db._conn,
     )
@@ -179,7 +179,7 @@ def stateful_step_count_histogram():
         """
         SELECT json_extract(settings, '$.stateful_step_count') as stateful_step_count
         FROM runtime_summary
-        WHERE settings IS NOT NULL
+        WHERE status IN ('passed', 'failed')
         """,
         db._conn,
     )
@@ -202,7 +202,7 @@ def derandomize_bar_chart():
             json_extract(settings, '$.derandomize') as derandomize,
             COUNT(*) as count
         FROM runtime_summary
-        WHERE settings IS NOT NULL
+        WHERE status IN ('passed', 'failed')
         GROUP BY derandomize
         """,
         db._conn,
@@ -240,7 +240,6 @@ def median_choices_size_histogram():
         """
         SELECT node_id, choices_size
         FROM runtime_testcase
-        WHERE choices_size IS NOT NULL
         """,
         db._conn,
     )

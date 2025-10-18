@@ -172,7 +172,7 @@ def pytest_runtest_makereport(item, call):
         "settings": {
             "backend": s.backend,
             "database": str(type(s.database)),
-            "deadline": s.deadline.total_seconds(),
+            "deadline": None if s.deadline is None else s.deadline.total_seconds(),
             "derandomize": s.derandomize,
             "max_examples": s.max_examples,
             "phases": [phase.value for phase in s.phases],
