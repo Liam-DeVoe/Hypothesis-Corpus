@@ -65,8 +65,7 @@ def main():
         """
         SELECT
             facet as pattern,
-            COUNT(*) as count,
-            COUNT(DISTINCT node_id) as unique_tests
+            COUNT(*) as count
         FROM facets_nodes
         WHERE type = 'pattern'
         GROUP BY facet
@@ -91,8 +90,7 @@ def main():
         """
         SELECT
             facet as domain,
-            COUNT(*) as count,
-            COUNT(DISTINCT node_id) as unique_tests
+            COUNT(*) as count
         FROM facets_nodes
         WHERE type = 'domain'
         GROUP BY facet
@@ -186,9 +184,6 @@ def main():
                 column_config={
                     "pattern": "Pattern",
                     "count": st.column_config.NumberColumn("Tests", format="%d"),
-                    "unique_tests": st.column_config.NumberColumn(
-                        "Unique Tests", format="%d"
-                    ),
                 },
                 hide_index=True,
                 width="stretch",
@@ -210,9 +205,6 @@ def main():
                 column_config={
                     "domain": "Domain",
                     "count": st.column_config.NumberColumn("Tests", format="%d"),
-                    "unique_tests": st.column_config.NumberColumn(
-                        "Unique Tests", format="%d"
-                    ),
                 },
                 hide_index=True,
                 width="stretch",
