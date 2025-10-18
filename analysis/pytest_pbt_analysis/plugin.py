@@ -91,10 +91,17 @@ def pytest_collection_modifyitems(session, config, items):
     if _collection_error:
         raise AssertionError(_collection_error)
 
+    # match by suffix comparison to remove any false positives from
+    # collecting from different dirs. For instance we might store a nodeid
+    # as repo/test_a.py, and collect it as test_a.py in this plugin. we still
+    # want to match those up.
+    def suffix_match(nodeid1: str, nodeid2: str) -> bool:
+        return nodeid1.endswith(nodeid2) or nodeid2.endswith(nodeid1)
+
     assert items
     n = len(items)
     for i, item in enumerate(reversed(items)):
-        if item.nodeid != nodeid:
+        if not suffix_match(item.nodeid, nodeid):
             del items[n - i - 1]
     assert len(items) == 1, items
 

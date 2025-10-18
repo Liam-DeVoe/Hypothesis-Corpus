@@ -119,10 +119,12 @@ def experiment(
         ]
     if limit:
         repos = repos[:limit]
-    if repos is not None:
+
+    if repo_name is not None:
         assert limit is None
         repos = [repo for repo in repos if repo["full_name"] == repo_name]
-        assert len(repos) == 1
+        # if you hit this, then maybe you forgot to pass --overwrite?
+        assert len(repos) == 1, repos
 
     work_items = []
     for repo in repos:
