@@ -57,6 +57,11 @@ def collect(db_path: str):
 @click.option("--workers", "-w", type=int, default=4, help="Number of worker processes")
 @click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
 @click.option(
+    "--repo",
+    "repo_name",
+    help="Run experiment on specific repository (e.g., owner/repo)",
+)
+@click.option(
     "--docker-image", default="pbt-analysis:latest", help="Docker image to use"
 )
 @click.option(
@@ -70,6 +75,7 @@ def experiment(
     db_path: str,
     workers: int,
     limit: int,
+    repo_name: str,
     docker_image: str,
     experiments: tuple[str, ...],
     debug: bool,
@@ -113,6 +119,10 @@ def experiment(
         ]
     if limit:
         repos = repos[:limit]
+    if repos is not None:
+        assert limit is None
+        repos = [repo for repo in repos if repo["full_name"] == repo_name]
+        assert len(repos) == 1
 
     work_items = []
     for repo in repos:

@@ -78,13 +78,18 @@ class RuntimeExperiment(Experiment):
             cwd="/app/repo",
             timeout=timeout,
         )
-        # 0 = passed
+        # 0 = test passed
         # 1 = test failed
-        # 3 = internal error
+        # 2 = test execution was interrupted by the user
+        # 3 = internal error happened during test execution
+        # 4 = pytest command line usage error
+        # 5 = no tests were collected
         #
-        # tests either passing or failing is fine, but I want to know about any
-        # internal errors
-        assert result.returncode in {0, 1}
+        if result.returncode not in {0, 1}:
+            raise RuntimeError(
+                f"pytest exited with code {result.returncode}. "
+                f"stdout: {result.stdout}\n\n stderr: {result.stderr}"
+            )
 
         results_file = Path("/app/test_results.json")
         assert results_file.exists()

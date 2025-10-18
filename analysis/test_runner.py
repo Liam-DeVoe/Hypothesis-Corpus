@@ -162,9 +162,13 @@ class TestRunner:
         container.start()
 
         if debug:
-            logger.info(f"[w{self.worker_id}][{repo_name}] Container started, streaming logs...")
+            logger.info(
+                f"[w{self.worker_id}][{repo_name}] Container started, streaming logs..."
+            )
             for line in container.logs(stream=True, stdout=True, stderr=True):
-                logger.info(f"[w{self.worker_id}][{repo_name}] {line.decode('utf-8').rstrip()}")
+                logger.info(
+                    f"[w{self.worker_id}][{repo_name}] {line.decode('utf-8').rstrip()}"
+                )
             result = container.wait(timeout=self.RUNNER_TIMEOUT)
             logger.info(
                 f"[w{self.worker_id}][{repo_name}] Container exit code: {result.get('StatusCode', 'unknown')}"
