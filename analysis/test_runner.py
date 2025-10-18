@@ -43,20 +43,62 @@ class TestRunner:
             logger.error(f"[w{self.worker_id}] Failed to get git hash: {e}")
             return None
 
-    def clone_repository(self, repo_url: str, target_dir: Path) -> bool:
-        """Clone a repository to the target directory."""
+    def clone_repository(
+        self, repo_url: str, target_dir: Path, commit_hash: str
+    ) -> bool:
         try:
             # Construct GitHub URL if just owner/repo is provided
             if not repo_url.startswith(("http://", "https://", "git@")):
                 repo_url = f"https://github.com/{repo_url}.git"
 
             logger.info(f"[w{self.worker_id}][{repo_url}] Cloning repository")
+
+            logger.info(
+                f"[w{self.worker_id}][{repo_url}] Fetching commit {commit_hash[:7]} with depth 1"
+            )
+            # we want to pull down a specific commit from the remote. We'll
+            # initialize an empty repo, then fetch that specific commit with --depth 1,
+            # then reify the files by unpacking (checking out) the current git state.
+            #
+            # see https://stackoverflow.com/questions/31278902/how-to-
+            # shallow-clone-a-specific-commit-with-depth-1.
+            target_dir.mkdir(parents=True, exist_ok=True)
+
             subprocess.run(
-                ["git", "clone", "--depth", "1", repo_url, str(target_dir)],
+                ["git", "init"],
+                cwd=target_dir,
                 capture_output=True,
                 text=True,
                 check=True,
             )
+            subprocess.run(
+                ["git", "remote", "add", "origin", repo_url],
+                cwd=target_dir,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "fetch", "--depth", "1", "origin", commit_hash],
+                cwd=target_dir,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "checkout", "FETCH_HEAD"],
+                cwd=target_dir,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            # sanity check
+            assert self.get_git_commit_hash(target_dir) == commit_hash, (
+                self.get_git_commit_hash(target_dir),
+                commit_hash,
+            )
+
             return True
         except subprocess.CalledProcessError as e:
             logger.error(
@@ -196,6 +238,7 @@ class TestRunner:
         repo_name: str,
         node_ids: list[str],
         requirements: str,
+        commit_hash: str,
         experiment_name: str,
         *,
         debug: bool,
@@ -210,7 +253,7 @@ class TestRunner:
             app_dir = work_dir / "app"
             app_dir.mkdir(exist_ok=True)
 
-            self.clone_repository(repo_name, repo_dir)
+            self.clone_repository(repo_name, repo_dir, commit_hash)
             self.setup_environment(
                 app_dir,
                 requirements,

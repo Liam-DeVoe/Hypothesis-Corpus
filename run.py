@@ -105,7 +105,8 @@ def experiment(
             core_repository.id,
             core_repository.full_name,
             core_repository.requirements,
-            core_repository.experiments_ran
+            core_repository.experiments_ran,
+            core_repository.commit_hash
         FROM core_repository
         WHERE core_repository.status = 'valid'
     """
@@ -140,6 +141,7 @@ def experiment(
             node_ids=node_ids,
             requirements=repo["requirements"],
             repo_id=repo["id"],
+            commit_hash=repo["commit_hash"],
         )
         work_items.append(work_item)
 

@@ -21,6 +21,7 @@ class WorkItem:
     node_ids: list[str]
     requirements: str
     repo_id: int
+    commit_hash: str
 
 
 class Worker(Process):
@@ -158,6 +159,7 @@ class Worker(Process):
                     work_item.repo_name,
                     work_item.node_ids,
                     work_item.requirements,
+                    commit_hash=work_item.commit_hash,
                     experiment_name=experiment.name,
                     debug=self.debug,
                 )
