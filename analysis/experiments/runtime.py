@@ -84,10 +84,9 @@ class RuntimeExperiment(Experiment):
         # 3 = internal error happened during test execution
         # 4 = pytest command line usage error
         # 5 = no tests were collected
-        #
         if result.returncode not in {0, 1}:
             raise RuntimeError(
-                f"pytest exited with code {result.returncode}. "
+                f"pytest exited with code {result.returncode}. nodeid: {node_id}\n"
                 f"stdout: {result.stdout}\n\n stderr: {result.stderr}"
             )
 

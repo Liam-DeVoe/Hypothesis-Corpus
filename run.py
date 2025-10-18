@@ -200,18 +200,22 @@ def experiment(
 # ==============================================================================
 
 
-def _install(*, db_path, limit, debug):
+def _install(*, db_path, limit, debug, overwrite, repo_name):
     from analysis.collect.install_repos import install_repository
     from analysis.database import Database
 
     db = Database(db_path=db_path)
 
-    # Get repositories that need processing
-    query = "SELECT full_name FROM core_repository WHERE status IS NULL"
-    if limit:
-        query += f" LIMIT {limit}"
+    repos = db.fetchall("SELECT full_name, status FROM core_repository")
+    if not overwrite:
+        repos = [repo for repo in repos if repo["status"] is None]
 
-    repos = db.fetchall(query)
+    if limit is not None:
+        repos = repos[:limit]
+
+    if repo_name is not None:
+        repos = [repo for repo in repos if repo["full_name"] == repo_name]
+        assert len(repos) == 1, repos
 
     console.print(f"Found [green]{len(repos)}[/green] repositories to process\n")
 
@@ -357,8 +361,10 @@ def _populate_collected_nodes(db_path: str):
 @click.option("--db-path", help="Path to database file", default="analysis/data.db")
 @click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
 @click.option("--debug", is_flag=True, help="Enable debug mode with container logs")
-def install(db_path: str, limit: int, debug: bool):
-    _install(db_path=db_path, limit=limit, debug=debug)
+@click.option("--overwrite", is_flag=True, help="Re-run installation even if already completed")
+@click.option("--repo", "repo_name", help="Process just this repository")
+def install(db_path: str, limit: int, debug: bool, overwrite: bool, repo_name: str):
+    _install(db_path=db_path, limit=limit, debug=debug, overwrite=overwrite, repo_name=repo_name)
     _populate_collected_nodes(db_path=db_path)
 
 
