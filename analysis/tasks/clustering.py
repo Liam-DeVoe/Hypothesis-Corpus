@@ -248,20 +248,13 @@ class ClusterTask(Task):
             """
         )
         domains = [(row["id"], row["facet"]) for row in domain_rows]
-
         logger.info(
             f"Found {len(patterns)} unique patterns and {len(domains)} unique domains"
         )
 
-        pattern_clusters = ClusterTask._cluster_facets(patterns, "pattern")
-        domain_clusters = []
-        # domain_clusters = ClusterTask._cluster_facets(domains, "domain")
-
         return {
-            "pattern_clusters": pattern_clusters,
-            "domain_clusters": domain_clusters,
-            "num_pattern_clusters": len(pattern_clusters),
-            "num_domain_clusters": len(domain_clusters),
+            "pattern_clusters": ClusterTask._cluster_facets(patterns, "pattern"),
+            "domain_clusters": ClusterTask._cluster_facets(domains, "domain"),
         }
 
     @staticmethod
@@ -330,8 +323,8 @@ class ClusterTask(Task):
         db.commit()
 
         logger.info(
-            f"Stored {data['num_pattern_clusters']} pattern clusters and "
-            f"{data['num_domain_clusters']} domain clusters"
+            f"Stored {len(data['pattern_clusters'])} pattern clusters and "
+            f"{len(data['domain_clusters'])} domain clusters"
         )
 
     @staticmethod

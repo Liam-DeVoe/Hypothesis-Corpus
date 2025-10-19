@@ -72,6 +72,8 @@ Here is the summary:
 
 Now output your answer in English inside <answer> tags:"""
 
+CLAUDE_MODEL = "claude-haiku-4-5-20251001"
+
 
 class FacetsExperiment(Experiment):
     name = "facets"
@@ -104,7 +106,7 @@ class FacetsExperiment(Experiment):
     @staticmethod
     def _run_claude(prompt: str) -> str:
         result = subprocess_run(
-            ["claude", "-p", prompt],
+            ["claude", "--model", CLAUDE_MODEL, "-p", prompt],
             timeout=60 * 10,
             cwd="/app/repo",
         )
