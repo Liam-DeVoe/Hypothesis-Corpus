@@ -1,11 +1,12 @@
 import logging
-import math
+import os
 import re
 import subprocess
 from typing import Any
 
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
 from .task import Task
 
@@ -93,7 +94,7 @@ class ClusterTask(Task):
         return ClusterTask._embedding_model
 
     @staticmethod
-    def _run_claude_for_naming(items: list[str]) -> tuple[str, str]:
+    def _name_cluster(items: list[str]) -> tuple[str, str]:
         """Use Claude to generate a cluster name and description."""
         items_text = "\n".join(f"- {item}" for item in items)
         prompt = CLUSTER_NAMING_PROMPT.format(items=items_text)
@@ -117,19 +118,33 @@ class ClusterTask(Task):
         return name, description
 
     @staticmethod
-    def _determine_optimal_k(n_items: int) -> int:
-        """Determine optimal number of clusters based on dataset size.
+    def _determine_optimal_k(embeddings) -> int:
+        """Determine optimal number of clusters using silhouette score."""
+        if len(embeddings) < 2:
+            return 2
 
-        Following Clio's approach of creating meaningful groupings.
-        """
-        if n_items < 10:
-            return max(2, n_items // 3)
-        elif n_items < 50:
-            return max(5, int(math.sqrt(n_items)))
-        elif n_items < 200:
-            return max(10, int(math.sqrt(n_items) * 1.5))
-        else:
-            return max(15, int(math.sqrt(n_items) * 2))
+        k_min = 2
+        k_max = len(embeddings) // 5
+
+        if k_min >= k_max:
+            return k_min
+
+        best_k = k_min
+        best_score = -1
+
+        logger.info(f"Evaluating k from {k_min} to {k_max} using silhouette score...")
+        for k in range(k_min, k_max + 1):
+            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            labels = kmeans.fit_predict(embeddings)
+            score = silhouette_score(embeddings, labels)
+            logger.info(f"  k={k}: silhouette={score:.4f}")
+
+            if score > best_score:
+                best_score = score
+                best_k = k
+
+        logger.info(f"Selected k={best_k} (silhouette={best_score:.4f})")
+        return best_k
 
     @staticmethod
     def _cluster_facets(
@@ -162,12 +177,8 @@ class ClusterTask(Task):
             f"Generated {len(embeddings)} embeddings of dimension {embeddings.shape[1]}"
         )
 
-        # Determine optimal k
-        k = ClusterTask._determine_optimal_k(len(facets))
-        logger.info(f"Using k={k} clusters")
-
-        # Run k-means clustering
-        logger.info("Running k-means clustering...")
+        k = ClusterTask._determine_optimal_k(embeddings)
+        logger.info(f"Running k-means clustering with k={k}...")
         kmeans = KMeans(n_clusters=k, random_state=42)
         cluster_labels = kmeans.fit_predict(embeddings)
 
@@ -184,11 +195,11 @@ class ClusterTask(Task):
         # Generate names and descriptions for each cluster
         logger.info("Generating cluster names and descriptions...")
         cluster_metadata = {}
-        for cluster_id, cluster_facets in clusters.items():
+        for cluster_id, cluster_facets in sorted(
+            clusters.items(), key=lambda kv: kv[0]
+        ):
             facet_texts_in_cluster = [f[1] for f in cluster_facets]
-            name, description = ClusterTask._run_claude_for_naming(
-                facet_texts_in_cluster
-            )
+            name, description = ClusterTask._name_cluster(facet_texts_in_cluster)
 
             cluster_metadata[cluster_id] = {
                 "name": name,
@@ -205,6 +216,13 @@ class ClusterTask(Task):
     def run(db: Any) -> dict[str, Any]:
         """Run clustering on all pattern and domain facets."""
         logger.info("Starting clustering task...")
+        # gets rid of an annoying warning:
+        #
+        # huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
+        # To disable this warning, you can either:
+        #         - Avoid using `tokenizers` before the fork if possible
+        #         - Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
         # Fetch all unique patterns
         pattern_rows = db.fetchall(
@@ -230,10 +248,7 @@ class ClusterTask(Task):
             f"Found {len(patterns)} unique patterns and {len(domains)} unique domains"
         )
 
-        # Cluster patterns
         pattern_clusters = ClusterTask._cluster_facets(patterns, "pattern")
-
-        # Cluster domains
         domain_clusters = ClusterTask._cluster_facets(domains, "domain")
 
         return {
