@@ -69,7 +69,7 @@ def unique_test_count_histogram():
         unique_tests = set()
         for node_id in node_ids:
             # Remove parametrization: "test.py::test_foo[param]" -> "test.py::test_foo"
-            base_test = node_id.split("[")[0] if "[" in node_id else node_id
+            base_test = node_id.split("[")[0]
             unique_tests.add(base_test)
         unique_counts.append(len(unique_tests))
 

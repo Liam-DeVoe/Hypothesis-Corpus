@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 class WorkItem:
     repo_name: str
     node_ids: list[str]
+    # Subset of node_ids for canonical parametrizations
+    canonical_node_ids: list[str]
     requirements: str
     repo_id: int
     commit_hash: str
@@ -164,10 +166,17 @@ class Worker(Process):
                     f"[w{self.worker_id}][{work_item.repo_name}] Running experiment: {experiment.name}"
                 )
 
+                # Use canonical nodes if experiment requests them, otherwise all nodes
+                node_ids = (
+                    work_item.canonical_node_ids
+                    if experiment.only_canonical_nodes
+                    else work_item.node_ids
+                )
+
                 # Run tests in container with experiment name
                 results = test_runner.process_repository(
                     work_item.repo_name,
-                    work_item.node_ids,
+                    node_ids,
                     work_item.requirements,
                     commit_hash=work_item.commit_hash,
                     experiment_name=experiment.name,

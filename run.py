@@ -7,6 +7,7 @@ import logging
 import subprocess
 import sys
 import traceback
+from collections import defaultdict
 
 import click
 from rich.console import Console
@@ -130,15 +131,21 @@ def experiment(
     work_items = []
     for repo in repos:
         nodes = db.fetchall(
-            "SELECT node_id FROM core_node WHERE repo_id = ?", (repo["id"],)
+            "SELECT node_id, canonical_parametrization FROM core_node WHERE repo_id = ?",
+            (repo["id"],),
         )
         node_ids = [node["node_id"] for node in nodes]
+        canonical_node_ids = [
+            node["node_id"] for node in nodes if node["canonical_parametrization"]
+        ]
+
         # should have been marked invalid if there are no node ids
         assert node_ids
 
         work_item = WorkItem(
             repo_name=repo["full_name"],
             node_ids=node_ids,
+            canonical_node_ids=canonical_node_ids,
             requirements=repo["requirements"],
             repo_id=repo["id"],
             commit_hash=repo["commit_hash"],
@@ -340,11 +347,20 @@ def _populate_collected_nodes(db_path: str):
             "DELETE FROM core_node WHERE repo_id = ?",
             (repo_id,),
         )
+
+        # mark first node in each parametrization group as canonical
+        node_groups = defaultdict(list)
         for node_id in node_ids:
-            db.execute(
-                "INSERT INTO core_node (repo_id, node_id) VALUES (?, ?)",
-                (repo_id, node_id),
-            )
+            base_name = node_id.split("[")[0]
+            node_groups[base_name].append(node_id)
+
+        for node_ids_in_group in node_groups.values():
+            for i, node_id in enumerate(node_ids_in_group):
+                is_canonical = i == 0
+                db.execute(
+                    "INSERT INTO core_node (repo_id, node_id, canonical_parametrization) VALUES (?, ?, ?)",
+                    (repo_id, node_id, is_canonical),
+                )
 
         total_nodes_inserted += len(node_ids)
         logger.debug(f"Populated {len(node_ids)} nodes for repository {repo_name}")

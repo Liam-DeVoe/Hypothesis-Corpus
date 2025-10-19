@@ -8,6 +8,9 @@ class Experiment(ABC):
     # Subclasses must define this as a class attribute
     name: str
 
+    # If True, only run on canonical parametrization nodes
+    only_canonical_nodes: bool = False
+
     def __init_subclass__(cls, **kwargs):
         if getattr(cls, "__abstractmethods__", None):
             return

@@ -36,7 +36,7 @@ def main():
         SELECT
             COUNT(DISTINCT s.node_id) as nodes_with_summaries,
             COUNT(DISTINCT r.id) as repos_with_summaries,
-            (SELECT COUNT(*) FROM core_node) as total_nodes,
+            (SELECT COUNT(*) FROM core_node WHERE canonical_parametrization = TRUE) as total_nodes,
             (SELECT COUNT(*) FROM core_repository WHERE status = 'valid') as total_repos,
             AVG(LENGTH(s.facet)) as avg_summary_length,
             MIN(LENGTH(s.facet)) as min_summary_length,
@@ -44,7 +44,7 @@ def main():
         FROM facets_nodes s
         JOIN core_node n ON s.node_id = n.id
         JOIN core_repository r ON n.repo_id = r.id
-        WHERE s.type = 'summary'
+        WHERE s.type = 'summary' AND n.canonical_parametrization = TRUE
         """,
         db._conn,
     )
@@ -126,7 +126,7 @@ def main():
             nodes_processed = overall_stats["nodes_with_summaries"].iloc[0]
             total_nodes = overall_stats["total_nodes"].iloc[0]
             st.metric(
-                "Nodes processed",
+                "Nodes processed (canonlical only)",
                 f"{nodes_processed:,} / {total_nodes:,}",
             )
         with col2:
@@ -280,7 +280,7 @@ def main():
             st.write(f"**{len(summaries)}** tests found")
 
             # Show each summary in an expandable section
-            for idx, row in summaries.iterrows():
+            for _idx, row in summaries.iterrows():
                 # Get patterns for this test
                 patterns_for_test = pd.read_sql_query(
                     """
