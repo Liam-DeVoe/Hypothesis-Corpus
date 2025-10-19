@@ -126,7 +126,7 @@ def main():
             nodes_processed = overall_stats["nodes_with_summaries"].iloc[0]
             total_nodes = overall_stats["total_nodes"].iloc[0]
             st.metric(
-                "Nodes processed (canonlical only)",
+                "Nodes processed (canonical only)",
                 f"{nodes_processed:,} / {total_nodes:,}",
             )
         with col2:
