@@ -145,7 +145,7 @@ def main():
         with col4:
             if not domain_stats.empty:
                 st.metric(
-                    "Unique pomains",
+                    "Unique domains",
                     f"{len(domains):,}",
                 )
     else:
