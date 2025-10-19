@@ -1,5 +1,3 @@
-"""Clustering task using embeddings and k-means (Clio-style)."""
-
 import logging
 import math
 import re
@@ -14,7 +12,6 @@ from .task import Task
 logger = logging.getLogger(__name__)
 
 
-# Clio-style prompts for cluster naming
 CLUSTER_NAMING_PROMPT = """You are tasked with creating a clear, concise name and description for a cluster of similar items. Your goal is to identify the common theme or pattern among the items and create a descriptive label.
 
 Here are the items in the cluster:
@@ -41,7 +38,7 @@ Text: {text}
 Provide a brief semantic summary that captures the key concepts and meaning."""
 
 
-class ClusteringTask(Task):
+class ClusterTask(Task):
     """Clusters facets using embeddings and k-means clustering (Clio-style).
 
     This task:
@@ -52,7 +49,7 @@ class ClusteringTask(Task):
     5. Stores cluster assignments and metadata
     """
 
-    name = "clustering"
+    name = "cluster"
     follows = ["facets"]
 
     @staticmethod
@@ -89,11 +86,11 @@ class ClusteringTask(Task):
 
     @staticmethod
     def _get_embedding_model() -> SentenceTransformer:
-        if ClusteringTask._embedding_model is None:
+        if ClusterTask._embedding_model is None:
             logger.info("Loading sentence transformer model: all-mpnet-base-v2")
-            ClusteringTask._embedding_model = SentenceTransformer("all-mpnet-base-v2")
+            ClusterTask._embedding_model = SentenceTransformer("all-mpnet-base-v2")
             logger.info("Model loaded successfully")
-        return ClusteringTask._embedding_model
+        return ClusterTask._embedding_model
 
     @staticmethod
     def _run_claude_for_naming(items: list[str]) -> tuple[str, str]:
@@ -157,7 +154,7 @@ class ClusteringTask(Task):
         facet_texts = [f[1] for f in facets]
 
         # Get embedding model and encode all texts in batch for efficiency
-        model = ClusteringTask._get_embedding_model()
+        model = ClusterTask._get_embedding_model()
         embeddings = model.encode(
             facet_texts, convert_to_numpy=True, show_progress_bar=True
         )
@@ -166,7 +163,7 @@ class ClusteringTask(Task):
         )
 
         # Determine optimal k
-        k = ClusteringTask._determine_optimal_k(len(facets))
+        k = ClusterTask._determine_optimal_k(len(facets))
         logger.info(f"Using k={k} clusters")
 
         # Run k-means clustering
@@ -177,7 +174,7 @@ class ClusteringTask(Task):
         # Group facets by cluster
         clusters: dict[int, list[tuple[int, str]]] = {}
         for facet_id, facet_text, cluster_id in zip(
-            facet_ids, facet_texts, cluster_labels
+            facet_ids, facet_texts, cluster_labels, strict=True
         ):
             cluster_id = int(cluster_id)
             if cluster_id not in clusters:
@@ -189,7 +186,7 @@ class ClusteringTask(Task):
         cluster_metadata = {}
         for cluster_id, cluster_facets in clusters.items():
             facet_texts_in_cluster = [f[1] for f in cluster_facets]
-            name, description = ClusteringTask._run_claude_for_naming(
+            name, description = ClusterTask._run_claude_for_naming(
                 facet_texts_in_cluster
             )
 
@@ -213,7 +210,7 @@ class ClusteringTask(Task):
         pattern_rows = db.fetchall(
             """
             SELECT DISTINCT id, facet
-            FROM facets
+            FROM facets_nodes
             WHERE type = 'pattern'
             """
         )
@@ -223,7 +220,7 @@ class ClusteringTask(Task):
         domain_rows = db.fetchall(
             """
             SELECT DISTINCT id, facet
-            FROM facets
+            FROM facets_nodes
             WHERE type = 'domain'
             """
         )
@@ -234,10 +231,10 @@ class ClusteringTask(Task):
         )
 
         # Cluster patterns
-        pattern_clusters = ClusteringTask._cluster_facets(patterns, "pattern")
+        pattern_clusters = ClusterTask._cluster_facets(patterns, "pattern")
 
         # Cluster domains
-        domain_clusters = ClusteringTask._cluster_facets(domains, "domain")
+        domain_clusters = ClusterTask._cluster_facets(domains, "domain")
 
         return {
             "pattern_clusters": pattern_clusters,

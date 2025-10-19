@@ -123,15 +123,15 @@ def main():
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
-            nodes_processed = overall_stats['nodes_with_summaries'].iloc[0]
-            total_nodes = overall_stats['total_nodes'].iloc[0]
+            nodes_processed = overall_stats["nodes_with_summaries"].iloc[0]
+            total_nodes = overall_stats["total_nodes"].iloc[0]
             st.metric(
                 "Nodes processed",
                 f"{nodes_processed:,} / {total_nodes:,}",
             )
         with col2:
-            repos_processed = overall_stats['repos_with_summaries'].iloc[0]
-            total_repos = overall_stats['total_repos'].iloc[0]
+            repos_processed = overall_stats["repos_with_summaries"].iloc[0]
+            total_repos = overall_stats["total_repos"].iloc[0]
             st.metric(
                 "Repositories processed",
                 f"{repos_processed:,} / {total_repos:,}",

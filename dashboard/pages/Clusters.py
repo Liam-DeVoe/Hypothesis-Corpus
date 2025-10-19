@@ -37,7 +37,7 @@ def main():
         st.info(
             "No clusters found. Run the clustering post-processor to generate clusters:\n\n"
             "```bash\n"
-            "python run_tasks.py run clustering\n"
+            "python run.py task run cluster\n"
             "```"
         )
         return

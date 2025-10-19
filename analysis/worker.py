@@ -217,7 +217,7 @@ class Worker(Process):
                     if "error" in node_result:
                         error_msg = (
                             f"Node {node_id} failed: {node_result['error']}"
-                            f"\n\nTraceback:{node_result['traceback']}"
+                            f"\n\nTraceback: {node_result['traceback']}"
                         )
                         logger.error(
                             f"[w{self.worker_id}][{work_item.repo_name}] {error_msg}"
