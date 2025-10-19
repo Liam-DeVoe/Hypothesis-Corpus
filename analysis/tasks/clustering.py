@@ -1,9 +1,11 @@
 import logging
+import math
 import os
 import re
 import subprocess
 from typing import Any
 
+import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
@@ -32,24 +34,8 @@ Present your output in the following format:
 
 Be specific and accurate. Focus on what truly unifies these items."""
 
-EMBEDDING_PROMPT = """Please provide a semantic representation of the following text. Focus on capturing the core meaning and concepts.
-
-Text: {text}
-
-Provide a brief semantic summary that captures the key concepts and meaning."""
-
 
 class ClusterTask(Task):
-    """Clusters facets using embeddings and k-means clustering (Clio-style).
-
-    This task:
-    1. Fetches all pattern and domain facets from the database
-    2. Generates embeddings for each facet using Claude
-    3. Runs k-means clustering to group similar facets
-    4. Uses Claude to generate names and descriptions for each cluster
-    5. Stores cluster assignments and metadata
-    """
-
     name = "cluster"
     follows = ["facets"]
 
@@ -119,31 +105,50 @@ class ClusterTask(Task):
 
     @staticmethod
     def _determine_optimal_k(embeddings) -> int:
-        """Determine optimal number of clusters using silhouette score."""
+        """Determine optimal number of clusters using sillouhette score"""
         if len(embeddings) < 2:
             return 2
 
+        max_evaluations = 20
         k_min = 2
         k_max = len(embeddings) // 5
 
         if k_min >= k_max:
             return k_min
 
-        best_k = k_min
-        best_score = -1
+        # Sample k values uniformly across range
+        k_range = k_max - k_min + 1
+        if k_range <= max_evaluations:
+            k_values = list(range(k_min, k_max + 1))
+        else:
+            k_values = np.linspace(k_min, k_max, max_evaluations, dtype=int)
+            # Remove duplicates
+            k_values = sorted(set(k_values))
 
-        logger.info(f"Evaluating k from {k_min} to {k_max} using silhouette score...")
-        for k in range(k_min, k_max + 1):
+        logger.info(
+            f"Evaluating {len(k_values)} k values in range [{k_min}, {k_max}]: {k_values}"
+        )
+
+        best_k = k_min
+        best_score = -math.inf
+
+        for i, k in enumerate(k_values, 1):
             kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
             labels = kmeans.fit_predict(embeddings)
             score = silhouette_score(embeddings, labels)
-            logger.info(f"  k={k}: silhouette={score:.4f}")
+
+            logger.info(f"  {i}/{len(k_values)}: k={k}, silhouette={score:.4f}")
 
             if score > best_score:
                 best_score = score
                 best_k = k
+                logger.info("    → New best!")
 
-        logger.info(f"Selected k={best_k} (silhouette={best_score:.4f})")
+        logger.info(
+            f"Selected k={best_k} (silhouette={best_score:.4f}) "
+            f"after {len(k_values)} evaluations"
+        )
+
         return best_k
 
     @staticmethod
@@ -249,7 +254,8 @@ class ClusterTask(Task):
         )
 
         pattern_clusters = ClusterTask._cluster_facets(patterns, "pattern")
-        domain_clusters = ClusterTask._cluster_facets(domains, "domain")
+        domain_clusters = []
+        # domain_clusters = ClusterTask._cluster_facets(domains, "domain")
 
         return {
             "pattern_clusters": pattern_clusters,
