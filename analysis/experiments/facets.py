@@ -21,7 +21,7 @@ REPOSITORY_SUMMARY_PROMPT = """Your job is to summarize what this GitHub reposit
 
 If necessary, explore the repository codebase before answering. The repository's name is {repo_name}. Output your answer in English inside <summary> tags."""
 
-SUMMARY_PROMPT = """Your job is to summarize what this property-based test is testing. Describe both the testing pattern/relationship being verified and the domain/technology being tested. Be clear, concise, and get to the point in at most two sentences. Focus on what is being tested and how, not on implementation details.
+NODE_SUMMARY_PROMPT = """Your job is to summarize what this property-based test is testing. Describe both the testing pattern/relationship being verified and the domain/technology being tested. Be clear, concise, and get to the point in at most two sentences. Focus on what is being tested and how, not on implementation details.
 
 <examples>
 * <summary>This test verifies that a DFA correctly counts accepted strings at the maximum length boundary by checking that count_strings returns at least 1 for strings of length n when the maximum is n.</summary>
@@ -115,12 +115,12 @@ class FacetsExperiment(Experiment):
 
     @staticmethod
     def _run_summary(node_id: str) -> str:
-        prompt = SUMMARY_PROMPT.format(nodeid=node_id)
+        prompt = NODE_SUMMARY_PROMPT.format(nodeid=node_id)
         response = FacetsExperiment._run_claude(prompt)
         match = re.search(r"<summary>(.*?)</summary>", response, re.DOTALL)
         if not match:
             raise ValueError(
-                f"No <summary> tags found in response: {response[:200]}..."
+                f"No <summary> tags found in response: {response}..."
             )
 
         return match.group(1).strip()
@@ -204,7 +204,13 @@ class FacetsExperiment(Experiment):
     @staticmethod
     def run_repository(repo_name: str, node_ids: list[str]) -> dict[str, Any]:
         prompt = REPOSITORY_SUMMARY_PROMPT.format(repo_name=repo_name)
-        summary = FacetsExperiment._run_claude(prompt)
+        response = FacetsExperiment._run_claude(prompt)
+        match = re.search(r"<summary>(.*?)</summary>", response, re.DOTALL)
+        if not match:
+            raise ValueError(
+                f"No <summary> tags found in response: {response}..."
+            )
+        summary = match.group(1).strip()
         return {"summary": summary}
 
     @staticmethod
