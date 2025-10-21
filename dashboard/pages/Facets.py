@@ -236,7 +236,7 @@ def main():
         st.write(f"**{len(repo_level_summaries)}** repositories with summaries")
 
         for _idx, row in repo_level_summaries.iterrows():
-            with st.expander(f"🗂️ {row['repository']}", expanded=False):
+            with st.expander(f"{row['repository']}", expanded=False):
                 st.markdown("**Repository Summary:**")
                 st.write(row["summary"])
                 st.markdown(f"*Length: {row['summary_length']} chars*")
