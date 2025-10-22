@@ -17,6 +17,7 @@ def histogram_with_kde(
     yaxis_title: str,
     bin_size: float = 1,
     height: int = 400,
+    x_type: str = "linear",
 ) -> go.Figure:
     """Create a histogram with KDE overlay.
 
@@ -27,6 +28,7 @@ def histogram_with_kde(
         yaxis_title: Y-axis label
         bin_size: Size of histogram bins (default: 1)
         height: Chart height in pixels (default: 400)
+        x_type: X-axis scale type: "linear" or "log" (default: "linear")
 
     Returns:
         Plotly figure with histogram and KDE overlay
@@ -70,6 +72,9 @@ def histogram_with_kde(
         height=height,
         showlegend=True,
     )
+
+    if x_type != "linear":
+        fig.update_xaxes(type=x_type)
 
     return fig
 

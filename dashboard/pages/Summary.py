@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -43,6 +44,7 @@ def hypothesis_test_count_histogram():
         xaxis_title="# of Hypothesis tests",
         yaxis_title="Repository count",
         bin_size=1,
+        x_type="log",
     )
 
 
@@ -79,6 +81,7 @@ def unique_test_count_histogram():
         xaxis_title="# of Hypothesis tests (grouping @pytest.mark.parametrize)",
         yaxis_title="Repository count",
         bin_size=1,
+        x_type="log",
     )
 
 
@@ -278,6 +281,187 @@ def median_choices_size_histogram():
     )
 
 
+def backend_bar_chart():
+    """Bar chart showing distribution of backend values."""
+    settings_data = pd.read_sql_query(
+        """
+        SELECT
+            json_extract(settings, '$.backend') as backend,
+            COUNT(*) as count
+        FROM runtime_summary
+        WHERE status IN ('passed', 'failed')
+        GROUP BY backend
+        """,
+        db._conn,
+    )
+
+    if settings_data.empty:
+        return None
+
+    # Replace NULL with empty string for display
+    settings_data["backend"] = settings_data["backend"].fillna("")
+
+    # Sort by count descending
+    settings_data = settings_data.sort_values("count", ascending=False)
+
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=settings_data["backend"],
+                y=settings_data["count"],
+                marker_color="steelblue",
+            )
+        ]
+    )
+
+    fig.update_layout(
+        title="Distribution of backend",
+        xaxis_title="Backend",
+        yaxis_title="Test count",
+        height=400,
+        showlegend=False,
+    )
+
+    return fig
+
+
+def database_bar_chart():
+    """Bar chart showing distribution of database types."""
+    settings_data = pd.read_sql_query(
+        """
+        SELECT
+            json_extract(settings, '$.database') as database,
+            COUNT(*) as count
+        FROM runtime_summary
+        WHERE status IN ('passed', 'failed')
+        GROUP BY database
+        """,
+        db._conn,
+    )
+    if settings_data.empty:
+        return None
+
+    # Clean up class names to be more readable
+    def clean_database_name(db_str):
+        if db_str is None or db_str == "<class 'NoneType'>":
+            return "None"
+        # Extract content from <class 'content'> using regex
+        match = re.match(r"<class '(.+?)'>", str(db_str))
+        if match:
+            full_name = match.group(1)
+            # Get just the class name after the last dot
+            return full_name.split(".")[-1]
+        return str(db_str)
+
+    settings_data["database_label"] = settings_data["database"].apply(clean_database_name)
+
+    # Sort by count descending
+    settings_data = settings_data.sort_values("count", ascending=False)
+
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=settings_data["database_label"],
+                y=settings_data["count"],
+                marker_color="steelblue",
+            )
+        ]
+    )
+
+    fig.update_layout(
+        title="Distribution of database",
+        xaxis_title="Database type",
+        yaxis_title="Test count",
+        height=400,
+        showlegend=False,
+    )
+
+    return fig
+
+
+def suppress_health_check_bar_chart():
+    """Bar chart showing distribution of suppress_health_check values."""
+    # HealthCheck enum mapping from hypothesis
+    HEALTH_CHECK_NAMES = {
+        1: "data_too_large",
+        2: "filter_too_much",
+        3: "too_slow",
+        7: "large_base_example",
+        9: "function_scoped_fixture",
+        10: "differing_executors",
+        11: "nested_given",
+    }
+
+    # Get counts of empty lists and total
+    counts = pd.read_sql_query(
+        """
+        SELECT
+            COUNT(*) as total,
+            SUM(CASE
+                WHEN json_extract(settings, '$.suppress_health_check') = '[]'
+                THEN 1 ELSE 0
+            END) as empty_count
+        FROM runtime_summary
+        WHERE status IN ('passed', 'failed')
+        """,
+        db._conn,
+    )
+
+    total = counts["total"].iloc[0] if not counts.empty else 0
+    empty_count = counts["empty_count"].iloc[0] if not counts.empty else 0
+
+    settings_data = pd.read_sql_query(
+        """
+        SELECT json_extract(settings, '$.suppress_health_check') as suppress_health_check
+        FROM runtime_summary
+        WHERE status IN ('passed', 'failed')
+        AND json_extract(settings, '$.suppress_health_check') IS NOT NULL
+        AND json_extract(settings, '$.suppress_health_check') != '[]'
+        """,
+        db._conn,
+    )
+
+    if settings_data.empty:
+        return None, empty_count, total
+
+    # Count occurrences of each health check
+    health_check_counts = {}
+
+    for shc_json in settings_data["suppress_health_check"]:
+        shc_list = json.loads(shc_json) if isinstance(shc_json, str) else shc_json
+        for hc_value in shc_list:
+            hc_name = HEALTH_CHECK_NAMES.get(hc_value, f"unknown_{hc_value}")
+            health_check_counts[hc_name] = health_check_counts.get(hc_name, 0) + 1
+
+    if not health_check_counts:
+        return None, empty_count, total
+
+    # Sort by count descending
+    sorted_items = sorted(health_check_counts.items(), key=lambda x: x[1], reverse=True)
+    labels = [item[0] for item in sorted_items]
+    counts = [item[1] for item in sorted_items]
+
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=labels,
+                y=counts,
+                marker_color="steelblue",
+            )
+        ]
+    )
+
+    fig.update_layout(
+        title="Distribution of suppress_health_check",
+        xaxis_title="Health check",
+        yaxis_title="Test count",
+        height=400,
+        showlegend=False,
+    )
+
+    return fig, empty_count, total
+
+
 def main():
     """Summary page with key research findings."""
     # Sidebar
@@ -349,11 +533,39 @@ def main():
     else:
         st.info("No derandomize data available.")
 
+    fig = backend_bar_chart()
+    if fig:
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No backend data available.")
+
+    fig = database_bar_chart()
+    if fig:
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No database data available.")
+
     fig = median_choices_size_histogram()
     if fig:
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No choices_size data available.")
+
+    result = suppress_health_check_bar_chart()
+    if result and result[0]:
+        fig, empty_count, total = result
+
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            if total > 0:
+                st.markdown("**suppress_health_check = []**")
+                st.markdown(f"{empty_count:,} / {total:,}")
+    else:
+        st.info("No suppress_health_check data available.")
 
 
 if __name__ == "__main__":
