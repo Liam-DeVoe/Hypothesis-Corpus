@@ -1,8 +1,8 @@
 import logging
 import sqlite3
-from sqlite3 import Connection
 import time
 from pathlib import Path
+from sqlite3 import Connection
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,7 @@ class LoggingConnection(Connection):
         script_preview = script.strip()[:100].replace("\n", " ")
         print(f"[{elapsed:.1f}ms] {script_preview}... (executescript)")
         return cursor
+
 
 # Global cache for database instances (singleton per db_path)
 _database_cache = {}

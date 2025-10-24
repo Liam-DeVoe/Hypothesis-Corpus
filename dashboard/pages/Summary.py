@@ -353,7 +353,9 @@ def database_bar_chart():
             return full_name.split(".")[-1]
         return str(db_str)
 
-    settings_data["database_label"] = settings_data["database"].apply(clean_database_name)
+    settings_data["database_label"] = settings_data["database"].apply(
+        clean_database_name
+    )
 
     # Sort by count descending
     settings_data = settings_data.sort_values("count", ascending=False)

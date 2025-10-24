@@ -122,9 +122,7 @@ class FacetsExperiment(Experiment):
         response = FacetsExperiment._run_claude(prompt)
         match = re.search(r"<summary>(.*?)</summary>", response, re.DOTALL)
         if not match:
-            raise ValueError(
-                f"No <summary> tags found in response: {response}..."
-            )
+            raise ValueError(f"No <summary> tags found in response: {response}...")
 
         return match.group(1).strip()
 
@@ -210,9 +208,7 @@ class FacetsExperiment(Experiment):
         response = FacetsExperiment._run_claude(prompt)
         match = re.search(r"<summary>(.*?)</summary>", response, re.DOTALL)
         if not match:
-            raise ValueError(
-                f"No <summary> tags found in response: {response}..."
-            )
+            raise ValueError(f"No <summary> tags found in response: {response}...")
         summary = match.group(1).strip()
         return {"summary": summary}
 

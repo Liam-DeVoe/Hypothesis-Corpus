@@ -102,7 +102,9 @@ def main():
         WHERE s.type = 'summary'
         """
     )
-    total_repo_summaries = repo_summary_count_result[0] if repo_summary_count_result else 0
+    total_repo_summaries = (
+        repo_summary_count_result[0] if repo_summary_count_result else 0
+    )
 
     # Also get repo summaries for the dropdown (limited for performance)
     repo_summaries = pd.read_sql_query(
@@ -224,13 +226,24 @@ def main():
             # Pagination controls
             col_prev, col_info, col_next = st.columns([1, 2, 1])
             with col_prev:
-                if st.button("← Previous", key="patterns_prev", disabled=st.session_state.patterns_page == 0):
+                if st.button(
+                    "← Previous",
+                    key="patterns_prev",
+                    disabled=st.session_state.patterns_page == 0,
+                ):
                     st.session_state.patterns_page -= 1
                     st.rerun()
             with col_info:
-                st.markdown(f"<div style='text-align: center'>Page {st.session_state.patterns_page + 1} of {total_pages} ({total_patterns:,} total patterns)</div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div style='text-align: center'>Page {st.session_state.patterns_page + 1} of {total_pages} ({total_patterns:,} total patterns)</div>",
+                    unsafe_allow_html=True,
+                )
             with col_next:
-                if st.button("Next →", key="patterns_next", disabled=st.session_state.patterns_page >= total_pages - 1):
+                if st.button(
+                    "Next →",
+                    key="patterns_next",
+                    disabled=st.session_state.patterns_page >= total_pages - 1,
+                ):
                     st.session_state.patterns_page += 1
                     st.rerun()
     else:
@@ -284,13 +297,24 @@ def main():
             # Pagination controls
             col_prev, col_info, col_next = st.columns([1, 2, 1])
             with col_prev:
-                if st.button("← Previous", key="domains_prev", disabled=st.session_state.domains_page == 0):
+                if st.button(
+                    "← Previous",
+                    key="domains_prev",
+                    disabled=st.session_state.domains_page == 0,
+                ):
                     st.session_state.domains_page -= 1
                     st.rerun()
             with col_info:
-                st.markdown(f"<div style='text-align: center'>Page {st.session_state.domains_page + 1} of {total_pages} ({total_domains:,} total domains)</div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div style='text-align: center'>Page {st.session_state.domains_page + 1} of {total_pages} ({total_domains:,} total domains)</div>",
+                    unsafe_allow_html=True,
+                )
             with col_next:
-                if st.button("Next →", key="domains_next", disabled=st.session_state.domains_page >= total_pages - 1):
+                if st.button(
+                    "Next →",
+                    key="domains_next",
+                    disabled=st.session_state.domains_page >= total_pages - 1,
+                ):
                     st.session_state.domains_page += 1
                     st.rerun()
     else:
@@ -312,7 +336,9 @@ def main():
         end_idx = min(start_idx + rows_per_page, total_repo_summaries)
 
         # Display pagination info
-        st.write(f"**{total_repo_summaries}** repositories with summaries (showing {start_idx + 1}-{end_idx})")
+        st.write(
+            f"**{total_repo_summaries}** repositories with summaries (showing {start_idx + 1}-{end_idx})"
+        )
 
         # Fetch only the current page from database
         offset = st.session_state.repo_summaries_page * rows_per_page
@@ -345,13 +371,24 @@ def main():
         # Pagination controls
         col_prev, col_page_info, col_next = st.columns([1, 2, 1])
         with col_prev:
-            if st.button("← Previous", key="repo_summaries_prev", disabled=st.session_state.repo_summaries_page == 0):
+            if st.button(
+                "← Previous",
+                key="repo_summaries_prev",
+                disabled=st.session_state.repo_summaries_page == 0,
+            ):
                 st.session_state.repo_summaries_page -= 1
                 st.rerun()
         with col_page_info:
-            st.markdown(f"<div style='text-align: center'>Page {st.session_state.repo_summaries_page + 1} of {total_pages}</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div style='text-align: center'>Page {st.session_state.repo_summaries_page + 1} of {total_pages}</div>",
+                unsafe_allow_html=True,
+            )
         with col_next:
-            if st.button("Next →", key="repo_summaries_next", disabled=st.session_state.repo_summaries_page >= total_pages - 1):
+            if st.button(
+                "Next →",
+                key="repo_summaries_next",
+                disabled=st.session_state.repo_summaries_page >= total_pages - 1,
+            ):
                 st.session_state.repo_summaries_page += 1
                 st.rerun()
     else:

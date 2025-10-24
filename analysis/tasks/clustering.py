@@ -1,6 +1,7 @@
 import logging
 import math
 import os
+import random
 import re
 import subprocess
 from typing import Any
@@ -38,6 +39,9 @@ Be specific and accurate. Focus on what truly unifies these items."""
 class ClusterTask(Task):
     name = "cluster"
     follows = ["facets"]
+
+    # either "auto" or an int
+    k = 50
 
     @staticmethod
     def get_schema_sql() -> str:
@@ -109,9 +113,9 @@ class ClusterTask(Task):
         if len(embeddings) < 2:
             return 2
 
-        max_evaluations = 20
+        max_evaluations = 200
         k_min = 2
-        k_max = len(embeddings) // 5
+        k_max = int(math.sqrt(len(embeddings)) * 2)
 
         if k_min >= k_max:
             return k_min
@@ -133,7 +137,7 @@ class ClusterTask(Task):
         best_score = -math.inf
 
         for i, k in enumerate(k_values, 1):
-            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            kmeans = KMeans(n_clusters=k, random_state=42)
             labels = kmeans.fit_predict(embeddings)
             score = silhouette_score(embeddings, labels)
 
@@ -150,6 +154,23 @@ class ClusterTask(Task):
         )
 
         return best_k
+
+    @staticmethod
+    def _preview_clusters(clusters: dict[int, list[tuple[int, str]]], facet_type: str):
+        logger.info(f"\n{'='*80}")
+        logger.info(f"Cluster Preview: {facet_type}")
+        logger.info(f"{'='*80}\n")
+
+        for cluster_id in sorted(clusters.keys()):
+            cluster_facets = clusters[cluster_id]
+            facet_texts = [f[1] for f in cluster_facets]
+
+            samples = random.sample(facet_texts,  min(5, len(facet_texts)))
+
+            logger.info(f"Cluster {cluster_id} ({len(facet_texts)} items):")
+            for i, sample in enumerate(samples, 1):
+                logger.info(f"  {i}. {sample}")
+            logger.info("")
 
     @staticmethod
     def _cluster_facets(
@@ -182,7 +203,9 @@ class ClusterTask(Task):
             f"Generated {len(embeddings)} embeddings of dimension {embeddings.shape[1]}"
         )
 
-        k = ClusterTask._determine_optimal_k(embeddings)
+        k = ClusterTask.k
+        if k == "auto":
+            k = ClusterTask._determine_optimal_k(embeddings)
         logger.info(f"Running k-means clustering with k={k}...")
         kmeans = KMeans(n_clusters=k, random_state=42)
         cluster_labels = kmeans.fit_predict(embeddings)
@@ -197,6 +220,7 @@ class ClusterTask(Task):
                 clusters[cluster_id] = []
             clusters[cluster_id].append((facet_id, facet_text))
 
+        ClusterTask._preview_clusters(clusters, facet_type)
         # Generate names and descriptions for each cluster
         logger.info("Generating cluster names and descriptions...")
         cluster_metadata = {}
