@@ -1,8 +1,44 @@
 import logging
 import sqlite3
+from sqlite3 import Connection
+import time
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+debug = False
+
+
+class LoggingConnection(Connection):
+
+    def execute(self, query, parameters=None):
+        start = time.time()
+        if parameters is None:
+            cursor = super().execute(query)
+        else:
+            cursor = super().execute(query, parameters)
+        elapsed = (time.time() - start) * 1000
+
+        query_preview = query.strip()[:100].replace("\n", " ")
+        print(f"[{elapsed:.1f}ms] {query_preview}...")
+        return cursor
+
+    def executemany(self, query, parameters):
+        start = time.time()
+        cursor = super().executemany(query, parameters)
+        elapsed = (time.time() - start) * 1000
+        query_preview = query.strip()[:100].replace("\n", " ")
+        print(f"[{elapsed:.1f}ms] {query_preview}... (executemany)")
+        return cursor
+
+    def executescript(self, script):
+        """Execute script and log timing."""
+        start = time.time()
+        cursor = super().executescript(script)
+        elapsed = (time.time() - start) * 1000
+        script_preview = script.strip()[:100].replace("\n", " ")
+        print(f"[{elapsed:.1f}ms] {script_preview}... (executescript)")
+        return cursor
 
 # Global cache for database instances (singleton per db_path)
 _database_cache = {}
@@ -29,7 +65,10 @@ class Database:
 
         # Create single persistent connection
         self._conn = sqlite3.connect(
-            self.db_path, timeout=30.0, check_same_thread=False
+            self.db_path,
+            timeout=30.0,
+            check_same_thread=False,
+            factory=LoggingConnection if debug else Connection,
         )
         self._conn.row_factory = sqlite3.Row
 

@@ -99,7 +99,10 @@ class FacetsExperiment(Experiment):
             );
 
             CREATE INDEX IF NOT EXISTS idx_facets_repository_repo ON facets_repository(repo_id);
+            CREATE INDEX IF NOT EXISTS idx_facets_repository_type ON facets_repository(type);
+
             CREATE INDEX IF NOT EXISTS idx_facets_nodes_node ON facets_nodes(node_id);
+            CREATE INDEX IF NOT EXISTS idx_facets_nodes_type ON facets_nodes(type);
         """
 
     @staticmethod

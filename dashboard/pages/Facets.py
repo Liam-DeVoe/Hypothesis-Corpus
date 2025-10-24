@@ -61,18 +61,15 @@ def main():
         db._conn,
     )
 
-    patterns = pd.read_sql_query(
+    # Get total pattern count first
+    pattern_count_result = db.fetchone(
         """
-        SELECT
-            facet as pattern,
-            COUNT(*) as count
+        SELECT COUNT(DISTINCT facet) as total
         FROM facets_nodes
         WHERE type = 'pattern'
-        GROUP BY facet
-        ORDER BY count DESC
-        """,
-        db._conn,
+        """
     )
+    total_patterns = pattern_count_result[0] if pattern_count_result else 0
 
     # Domain stats
     domain_stats = pd.read_sql_query(
@@ -86,20 +83,28 @@ def main():
         db._conn,
     )
 
-    domains = pd.read_sql_query(
+    # Get total domain count first
+    domain_count_result = db.fetchone(
         """
-        SELECT
-            facet as domain,
-            COUNT(*) as count
+        SELECT COUNT(DISTINCT facet) as total
         FROM facets_nodes
         WHERE type = 'domain'
-        GROUP BY facet
-        ORDER BY count DESC
-        """,
-        db._conn,
+        """
     )
+    total_domains = domain_count_result[0] if domain_count_result else 0
 
-    # Summaries by repository
+    # Get total repo summary count first
+    repo_summary_count_result = db.fetchone(
+        """
+        SELECT COUNT(DISTINCT r.id) as total
+        FROM core_repository r
+        JOIN facets_repository s ON r.id = s.repo_id
+        WHERE s.type = 'summary'
+        """
+    )
+    total_repo_summaries = repo_summary_count_result[0] if repo_summary_count_result else 0
+
+    # Also get repo summaries for the dropdown (limited for performance)
     repo_summaries = pd.read_sql_query(
         """
         SELECT
@@ -140,13 +145,13 @@ def main():
             if not pattern_stats.empty:
                 st.metric(
                     "Unique patterns",
-                    f"{len(patterns):,}",
+                    f"{total_patterns:,}",
                 )
         with col4:
             if not domain_stats.empty:
                 st.metric(
                     "Unique domains",
-                    f"{len(domains):,}",
+                    f"{total_domains:,}",
                 )
     else:
         st.info(
@@ -173,12 +178,38 @@ def main():
     # Pattern and Domain analysis
     st.subheader("Patterns")
 
-    if not patterns.empty:
+    if total_patterns > 0:
         (col1,) = st.columns(1)
 
         with col1:
-            # Show pattern table
+            # Show pattern table with pagination
             st.markdown("**All Patterns**")
+
+            # Initialize pagination state for patterns
+            if "patterns_page" not in st.session_state:
+                st.session_state.patterns_page = 0
+
+            rows_per_page = 50
+            total_pages = (total_patterns + rows_per_page - 1) // rows_per_page
+
+            # Fetch only the current page from database
+            offset = st.session_state.patterns_page * rows_per_page
+            patterns = pd.read_sql_query(
+                """
+                SELECT
+                    facet as pattern,
+                    COUNT(*) as count
+                FROM facets_nodes
+                WHERE type = 'pattern'
+                GROUP BY facet
+                ORDER BY count DESC
+                LIMIT ? OFFSET ?
+                """,
+                db._conn,
+                params=[rows_per_page, offset],
+            )
+
+            # Display current page data
             st.dataframe(
                 patterns,
                 column_config={
@@ -189,17 +220,56 @@ def main():
                 width="stretch",
                 height=568,
             )
+
+            # Pagination controls
+            col_prev, col_info, col_next = st.columns([1, 2, 1])
+            with col_prev:
+                if st.button("← Previous", key="patterns_prev", disabled=st.session_state.patterns_page == 0):
+                    st.session_state.patterns_page -= 1
+                    st.rerun()
+            with col_info:
+                st.markdown(f"<div style='text-align: center'>Page {st.session_state.patterns_page + 1} of {total_pages} ({total_patterns:,} total patterns)</div>", unsafe_allow_html=True)
+            with col_next:
+                if st.button("Next →", key="patterns_next", disabled=st.session_state.patterns_page >= total_pages - 1):
+                    st.session_state.patterns_page += 1
+                    st.rerun()
     else:
         st.info("No pattern data available yet.")
 
     st.subheader("Domains")
 
-    if not domains.empty:
+    if total_domains > 0:
         (col1,) = st.columns(1)
 
         with col1:
-            # Show domain table
+            # Show domain table with pagination
             st.markdown("**All Domains**")
+
+            # Initialize pagination state for domains
+            if "domains_page" not in st.session_state:
+                st.session_state.domains_page = 0
+
+            rows_per_page = 50
+            total_pages = (total_domains + rows_per_page - 1) // rows_per_page
+
+            # Fetch only the current page from database
+            offset = st.session_state.domains_page * rows_per_page
+            domains = pd.read_sql_query(
+                """
+                SELECT
+                    facet as domain,
+                    COUNT(*) as count
+                FROM facets_nodes
+                WHERE type = 'domain'
+                GROUP BY facet
+                ORDER BY count DESC
+                LIMIT ? OFFSET ?
+                """,
+                db._conn,
+                params=[rows_per_page, offset],
+            )
+
+            # Display current page data
             st.dataframe(
                 domains,
                 column_config={
@@ -210,38 +280,80 @@ def main():
                 width="stretch",
                 height=568,
             )
+
+            # Pagination controls
+            col_prev, col_info, col_next = st.columns([1, 2, 1])
+            with col_prev:
+                if st.button("← Previous", key="domains_prev", disabled=st.session_state.domains_page == 0):
+                    st.session_state.domains_page -= 1
+                    st.rerun()
+            with col_info:
+                st.markdown(f"<div style='text-align: center'>Page {st.session_state.domains_page + 1} of {total_pages} ({total_domains:,} total domains)</div>", unsafe_allow_html=True)
+            with col_next:
+                if st.button("Next →", key="domains_next", disabled=st.session_state.domains_page >= total_pages - 1):
+                    st.session_state.domains_page += 1
+                    st.rerun()
     else:
         st.info("No domain data available yet.")
 
     # Repository Summaries Section
     st.subheader("Repository Summaries")
 
-    # Get repository-level summaries
-    repo_level_summaries = pd.read_sql_query(
-        """
-        SELECT
-            r.full_name as repository,
-            s.facet as summary,
-            LENGTH(s.facet) as summary_length,
-            s.created_at
-        FROM facets_repository s
-        JOIN core_repository r ON s.repo_id = r.id
-        WHERE s.type = 'summary'
-        ORDER BY r.full_name
-        """,
-        db._conn,
-    )
+    if total_repo_summaries > 0:
+        # Initialize pagination state for repository summaries
+        if "repo_summaries_page" not in st.session_state:
+            st.session_state.repo_summaries_page = 0
 
-    if not repo_level_summaries.empty:
-        st.write(f"**{len(repo_level_summaries)}** repositories with summaries")
+        rows_per_page = 50
+        total_pages = (total_repo_summaries + rows_per_page - 1) // rows_per_page
 
-        for _idx, row in repo_level_summaries.iterrows():
+        # Calculate start and end indices
+        start_idx = st.session_state.repo_summaries_page * rows_per_page
+        end_idx = min(start_idx + rows_per_page, total_repo_summaries)
+
+        # Display pagination info
+        st.write(f"**{total_repo_summaries}** repositories with summaries (showing {start_idx + 1}-{end_idx})")
+
+        # Fetch only the current page from database
+        offset = st.session_state.repo_summaries_page * rows_per_page
+        repo_level_summaries = pd.read_sql_query(
+            """
+            SELECT
+                r.full_name as repository,
+                s.facet as summary,
+                LENGTH(s.facet) as summary_length,
+                s.created_at
+            FROM facets_repository s
+            JOIN core_repository r ON s.repo_id = r.id
+            WHERE s.type = 'summary'
+            ORDER BY r.full_name
+            LIMIT ? OFFSET ?
+            """,
+            db._conn,
+            params=[rows_per_page, offset],
+        )
+
+        # Display current page of summaries
+        for _, row in repo_level_summaries.iterrows():
             with st.expander(f"{row['repository']}", expanded=False):
                 st.markdown("**Repository Summary:**")
                 st.write(row["summary"])
                 st.markdown(f"*Length: {row['summary_length']} chars*")
                 if row["created_at"]:
                     st.markdown(f"*Created: {row['created_at']}*")
+
+        # Pagination controls
+        col_prev, col_page_info, col_next = st.columns([1, 2, 1])
+        with col_prev:
+            if st.button("← Previous", key="repo_summaries_prev", disabled=st.session_state.repo_summaries_page == 0):
+                st.session_state.repo_summaries_page -= 1
+                st.rerun()
+        with col_page_info:
+            st.markdown(f"<div style='text-align: center'>Page {st.session_state.repo_summaries_page + 1} of {total_pages}</div>", unsafe_allow_html=True)
+        with col_next:
+            if st.button("Next →", key="repo_summaries_next", disabled=st.session_state.repo_summaries_page >= total_pages - 1):
+                st.session_state.repo_summaries_page += 1
+                st.rerun()
     else:
         st.info("No repository-level summaries available yet.")
 
