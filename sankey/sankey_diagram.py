@@ -1,6 +1,7 @@
 import sqlite3
-import plotly.graph_objects as go
 from collections import Counter
+
+import plotly.graph_objects as go
 
 # Connect to database
 db_path = "/Users/tybug/Desktop/data.db"
@@ -8,10 +9,12 @@ conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 # Get all repositories with their status and status_reason
-cursor.execute("""
+cursor.execute(
+    """
     SELECT status, status_reason, collection_returncode
     FROM core_repository
-""")
+"""
+)
 repos = cursor.fetchall()
 
 total_repos = len(repos)
@@ -23,7 +26,9 @@ total_repos = len(repos)
 
 # install_error without returncode = exception during installation (attempted but crashed)
 has_returncode = sum(1 for _, _, rc in repos if rc is not None)
-install_error_crashed = sum(1 for _, r, rc in repos if rc is None and "install_error" in (r or ""))
+install_error_crashed = sum(
+    1 for _, r, rc in repos if rc is None and "install_error" in (r or "")
+)
 attempted_installation = has_returncode + install_error_crashed
 no_returncode = total_repos - attempted_installation
 
@@ -55,7 +60,9 @@ never_installed_reasons = Counter()
 for status, reason, rc in repos:
     if rc is None and "install_error" not in (reason or ""):
         if reason == "invalid_repo":
-            never_installed_reasons["Rejected after clone (no test_*.py files, etc)"] += 1
+            never_installed_reasons[
+                "Rejected after clone (no test_*.py files, etc)"
+            ] += 1
         elif "minhash_duplicate" in (reason or ""):
             never_installed_reasons["Duplicate (as determined by MinHash)"] += 1
         elif "minhash_error" in (reason or ""):
@@ -67,9 +74,11 @@ for status, reason, rc in repos:
 nodes = []
 links = {"source": [], "target": [], "value": [], "label": [], "color": []}
 
+
 def add_node(label):
     nodes.append(label)
     return len(nodes) - 1
+
 
 def add_link(source_idx, target_idx, value, label="", color=None):
     links["source"].append(source_idx)
@@ -77,6 +86,7 @@ def add_link(source_idx, target_idx, value, label="", color=None):
     links["value"].append(value)
     links["label"].append(label)
     links["color"].append(color or "rgba(200, 200, 200, 0.4)")
+
 
 # Node colors
 node_colors = []
@@ -92,7 +102,9 @@ node_colors.append("#FFA15A")  # Orange - processing
 not_attempted_idx = add_node(f"Installation not attempted<br>({no_returncode:,})")
 node_colors.append("#EF553B")  # Red - rejected early
 
-add_link(start_idx, attempted_idx, attempted_installation, color="rgba(255, 161, 90, 0.4)")
+add_link(
+    start_idx, attempted_idx, attempted_installation, color="rgba(255, 161, 90, 0.4)"
+)
 add_link(start_idx, not_attempted_idx, no_returncode, color="rgba(239, 85, 59, 0.4)")
 
 # Stage 2: Reasons for not attempting
@@ -113,7 +125,9 @@ node_colors.append("#EF553B")
 
 add_link(attempted_idx, valid_idx, valid_repos, color="rgba(0, 204, 150, 0.4)")
 add_link(attempted_idx, invalid_idx, invalid_repos, color="rgba(239, 85, 59, 0.4)")
-add_link(attempted_idx, crashed_idx, install_error_crashed, color="rgba(239, 85, 59, 0.4)")
+add_link(
+    attempted_idx, crashed_idx, install_error_crashed, color="rgba(239, 85, 59, 0.4)"
+)
 
 # Stage 4: Invalid reasons breakdown
 for reason, count in invalid_reasons.most_common():
@@ -122,22 +136,26 @@ for reason, count in invalid_reasons.most_common():
     add_link(invalid_idx, idx, count, color="rgba(239, 85, 59, 0.3)")
 
 # Create Sankey diagram
-fig = go.Figure(data=[go.Sankey(
-    node=dict(
-        pad=20,
-        thickness=25,
-        line=dict(color="white", width=2),
-        label=nodes,
-        color=node_colors
-    ),
-    link=dict(
-        source=links["source"],
-        target=links["target"],
-        value=links["value"],
-        label=links["label"],
-        color=links["color"]
-    )
-)])
+fig = go.Figure(
+    data=[
+        go.Sankey(
+            node=dict(
+                pad=20,
+                thickness=25,
+                line=dict(color="white", width=2),
+                label=nodes,
+                color=node_colors,
+            ),
+            link=dict(
+                source=links["source"],
+                target=links["target"],
+                value=links["value"],
+                label=links["label"],
+                color=links["color"],
+            ),
+        )
+    ]
+)
 
 
 # Save as HTML
