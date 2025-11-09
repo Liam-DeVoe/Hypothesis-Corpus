@@ -400,7 +400,6 @@ def install(db_path: str, limit: int, debug: bool, overwrite: bool, repo_name: s
 @cli.group()
 def task():
     """Task management commands."""
-    pass
 
 
 @task.command()

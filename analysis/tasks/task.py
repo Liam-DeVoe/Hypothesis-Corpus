@@ -34,7 +34,6 @@ class Task(ABC):
         Returns:
             SQL string to create necessary tables and indices.
         """
-        pass
 
     @staticmethod
     @abstractmethod
@@ -47,7 +46,6 @@ class Task(ABC):
         Returns:
             Dictionary with results/statistics from the task.
         """
-        pass
 
     @staticmethod
     @abstractmethod
@@ -58,7 +56,6 @@ class Task(ABC):
             db: Database connection object.
             data: Results from run() to store.
         """
-        pass
 
     @staticmethod
     @abstractmethod
@@ -68,4 +65,3 @@ class Task(ABC):
         Args:
             db: Database connection object.
         """
-        pass

@@ -21,13 +21,11 @@ class Experiment(ABC):
     @abstractmethod
     def get_schema_sql() -> str:
         """Return SQL to create database tables for this experiment."""
-        pass
 
     @staticmethod
     @abstractmethod
     def run(node_id: str) -> dict[str, Any]:
         """Run the experiment and return data."""
-        pass
 
     @staticmethod
     def run_repository(repo_name: str, node_ids: list[str]) -> dict[str, Any]:
@@ -51,16 +49,13 @@ class Experiment(ABC):
             repo_id: Repository ID in the database
             data: Repository-level data returned from run_repository()
         """
-        pass
 
     @staticmethod
     @abstractmethod
     def delete_data(db: Any, repo_id: int):
         """Delete this experiment's data from the database."""
-        pass
 
     @staticmethod
     @abstractmethod
     def store_to_database(db: Any, repo_id: int, node_id: int, data: dict[str, Any]):
         """Store experiment results to the database."""
-        pass

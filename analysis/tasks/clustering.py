@@ -165,7 +165,7 @@ class ClusterTask(Task):
             cluster_facets = clusters[cluster_id]
             facet_texts = [f[1] for f in cluster_facets]
 
-            samples = random.sample(facet_texts,  min(5, len(facet_texts)))
+            samples = random.sample(facet_texts, min(5, len(facet_texts)))
 
             logger.info(f"Cluster {cluster_id} ({len(facet_texts)} items):")
             for i, sample in enumerate(samples, 1):
