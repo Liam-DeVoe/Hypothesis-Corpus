@@ -2,10 +2,8 @@ pytest==8.4.2
 datasketch==1.6.5
 hypothesis==6.140.2
 matplotlib==3.9.0
-# pinning these two for compatibility with an error
-# in transformers' PreTrainedModel
-sentence-transformers==4.1.0
-transformers==4.41.0
+sentence-transformers==5.2.2
+transformers>=5.0.0
 
 streamlit>=1.28.0
 pandas>=2.0.0
