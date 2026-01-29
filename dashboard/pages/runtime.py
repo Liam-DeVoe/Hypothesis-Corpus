@@ -120,28 +120,6 @@ def main():
 
     # Test execution results
     if not test_results.empty and test_results["total_executions"].iloc[0] > 0:
-        col1, col2 = st.columns(2)
-
-        with col1:
-            # Pass/Fail pie chart
-            passed = test_results["passed"].iloc[0]
-            failed = test_results["failed"].iloc[0]
-
-            fig = px.pie(
-                values=[passed, failed],
-                names=["Passed", "Failed"],
-                title="Test Execution Results",
-                color_discrete_map={"Passed": "green", "Failed": "red"},
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col2:
-            # Execution statistics
-            st.metric(
-                "Total Node Executions", f"{test_results['total_executions'].iloc[0]:,}"
-            )
-            st.metric("Pass Rate", f"{(passed / (passed + failed) * 100):.1f}%")
-
         # Execution time histogram
         if not execution_times.empty and len(execution_times) > 0:
             # Create histogram directly since we already have the data
