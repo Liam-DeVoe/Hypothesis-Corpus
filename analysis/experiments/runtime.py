@@ -96,6 +96,17 @@ class RuntimeExperiment(Experiment):
 
     @staticmethod
     def store_to_database(db: Any, repo_id: int, node_id: int, data: dict[str, Any]):
+        if data["status"] == "error":
+            db.execute(
+                """
+                INSERT INTO runtime_summary (node_id, status, error_message)
+                VALUES (?, ?, ?)
+                """,
+                (node_id, data["status"], data.get("error_message", "")),
+            )
+            db.commit()
+            return
+
         observations = data["observations"]
 
         # Calculate aggregate coverage and line execution counts from test cases

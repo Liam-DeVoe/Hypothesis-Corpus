@@ -70,6 +70,7 @@ def load_data():
         """
         SELECT
             COUNT(*) as total,
+            SUM(CASE WHEN cn.canonical_parametrization THEN 1 ELSE 0 END) as canonical,
             SUM(CASE WHEN rs.id IS NOT NULL THEN 1 ELSE 0 END) as analyzed,
             SUM(CASE WHEN rs.status = 'passed' THEN 1 ELSE 0 END) as passed,
             SUM(CASE WHEN rs.status = 'failed' THEN 1 ELSE 0 END) as failed
@@ -95,7 +96,8 @@ def load_experiment_progress():
             COUNT(DISTINCT rs.node_id) as processed,
             SUM(CASE WHEN rs.status = 'passed' THEN 1 ELSE 0 END) as passed,
             SUM(CASE WHEN rs.status = 'failed' THEN 1 ELSE 0 END) as failed,
-            SUM(CASE WHEN rs.status = 'skipped' THEN 1 ELSE 0 END) as skipped
+            SUM(CASE WHEN rs.status = 'skipped' THEN 1 ELSE 0 END) as skipped,
+            SUM(CASE WHEN rs.status = 'error' THEN 1 ELSE 0 END) as error
         FROM core_node cn
         LEFT JOIN runtime_summary rs ON cn.id = rs.node_id
     """)
@@ -123,6 +125,7 @@ def load_experiment_progress():
             COUNT(DISTINCT CASE WHEN rs.status = 'passed' THEN rs.node_id END) as runtime_passed,
             COUNT(DISTINCT CASE WHEN rs.status = 'failed' THEN rs.node_id END) as runtime_failed,
             COUNT(DISTINCT CASE WHEN rs.status = 'skipped' THEN rs.node_id END) as runtime_skipped,
+            COUNT(DISTINCT CASE WHEN rs.status = 'error' THEN rs.node_id END) as runtime_error,
             COUNT(DISTINCT CASE WHEN fn.type = 'summary' THEN fn.node_id END) as facets_done
         FROM core_repository r
         JOIN core_node cn ON r.id = cn.repo_id
@@ -149,22 +152,21 @@ def render_overview_metrics(stats: dict[str, Any]):
     with col1:
         st.metric(
             "Repositories",
-            stats["repositories"]["total"],
+            f"{stats['repositories']['total']:,}",
         )
 
     with col2:
-        analyzed = stats["core_node"]["analyzed"] or 0
         total = stats["core_node"]["total"] or 0
         st.metric(
-            "Nodes Analyzed",
-            f"{analyzed} / {total}",
+            "All Nodes",
+            f"{total:,}",
         )
 
     with col3:
-        failed = stats["core_node"]["failed"] or 0
+        canonical = stats["core_node"]["canonical"] or 0
         st.metric(
-            "Failed nodes",
-            f"{failed}",
+            "Canonical Nodes",
+            f"{canonical:,}",
         )
 
 
@@ -254,10 +256,11 @@ def render_experiment_progress(progress: dict[str, Any]):
         st.markdown(f"**{rt_done:,}** / {rt_total:,}")
 
     if rt_done > 0:
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3, c4 = st.columns(4)
         c1.caption(f"Passed: {runtime['passed'] or 0:,}")
         c2.caption(f"Failed: {runtime['failed'] or 0:,}")
         c3.caption(f"Skipped: {runtime['skipped'] or 0:,}")
+        c4.caption(f"Error: {runtime['error'] or 0:,}")
 
     # Runtime per-repository table
     render_repo_progress_table(
@@ -267,6 +270,7 @@ def render_experiment_progress(progress: dict[str, Any]):
             {"label": "Passed", "done_key": "runtime_passed", "total_key": "total_nodes"},
             {"label": "Failed", "done_key": "runtime_failed", "total_key": "total_nodes"},
             {"label": "Skipped", "done_key": "runtime_skipped", "total_key": "total_nodes"},
+            {"label": "Error", "done_key": "runtime_error", "total_key": "total_nodes"},
         ],
         expander_title="Details",
     )

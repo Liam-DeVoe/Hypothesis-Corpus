@@ -145,6 +145,12 @@ class Worker(Process):
                     logger.warning(
                         f"[w{self.worker_id}][{work_item.repo_name}] {error_msg}"
                     )
+                    if response.status_code == 404:
+                        db.execute(
+                            "UPDATE core_repository SET status = ?, status_reason = ? WHERE id = ?",
+                            ("invalid", "repo_404", work_item.repo_id),
+                        )
+                        db.commit()
                     return {"success": False, "error": error_msg}
             except requests.RequestException as e:
                 error_msg = f"Failed to check repository: {str(e)}"
@@ -231,6 +237,12 @@ class Worker(Process):
                         logger.error(
                             f"[w{self.worker_id}][{work_item.repo_name}] {error_msg}"
                         )
+                        experiment.store_to_database(
+                            db,
+                            work_item.repo_id,
+                            node_db_id,
+                            {"status": "error", "error_message": error_msg},
+                        )
                         nodes_failed += 1
                         continue
 
@@ -241,6 +253,12 @@ class Worker(Process):
                             logger.warning(
                                 f"[w{self.worker_id}][{work_item.repo_name}] "
                                 f"No data for {node_id} in experiment {experiment.name}"
+                            )
+                            experiment.store_to_database(
+                                db,
+                                work_item.repo_id,
+                                node_db_id,
+                                {"status": "error", "error_message": "No data returned"},
                             )
                             nodes_failed += 1
                             continue
@@ -253,9 +271,18 @@ class Worker(Process):
                         nodes_processed += 1
 
                     except Exception as e:
+                        error_msg = (
+                            f"Error processing {node_id} for {experiment.name}: "
+                            f"{traceback.format_exception(e)}"
+                        )
                         logger.error(
-                            f"[w{self.worker_id}][{work_item.repo_name}] Error "
-                            f"processing {node_id} for {experiment.name}: {traceback.format_exception(e)}"
+                            f"[w{self.worker_id}][{work_item.repo_name}] {error_msg}"
+                        )
+                        experiment.store_to_database(
+                            db,
+                            work_item.repo_id,
+                            node_db_id,
+                            {"status": "error", "error_message": error_msg},
                         )
                         nodes_failed += 1
 
