@@ -56,16 +56,15 @@ def load_data():
     """Load data from database."""
     db = get_database()
 
-    # Repository stats
     repo_stats = db.fetchone(
         """
         SELECT
             COUNT(*) as total
         FROM core_repository
+        WHERE status = 'valid'
         """
     )
 
-    # Node stats (based on runtime experiment results)
     node_stats = db.fetchone(
         """
         SELECT
@@ -75,7 +74,9 @@ def load_data():
             SUM(CASE WHEN rs.status = 'passed' THEN 1 ELSE 0 END) as passed,
             SUM(CASE WHEN rs.status = 'failed' THEN 1 ELSE 0 END) as failed
         FROM core_node cn
+        JOIN core_repository r ON cn.repo_id = r.id
         LEFT JOIN runtime_summary rs ON cn.id = rs.node_id
+        WHERE r.status = 'valid'
         """
     )
 
@@ -89,7 +90,6 @@ def load_experiment_progress():
     """Load experiment progress data from database."""
     db = get_database()
 
-    # Runtime progress (all nodes)
     runtime = db.fetchone("""
         SELECT
             COUNT(DISTINCT cn.id) as total_nodes,
@@ -99,19 +99,23 @@ def load_experiment_progress():
             SUM(CASE WHEN rs.status = 'skipped' THEN 1 ELSE 0 END) as skipped,
             SUM(CASE WHEN rs.status = 'error' THEN 1 ELSE 0 END) as error
         FROM core_node cn
+        JOIN core_repository r ON cn.repo_id = r.id
         LEFT JOIN runtime_summary rs ON cn.id = rs.node_id
+        WHERE r.status = 'valid'
     """)
 
-    # Facets progress (canonical nodes only)
     facets = db.fetchone("""
         SELECT
-            (SELECT COUNT(*) FROM core_node WHERE canonical_parametrization = TRUE) as total_canonical,
+            (SELECT COUNT(*) FROM core_node cn
+             JOIN core_repository r ON cn.repo_id = r.id
+             WHERE cn.canonical_parametrization = TRUE AND r.status = 'valid') as total_canonical,
             COUNT(DISTINCT CASE WHEN fn.type = 'summary' THEN fn.node_id END) as with_summary,
             COUNT(DISTINCT CASE WHEN fn.type = 'pattern' THEN fn.node_id END) as with_pattern,
             COUNT(DISTINCT CASE WHEN fn.type = 'domain' THEN fn.node_id END) as with_domain
         FROM facets_nodes fn
         JOIN core_node cn ON fn.node_id = cn.id
-        WHERE cn.canonical_parametrization = TRUE
+        JOIN core_repository r ON cn.repo_id = r.id
+        WHERE cn.canonical_parametrization = TRUE AND r.status = 'valid'
     """)
 
     # Repository-level progress
