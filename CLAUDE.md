@@ -13,7 +13,7 @@ pip install -r requirements.txt
 ./build.sh image  # Build Docker image for analysis
 ```
 
-Requires a `secrets.json` file with API tokens:
+Requires `analysis/secrets.json` with API tokens (see `analysis/secrets.json.example`):
 ```json
 {
   "claude_code_oauth_token": "your-token-here",
@@ -38,8 +38,8 @@ python run.py experiment -e runtime -e facets  # Specific experiments
 python run.py experiment --repo owner/repo --overwrite  # Single repo
 
 # Step 4: Run post-experiment tasks
-python run.py task run clustering
-python run.py task clear --task-name clustering
+python run.py task run cluster
+python run.py task clear --task-name cluster
 ```
 
 ### Dashboard
@@ -61,24 +61,24 @@ sqlite3 analysis/data.db ".tables"
 sqlite3 analysis/data.db "SELECT full_name, status FROM core_repository LIMIT 5;"
 ```
 
+`build.sh` also forwards all other commands to `run.py` (e.g., `./build.sh experiment` runs `python run.py experiment`).
+
 ## Architecture
 
 ### Data Flow
-1. **collect**: Searches GitHub for repos using Hypothesis, stores in `core_repository` table
-2. **install**: Clones repos, runs Docker container to install deps and collect pytest node IDs via custom plugin, captures git commit hash, sets `status='valid'`
-3. **experiment**: WorkerPool distributes valid repos across processes. Each worker clones repo, copies experiment modules, creates tar archive, executes in Docker container, parses results.json
-4. **task**: Runs post-experiment analysis (e.g., clustering) on collected data
-5. **dashboard**: Streamlit visualization reading from SQLite
+1. **collect**: Searches GitHub for repos using Hypothesis, stores in `core_repository` table. Uses file size bucketing to work around GitHub's 1000-result limit. Deduplicates repos via MinHash (Jaccard threshold 0.75).
+2. **install**: Clones repos, runs Docker container to install deps and collect pytest node IDs via custom plugin, captures git commit hash, sets `status='valid'`. Aborts after 7 consecutive failures as a safeguard.
+3. **experiment**: WorkerPool distributes valid repos across processes. Each worker clones the exact commit hash captured during install, copies experiment modules into a tar archive, executes in Docker container, parses results.json.
+4. **task**: Runs post-experiment analysis (e.g., clustering) on the host machine (not Docker).
+5. **dashboard**: Streamlit visualization reading from SQLite.
 
 ### Docker Container Execution
 - Files packaged as tar archive and sent via Docker API (avoids Mac mount penalties)
 - Container installs repo dependencies, then runs experiment via `runner.py`
 - Network access required for pip installs
-- Experiment modules copied into repo: `runner.py`, `experiment.py`, `utils.py`, `{experiment_name}.py`
-
-### Installation & Node Collection
-- Custom pytest plugin hooks `pytest_collection_finish` to collect node IDs
-- `git config --global --add safe.directory /app` needed for commit hash capture (ownership mismatch in container)
+- Experiment modules copied into container: `runner.py`, `experiment.py`, `utils.py`, `{experiment_name}.py`
+- A shared uv cache volume (`pbt-analysis-uv-cache`, 8GB limit) speeds up pip installs across containers
+- `CLAUDE_CODE_OAUTH_TOKEN` env var passed through for the facets experiment
 
 ### Experiment System
 Experiments run in Docker to analyze individual tests:
@@ -89,6 +89,14 @@ Experiments run in Docker to analyze individual tests:
 
 Built-in: `runtime` (strategies/features), `facets` (Claude-generated summaries/patterns/domains)
 
+Experiment modules must work both as package imports and standalone (in the container). Use the try/except pattern:
+```python
+try:
+    from .experiment import Experiment
+except ImportError:
+    from experiment import Experiment
+```
+
 ### Task System
 Tasks run after experiments on the host machine:
 - Inherit from `Task` (analysis/tasks/task.py)
@@ -96,10 +104,13 @@ Tasks run after experiments on the host machine:
 - Declare `follows = ["experiment_name"]` for dependencies
 - Implement: `get_schema_sql()`, `run(db)`, `store_to_database()`, `delete_data()`
 
-Built-in: `clustering` (sentence-transformers embeddings + k-means, Claude for cluster naming)
+Built-in: `cluster` (sentence-transformers embeddings + k-means, Claude for cluster naming). Follows `facets`.
+
+### Canonical Parametrization
+Tests with parametrize (`test_foo[0]`, `test_foo[1]`) are grouped by base name (`test_foo`). The first node in each group is marked canonical. The `facets` experiment uses `only_canonical_nodes = True` to avoid analyzing the same test logic multiple times.
 
 ### Database
-SQLite at `analysis/data.db`. Singleton pattern per path.
+SQLite at `analysis/data.db`. Singleton pattern via `get_database(path)`.
 
 **Core tables:**
 - `core_repository`: Collected repos (full_name, status, requirements, node_ids, commit_hash, experiments_ran)
@@ -108,14 +119,15 @@ SQLite at `analysis/data.db`. Singleton pattern per path.
 
 **Experiment tables** defined by `get_schema_sql()`:
 - `runtime`: `runtime_summary`, `runtime_testcase`
-- `facets`: `facets`
+- `facets`: `facets_repository`, `facets_nodes`
 
 **Task tables:**
-- `clustering`: `facets_cluster`, `facets_cluster_assignment`
+- `cluster`: `facets_cluster`, `facets_cluster_assignment`
 
 **API:**
 ```python
-db = Database(db_path="analysis/data.db")
+from analysis.database import get_database
+db = get_database("analysis/data.db")  # Singleton per path
 db.execute(query, params)
 db.fetchone(query, params)
 db.fetchall(query, params)
@@ -128,7 +140,7 @@ pd.read_sql_query("SELECT ...", db._conn)  # For pandas
 1. Create class in `analysis/experiments/` inheriting from `Experiment`
 2. Set `name` class attribute for auto-registration
 3. Implement `get_schema_sql()`, `run(node_id)`, `store_to_database()`, `delete_data()`
-4. Imports must work standalone (use try/except pattern for relative imports)
+4. Use try/except import pattern for standalone execution in containers
 5. Rebuild Docker image if adding system dependencies
 
 ## Adding New Tasks
@@ -148,4 +160,4 @@ pd.read_sql_query("SELECT ...", db._conn)  # For pandas
 - **analysis/collect/install_repos.py**: Orchestrates repo installation
 - **analysis/collect/_install.py**: Runs inside Docker to install deps and collect nodes
 - **analysis/database.py**: SQLite wrapper with singleton pattern
-- **dashboard/overview.py**: Streamlit entry point
+- **dashboard/Overview.py**: Streamlit entry point (note capitalized filename)
