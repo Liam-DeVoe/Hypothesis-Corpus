@@ -258,7 +258,10 @@ class Worker(Process):
                                 db,
                                 work_item.repo_id,
                                 node_db_id,
-                                {"status": "error", "error_message": "No data returned"},
+                                {
+                                    "status": "error",
+                                    "error_message": "No data returned",
+                                },
                             )
                             nodes_failed += 1
                             continue

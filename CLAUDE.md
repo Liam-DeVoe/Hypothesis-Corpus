@@ -127,6 +127,7 @@ SQLite at `analysis/data.db`. Singleton pattern via `get_database(path)`.
 **API:**
 ```python
 from analysis.database import get_database
+
 db = get_database("analysis/data.db")  # Singleton per path
 db.execute(query, params)
 db.fetchone(query, params)

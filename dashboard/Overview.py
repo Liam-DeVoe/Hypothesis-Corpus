@@ -90,7 +90,8 @@ def load_experiment_progress():
     """Load experiment progress data from database."""
     db = get_database()
 
-    runtime = db.fetchone("""
+    runtime = db.fetchone(
+        """
         SELECT
             COUNT(DISTINCT cn.id) as total_nodes,
             COUNT(DISTINCT rs.node_id) as processed,
@@ -102,9 +103,11 @@ def load_experiment_progress():
         JOIN core_repository r ON cn.repo_id = r.id
         LEFT JOIN runtime_summary rs ON cn.id = rs.node_id
         WHERE r.status = 'valid'
-    """)
+    """
+    )
 
-    facets = db.fetchone("""
+    facets = db.fetchone(
+        """
         SELECT
             (SELECT COUNT(*) FROM core_node cn
              JOIN core_repository r ON cn.repo_id = r.id
@@ -116,11 +119,13 @@ def load_experiment_progress():
         JOIN core_node cn ON fn.node_id = cn.id
         JOIN core_repository r ON cn.repo_id = r.id
         WHERE cn.canonical_parametrization = TRUE AND r.status = 'valid'
-    """)
+    """
+    )
 
     # Repository-level progress
     # Note: Use COUNT(DISTINCT) for canonical_nodes to avoid inflation from JOINs
-    repos = db.fetchall("""
+    repos = db.fetchall(
+        """
         SELECT
             r.full_name,
             COUNT(DISTINCT cn.id) as total_nodes,
@@ -138,7 +143,8 @@ def load_experiment_progress():
         WHERE r.status = 'valid'
         GROUP BY r.id
         ORDER BY r.full_name
-    """)
+    """
+    )
 
     return {
         "runtime": dict(runtime) if runtime else {},
@@ -270,10 +276,26 @@ def render_experiment_progress(progress: dict[str, Any]):
     render_repo_progress_table(
         repos,
         experiments=[
-            {"label": "Completed", "done_key": "runtime_done", "total_key": "total_nodes"},
-            {"label": "Passed", "done_key": "runtime_passed", "total_key": "total_nodes"},
-            {"label": "Failed", "done_key": "runtime_failed", "total_key": "total_nodes"},
-            {"label": "Skipped", "done_key": "runtime_skipped", "total_key": "total_nodes"},
+            {
+                "label": "Completed",
+                "done_key": "runtime_done",
+                "total_key": "total_nodes",
+            },
+            {
+                "label": "Passed",
+                "done_key": "runtime_passed",
+                "total_key": "total_nodes",
+            },
+            {
+                "label": "Failed",
+                "done_key": "runtime_failed",
+                "total_key": "total_nodes",
+            },
+            {
+                "label": "Skipped",
+                "done_key": "runtime_skipped",
+                "total_key": "total_nodes",
+            },
             {"label": "Error", "done_key": "runtime_error", "total_key": "total_nodes"},
         ],
         expander_title="Details",
@@ -303,7 +325,11 @@ def render_experiment_progress(progress: dict[str, Any]):
     render_repo_progress_table(
         repos,
         experiments=[
-            {"label": "Completed", "done_key": "facets_done", "total_key": "canonical_nodes"},
+            {
+                "label": "Completed",
+                "done_key": "facets_done",
+                "total_key": "canonical_nodes",
+            },
         ],
         expander_title="Details",
     )
@@ -336,8 +362,16 @@ def overview_page():
     render_repo_progress_table(
         progress["repos"],
         experiments=[
-            {"label": "Runtime", "done_key": "runtime_done", "total_key": "total_nodes"},
-            {"label": "Facets", "done_key": "facets_done", "total_key": "canonical_nodes"},
+            {
+                "label": "Runtime",
+                "done_key": "runtime_done",
+                "total_key": "total_nodes",
+            },
+            {
+                "label": "Facets",
+                "done_key": "facets_done",
+                "total_key": "canonical_nodes",
+            },
         ],
         expander_title="Details",
     )
