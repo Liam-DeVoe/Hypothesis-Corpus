@@ -228,6 +228,18 @@ class TestRunner:
         else:
             result = container.wait(timeout=self.RUNNER_TIMEOUT)
 
+        exit_code = result.get("StatusCode", -1)
+        logger.info(
+            f"[w{self.worker_id}][{repo_name}] Container exit code: {exit_code}"
+        )
+
+        if exit_code != 0:
+            container.remove(force=True)
+            raise RuntimeError(
+                "fatal: experiment container exited with non-zero exit code "
+                f"{exit_code}"
+            )
+
         bits, _ = container.get_archive("/app/results.json")
         tar_stream = BytesIO()
         for chunk in bits:
