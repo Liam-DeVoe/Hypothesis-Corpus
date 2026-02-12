@@ -104,7 +104,7 @@ def main():
                     node_data["traceback"] = traceback.format_exc()
 
                 # Write as JSONL line and flush to survive OOM
-                f.write(json.dumps(node_data, default=str) + "\n")
+                f.write(json.dumps(node_data) + "\n")
                 f.flush()
                 os.fsync(f.fileno())
 
