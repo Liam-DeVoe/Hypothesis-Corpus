@@ -106,7 +106,6 @@ def experiment(
             core_repository.id,
             core_repository.full_name,
             core_repository.requirements,
-            core_repository.experiments_ran,
             core_repository.commit_hash
         FROM core_repository
         WHERE core_repository.status = 'valid'
@@ -114,11 +113,13 @@ def experiment(
     )
 
     if not overwrite:
-        repos = [
-            repo
-            for repo in repos
-            if not set(experiments) <= set(json.loads(repo["experiments_ran"]))
-        ]
+        complete_repo_ids = set.intersection(
+            *(
+                Experiment.experiments[name].get_complete_repo_ids(db)
+                for name in experiments
+            )
+        )
+        repos = [repo for repo in repos if repo["id"] not in complete_repo_ids]
     if limit:
         repos = repos[:limit]
 
@@ -156,6 +157,12 @@ def experiment(
     console.print(f"Workers: [green]{workers}[/green]")
     console.print(f"Docker image: [green]{docker_image}[/green]")
     console.print()
+
+    if overwrite:
+        console.print("[yellow]Overwrite mode: deleting existing experiment data...[/yellow]")
+        for repo in repos:
+            for experiment_name in experiments:
+                Experiment.experiments[experiment_name].delete_data(db, repo["id"])
 
     # Create worker pool
     console.print("[bold]Starting analysis...[/bold]")

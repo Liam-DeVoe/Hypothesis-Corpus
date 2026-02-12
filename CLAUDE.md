@@ -113,7 +113,7 @@ Tests with parametrize (`test_foo[0]`, `test_foo[1]`) are grouped by base name (
 SQLite at `analysis/data.db`. Singleton pattern via `get_database(path)`.
 
 **Core tables:**
-- `core_repository`: Collected repos (full_name, status, requirements, node_ids, commit_hash, experiments_ran)
+- `core_repository`: Collected repos (full_name, status, requirements, node_ids, commit_hash)
 - `core_node`: Test nodes (repo_id, node_id, canonical_parametrization)
 - `core_minhashes`: MinHash for deduplication
 

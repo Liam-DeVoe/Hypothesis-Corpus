@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import shutil
 import subprocess
 import tarfile
@@ -124,6 +125,7 @@ class TestRunner:
         *,
         debug: bool,
         repo_name: str,
+        skip_run_repo: bool = False,
     ) -> bool:
         """Set up environment by copying experiment modules and config to app_dir."""
         # Write requirements to file if provided
@@ -170,9 +172,27 @@ class TestRunner:
             "experiment_name": experiment_name,
             "debug": debug,
             "repo_name": repo_name,
+            "skip_run_repo": skip_run_repo,
         }
         config_file = app_dir / "config.json"
         config_file.write_text(json.dumps(config, indent=2))
+
+    def _extract_file_from_container(self, container, path: str) -> str | None:
+        """Extract a file from the container. Returns content string or None."""
+        try:
+            bits, _ = container.get_archive(path)
+            tar_stream = BytesIO()
+            for chunk in bits:
+                tar_stream.write(chunk)
+            tar_stream.seek(0)
+            with tarfile.open(fileobj=tar_stream) as tar:
+                filename = os.path.basename(path)
+                f = tar.extractfile(filename)
+                if f:
+                    return f.read().decode("utf-8")
+        except Exception:
+            return None
+        return None
 
     def run_in_container(
         self, repo_name: str, work_dir: Path, node_ids: list[str], debug: bool
@@ -233,25 +253,51 @@ class TestRunner:
             f"[w{self.worker_id}][{repo_name}] Container exit code: {exit_code}"
         )
 
-        if exit_code != 0:
-            container.remove(force=True)
-            raise RuntimeError(
-                "fatal: experiment container exited with non-zero exit code "
-                f"{exit_code}"
+        # Extract result files from container (may exist even on non-zero exit)
+        try:
+            repo_content = self._extract_file_from_container(
+                container, "/app/repository_results.json"
+            )
+            nodes_content = self._extract_file_from_container(
+                container, "/app/node_results.jsonl"
             )
 
-        bits, _ = container.get_archive("/app/results.json")
-        tar_stream = BytesIO()
-        for chunk in bits:
-            tar_stream.write(chunk)
-        tar_stream.seek(0)
+            if repo_content is None and nodes_content is None:
+                raise RuntimeError(
+                    f"Container exited with code {exit_code}, no results recovered"
+                )
 
-        try:
-            with tarfile.open(fileobj=tar_stream) as tar:
-                results_file = tar.extractfile("results.json")
-                assert results_file
-                results = json.loads(results_file.read().decode("utf-8"))
-                return results
+            if exit_code != 0 and nodes_content is not None:
+                logger.warning(
+                    f"[w{self.worker_id}][{repo_name}] Container exited with "
+                    f"code {exit_code}, recovered partial results"
+                )
+
+            # Parse repository results
+            repository_results = json.loads(repo_content) if repo_content else {}
+
+            # Parse node results from JSONL
+            nodes = {}
+            if nodes_content:
+                for line in nodes_content.strip().split("\n"):
+                    if not line.strip():
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        node_id = entry.pop("node_id")
+                        nodes[node_id] = entry
+                    except json.JSONDecodeError:
+                        # Truncated line from OOM mid-write
+                        logger.warning(
+                            f"[w{self.worker_id}][{repo_name}] "
+                            "Skipping truncated JSONL line"
+                        )
+
+            return {
+                "repository": repository_results,
+                "nodes": nodes,
+                "exit_code": exit_code,
+            }
         finally:
             container.remove(force=True)
 
@@ -264,6 +310,7 @@ class TestRunner:
         experiment_name: str,
         *,
         debug: bool,
+        skip_run_repo: bool = False,
     ) -> dict[str, any]:
         """Process a complete repository."""
         work_dir = None
@@ -283,6 +330,7 @@ class TestRunner:
                 experiment_name,
                 debug=debug,
                 repo_name=repo_name,
+                skip_run_repo=skip_run_repo,
             )
             results = self.run_in_container(repo_name, work_dir, node_ids, debug)
             assert results is not None

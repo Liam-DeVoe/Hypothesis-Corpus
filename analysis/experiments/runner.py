@@ -1,5 +1,6 @@
 import importlib
 import json
+import os
 import sys
 import traceback
 from pathlib import Path
@@ -58,39 +59,54 @@ def main():
 
         # Run repository-level analysis
         repo_name = config["repo_name"]
+        skip_run_repo = config["skip_run_repo"]
         repository_results = {}
-        print(f"Running repository-level analysis for {repo_name}...", flush=True)
-        try:
-            repository_results["data"] = experiment_class.run_repository(
-                repo_name, node_ids
+
+        if skip_run_repo:
+            print("Skipping repository-level analysis (already completed)", flush=True)
+        else:
+            print(
+                f"Running repository-level analysis for {repo_name}...",
+                flush=True,
             )
-        except Exception as e:
-            print(f"ERROR: Repository-level analysis failed: {e}", flush=True)
-            print(f"Traceback: {traceback.format_exc()}", flush=True)
-            repository_results["error"] = str(e)
-            repository_results["traceback"] = traceback.format_exc()
-
-        # Process all test nodes
-        node_results = {}
-        for i, node_id in enumerate(node_ids, 1):
-            print(f"Processing test {i}/{len(node_ids)}: {node_id}", flush=True)
-            print(f"Running {experiment_name} experiment...", flush=True)
-            node_data = {}
-
             try:
-                node_data[experiment_name] = experiment_class.run(node_id, debug=debug)
+                repository_results["data"] = experiment_class.run_repository(
+                    repo_name, node_ids
+                )
             except Exception as e:
-                print(f"ERROR: Experiment failed: {e}", flush=True)
+                print(f"ERROR: Repository-level analysis failed: {e}", flush=True)
                 print(f"Traceback: {traceback.format_exc()}", flush=True)
-                node_data["error"] = str(e)
-                node_data["traceback"] = traceback.format_exc()
-            node_results[node_id] = node_data
+                repository_results["error"] = str(e)
+                repository_results["traceback"] = traceback.format_exc()
 
-        # Write results
-        print("\nWriting results to results.json", flush=True)
-        results = {"repository": repository_results, "nodes": node_results}
-        with open("/app/results.json", "w") as f:
-            json.dump(results, f, indent=2, default=str)
+        # Write repository results immediately
+        with open("/app/repository_results.json", "w") as f:
+            json.dump(repository_results, f, indent=2, default=str)
+
+        # Process all test nodes, writing results incrementally
+        with open("/app/node_results.jsonl", "w") as f:
+            for i, node_id in enumerate(node_ids, 1):
+                print(
+                    f"Processing test {i}/{len(node_ids)}: {node_id}",
+                    flush=True,
+                )
+                print(f"Running {experiment_name} experiment...", flush=True)
+                node_data = {"node_id": node_id}
+
+                try:
+                    node_data[experiment_name] = experiment_class.run(
+                        node_id, debug=debug
+                    )
+                except Exception as e:
+                    print(f"ERROR: Experiment failed: {e}", flush=True)
+                    print(f"Traceback: {traceback.format_exc()}", flush=True)
+                    node_data["error"] = str(e)
+                    node_data["traceback"] = traceback.format_exc()
+
+                # Write as JSONL line and flush to survive OOM
+                f.write(json.dumps(node_data, default=str) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
 
         print("Analysis complete", flush=True)
 
@@ -98,10 +114,12 @@ def main():
         print(f"ERROR in main: {e}", flush=True)
         print(f"Traceback: {traceback.format_exc()}", flush=True)
 
-        # Write error to results
-        with open("/app/results.json", "w") as f:
+        # Write error to repository results so host can see it
+        with open("/app/repository_results.json", "w") as f:
             json.dump(
-                {"error": str(e), "traceback": traceback.format_exc()}, f, indent=2
+                {"error": str(e), "traceback": traceback.format_exc()},
+                f,
+                indent=2,
             )
 
         sys.exit(1)

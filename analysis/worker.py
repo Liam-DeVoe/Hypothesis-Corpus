@@ -1,4 +1,3 @@
-import json
 import logging
 import multiprocessing as mp
 import subprocess
@@ -159,9 +158,13 @@ class Worker(Process):
                 )
                 return {"success": False, "error": error_msg}
 
-            # Delete any existing data for this repository before processing
-            for experiment in experiments:
-                experiment.delete_data(db, work_item.repo_id)
+            # Build node id mapping (pytest string <-> db id)
+            all_nodes = db.fetchall(
+                "SELECT id, node_id FROM core_node WHERE repo_id = ?",
+                (work_item.repo_id,),
+            )
+            string_to_db_id = {row["node_id"]: row["id"] for row in all_nodes}
+            db_id_to_string = {row["id"]: row["node_id"] for row in all_nodes}
 
             # Run all experiments for this repository
             all_nodes_processed = 0
@@ -172,21 +175,52 @@ class Worker(Process):
                     f"[w{self.worker_id}][{work_item.repo_name}] Running experiment: {experiment.name}"
                 )
 
-                # Use canonical nodes if experiment requests them, otherwise all nodes
-                node_ids = (
+                # Determine which node_ids this experiment expects
+                expected_node_ids = (
                     work_item.canonical_node_ids
                     if experiment.only_canonical_nodes
                     else work_item.node_ids
                 )
 
+                # Compute which nodes still need processing
+                completed_db_ids = experiment.get_completed_node_db_ids(
+                    db, work_item.repo_id
+                )
+                completed_strings = {
+                    db_id_to_string[db_id]
+                    for db_id in completed_db_ids
+                    if db_id in db_id_to_string
+                }
+                node_ids_to_run = [
+                    nid for nid in expected_node_ids if nid not in completed_strings
+                ]
+
+                if not node_ids_to_run:
+                    logger.info(
+                        f"[w{self.worker_id}][{work_item.repo_name}] "
+                        f"Experiment {experiment.name}: all nodes already completed, skipping"
+                    )
+                    continue
+
+                logger.info(
+                    f"[w{self.worker_id}][{work_item.repo_name}] "
+                    f"Experiment {experiment.name}: {len(node_ids_to_run)}/{len(expected_node_ids)} nodes to process"
+                )
+
+                # Skip run_repository() in container if repo-level data already exists
+                skip_run_repo = experiment.has_repository_data(
+                    db, work_item.repo_id
+                )
+
                 # Run tests in container with experiment name
                 results = test_runner.process_repository(
                     work_item.repo_name,
-                    node_ids,
+                    node_ids_to_run,
                     work_item.requirements,
                     commit_hash=work_item.commit_hash,
                     experiment_name=experiment.name,
                     debug=self.debug,
+                    skip_run_repo=skip_run_repo,
                 )
 
                 if results is None:
@@ -205,29 +239,26 @@ class Worker(Process):
                     )
                     continue
 
-                repository_results = results["repository"]
-                if "error" in repository_results:
-                    error_msg = f"Repository-level analysis failed: {repository_results['error']}"
-                    logger.error(
-                        f"[w{self.worker_id}][{work_item.repo_name}] {error_msg}"
-                    )
-                elif (
-                    "data" in repository_results
-                    and repository_results["data"] is not None
-                ):
-                    # Store repository-level results if present
-                    experiment.store_repository_to_database(
-                        db, work_item.repo_id, repository_results["data"]
-                    )
+                # Handle repository results
+                if not skip_run_repo:
+                    repository_results = results["repository"]
+                    if "error" in repository_results:
+                        error_msg = f"Repository-level analysis failed: {repository_results['error']}"
+                        logger.error(
+                            f"[w{self.worker_id}][{work_item.repo_name}] {error_msg}"
+                        )
+                    elif (
+                        "data" in repository_results
+                        and repository_results["data"] is not None
+                    ):
+                        experiment.store_repository_to_database(
+                            db, work_item.repo_id, repository_results["data"]
+                        )
 
                 nodes_processed = 0
                 nodes_failed = 0
                 for node_id, node_result in results["nodes"].items():
-                    result = db.fetchone(
-                        "SELECT id FROM core_node WHERE repo_id = ? AND node_id = ?",
-                        (work_item.repo_id, node_id),
-                    )
-                    node_db_id = result["id"]
+                    node_db_id = string_to_db_id[node_id]
 
                     if "error" in node_result:
                         error_msg = (
@@ -296,19 +327,6 @@ class Worker(Process):
                     f"[w{self.worker_id}][{work_item.repo_name}] Experiment {experiment.name}: "
                     f"{nodes_processed} processed, {nodes_failed} failed"
                 )
-
-            result = db.fetchone(
-                "SELECT experiments_ran FROM core_repository WHERE id = ?",
-                (work_item.repo_id,),
-            )
-            experiments_ran = set(json.loads(result["experiments_ran"]))
-            experiments_ran |= {experiment.name for experiment in experiments}
-
-            db.execute(
-                "UPDATE core_repository SET experiments_ran = ? WHERE id = ?",
-                (json.dumps(list(experiments_ran)), work_item.repo_id),
-            )
-            db.commit()
 
             return {
                 "success": True,

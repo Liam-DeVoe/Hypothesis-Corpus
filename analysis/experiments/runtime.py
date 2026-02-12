@@ -17,6 +17,7 @@ except ImportError:
 
 class RuntimeExperiment(Experiment):
     name = "runtime"
+    node_tables = ["runtime_summary", "runtime_testcase"]
 
     max_examples = 500
 
@@ -202,20 +203,3 @@ class RuntimeExperiment(Experiment):
 
         db.commit()
 
-    @staticmethod
-    def delete_data(db: Any, repo_id: int):
-        node_ids = db.fetchall("SELECT id FROM core_node WHERE repo_id = ?", (repo_id,))
-        node_id_list = [row["id"] for row in node_ids]
-
-        if node_id_list:
-            placeholders = ",".join("?" * len(node_id_list))
-            db.execute(
-                f"DELETE FROM runtime_summary WHERE node_id IN ({placeholders})",
-                node_id_list,
-            )
-            db.execute(
-                f"DELETE FROM runtime_testcase WHERE node_id IN ({placeholders})",
-                node_id_list,
-            )
-
-        db.commit()
