@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import subprocess
 import tarfile
@@ -51,6 +52,10 @@ def install_repository(
             print(f"uv cache exceeded limit ({size_gb:.2f}GB), cleaning cache")
             clean_uv_cache(docker_client)
 
+        # GIT_TERMINAL_PROMPT=0 prevents git from prompting for credentials
+        # when a repo is private/deleted (404), causing it to fail immediately.
+        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+
         subprocess.run(
             [
                 "git",
@@ -64,6 +69,7 @@ def install_repository(
             text=True,
             timeout=300,
             check=True,
+            env=env,
         )
 
         if commit_hash is not None:
@@ -74,6 +80,7 @@ def install_repository(
                 text=True,
                 timeout=300,
                 check=True,
+                env=env,
             )
             subprocess.run(
                 ["git", "checkout", commit_hash],
