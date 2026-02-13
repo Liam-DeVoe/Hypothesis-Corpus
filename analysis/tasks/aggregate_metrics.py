@@ -103,7 +103,7 @@ class AggregateMetricsTask(Task):
         gen_rows = []
         for _, row in timing_data.iterrows():
             timing = json.loads(row["timing"])
-            exec_time = timing.get("execute:test", 0)
+            exec_time = sum(v for k, v in timing.items() if k.startswith("execute:"))
             gen_time = sum(v for k, v in timing.items() if k.startswith("generate:"))
             total = exec_time + gen_time
             if total > 0:
