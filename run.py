@@ -216,6 +216,29 @@ def experiment(
 # ==============================================================================
 
 
+def _populate_nodes_for_repo(
+    db, repo_id: int, node_ids: list[str], source_codes: dict[str, str | None]
+):
+    # replace any existing nodes for this repository
+    db.execute("DELETE FROM core_node WHERE repo_id = ?", (repo_id,))
+
+    # mark first node in each parametrization group as canonical
+    node_groups = defaultdict(list)
+    for node_id in node_ids:
+        base_name = node_id.split("[")[0]
+        node_groups[base_name].append(node_id)
+
+    for node_ids_in_group in node_groups.values():
+        for i, node_id in enumerate(node_ids_in_group):
+            is_canonical = i == 0
+            db.execute(
+                "INSERT INTO core_node (repo_id, node_id, canonical_parametrization, source_code) VALUES (?, ?, ?, ?)",
+                (repo_id, node_id, is_canonical, source_codes.get(node_id)),
+            )
+
+    db.commit()
+
+
 def _install(*, db_path, limit, debug, overwrite, repo_name):
     from analysis.collect.install_repos import install_repository
     from analysis.database import Database
@@ -303,6 +326,17 @@ def _install(*, db_path, limit, debug, overwrite, repo_name):
         )
         db.commit()
 
+        if status == "valid":
+            repo_row = db.fetchone(
+                "SELECT id FROM core_repository WHERE full_name = ?", (repo_name,)
+            )
+            _populate_nodes_for_repo(
+                db,
+                repo_row["id"],
+                result["node_ids"],
+                result["source_codes"],
+            )
+
         count = len(result["node_ids"])
         other_count = len(result["other_node_ids"])
 
@@ -328,59 +362,6 @@ def _install(*, db_path, limit, debug, overwrite, repo_name):
     console.print(f"Total: {len(repos)}")
 
 
-def _populate_collected_nodes(db_path: str):
-    from analysis.database import Database
-
-    console.print("[bold]Populating node table...[/bold]")
-
-    db = Database(db_path=db_path)
-    repos = db.fetchall(
-        """
-        SELECT id, full_name, node_ids
-        FROM core_repository
-        WHERE status = 'valid' AND node_ids IS NOT NULL
-        """
-    )
-
-    total_nodes_inserted = 0
-    for repo in repos:
-        repo_id = repo["id"]
-        repo_name = repo["full_name"]
-        node_ids_json = repo["node_ids"]
-        node_ids = json.loads(node_ids_json)
-        if not node_ids:
-            continue
-
-        # replace any existing nodes for this repository
-        db.execute(
-            "DELETE FROM core_node WHERE repo_id = ?",
-            (repo_id,),
-        )
-
-        # mark first node in each parametrization group as canonical
-        node_groups = defaultdict(list)
-        for node_id in node_ids:
-            base_name = node_id.split("[")[0]
-            node_groups[base_name].append(node_id)
-
-        for node_ids_in_group in node_groups.values():
-            for i, node_id in enumerate(node_ids_in_group):
-                is_canonical = i == 0
-                db.execute(
-                    "INSERT INTO core_node (repo_id, node_id, canonical_parametrization) VALUES (?, ?, ?)",
-                    (repo_id, node_id, is_canonical),
-                )
-
-        total_nodes_inserted += len(node_ids)
-        logger.debug(f"Populated {len(node_ids)} nodes for repository {repo_name}")
-
-    db.commit()
-
-    if total_nodes_inserted > 0:
-        logger.info(
-            f"Populated {total_nodes_inserted} total nodes into core_node table"
-        )
-
 
 @cli.command()
 @click.option("--db-path", help="Path to database file", default="analysis/data.db")
@@ -398,7 +379,6 @@ def install(db_path: str, limit: int, debug: bool, overwrite: bool, repo_name: s
         overwrite=overwrite,
         repo_name=repo_name,
     )
-    _populate_collected_nodes(db_path=db_path)
 
 
 # ==============================================================================

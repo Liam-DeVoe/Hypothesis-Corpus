@@ -5,6 +5,7 @@ This script is copied into the repository directory and executed in the Docker c
 It receives configuration through a config.json file that should be present in /app/.
 """
 
+import inspect
 import json
 import os
 import signal
@@ -150,6 +151,7 @@ class CollectionPlugin:
     def __init__(self):
         self.nodeids = []
         self.other_nodeids = []
+        self.source_codes = {}
 
     def pytest_collection_finish(self, session):
         # defer import to avoid pytest warning about being unable to rewrite an
@@ -176,6 +178,17 @@ class CollectionPlugin:
                 other_items.append(item)
         self.nodeids = [item.nodeid for item in items]
         self.other_nodeids = [item.nodeid for item in other_items]
+
+        for item in items:
+            try:
+                source = inspect.getsource(item.obj)
+            except Exception as e:
+                print(
+                    f"WARNING: failed to get source for {item.nodeid}: {e}",
+                    flush=True,
+                )
+                source = None
+            self.source_codes[item.nodeid] = source
 
 
 # If this triggers, it will do so in the middle of pytest collection, which will be
@@ -207,6 +220,7 @@ output = {
     "requirements": "\n".join(packages),
     "node_ids": plugin.nodeids,
     "other_node_ids": plugin.other_nodeids,
+    "source_codes": plugin.source_codes,
     "commit_hash": commit_hash,
     "collection_returncode": collection_returncode,
     "timed_out": timed_out,
