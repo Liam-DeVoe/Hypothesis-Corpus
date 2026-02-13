@@ -229,4 +229,3 @@ class FacetsExperiment(Experiment):
             ),
         )
         db.commit()
-

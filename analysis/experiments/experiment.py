@@ -69,9 +69,7 @@ class Experiment(ABC):
         exists in at least one of the experiment's node_tables.
         """
         canonical_filter = (
-            "AND cn.canonical_parametrization = 1"
-            if cls.only_canonical_nodes
-            else ""
+            "AND cn.canonical_parametrization = 1" if cls.only_canonical_nodes else ""
         )
         union = " UNION ".join(
             f"SELECT DISTINCT node_id FROM {table}" for table in cls.node_tables
@@ -111,9 +109,7 @@ class Experiment(ABC):
         for table in cls.repo_tables:
             db.execute(f"DELETE FROM {table} WHERE repo_id = ?", (repo_id,))
 
-        node_ids = db.fetchall(
-            "SELECT id FROM core_node WHERE repo_id = ?", (repo_id,)
-        )
+        node_ids = db.fetchall("SELECT id FROM core_node WHERE repo_id = ?", (repo_id,))
         node_id_list = [row["id"] for row in node_ids]
         if node_id_list:
             placeholders = ",".join("?" * len(node_id_list))

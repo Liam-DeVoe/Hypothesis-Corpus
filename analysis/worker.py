@@ -208,9 +208,7 @@ class Worker(Process):
                 )
 
                 # Skip run_repository() in container if repo-level data already exists
-                skip_run_repo = experiment.has_repository_data(
-                    db, work_item.repo_id
-                )
+                skip_run_repo = experiment.has_repository_data(db, work_item.repo_id)
 
                 # Run tests in container with experiment name
                 results = test_runner.process_repository(

@@ -159,7 +159,9 @@ def experiment(
     console.print()
 
     if overwrite:
-        console.print("[yellow]Overwrite mode: deleting existing experiment data...[/yellow]")
+        console.print(
+            "[yellow]Overwrite mode: deleting existing experiment data...[/yellow]"
+        )
         for repo in repos:
             for experiment_name in experiments:
                 Experiment.experiments[experiment_name].delete_data(db, repo["id"])
