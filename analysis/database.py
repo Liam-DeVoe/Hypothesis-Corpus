@@ -107,7 +107,7 @@ class Database:
                 FOREIGN KEY (repo_id) REFERENCES core_repository(id)
             );
 
-            -- Node information (populated by analysis)
+            -- Node information (populated by install)
             CREATE TABLE IF NOT EXISTS core_node (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 repo_id INTEGER NOT NULL,

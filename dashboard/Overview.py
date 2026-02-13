@@ -387,8 +387,11 @@ def main():
     pg = st.navigation(
         [
             st.Page(overview_page, title="Overview"),
-            st.Page("pages/Summary.py", title="Summary"),
-            st.Page("pages/Runtime.py", title="Runtime"),
+            st.Page("pages/corpus.py", title="Corpus"),
+            st.Page("pages/settings.py", title="Settings"),
+            st.Page("pages/timing.py", title="Timing"),
+            st.Page("pages/testcases.py", title="Test Cases"),
+            st.Page("pages/coverage.py", title="Coverage"),
             st.Page("pages/Facets.py", title="Facets"),
             st.Page("pages/Clusters.py", title="Clusters"),
         ]
