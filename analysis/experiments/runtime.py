@@ -43,13 +43,14 @@ class RuntimeExperiment(Experiment):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 node_id INTEGER NOT NULL,
                 testcase_number INTEGER NOT NULL,  -- Order of test case execution
-                coverage TEXT,  -- JSON mapping: {"file_path": [line_numbers], ...}
-                timing TEXT,  -- JSON: observation.timing
-                predicates TEXT,  -- JSON: observation.predicates
-                features TEXT,  -- JSON: observation.features
-                data_status INTEGER,  -- observation.data_status
+                coverage TEXT NOT NULL,  -- JSON mapping: {"file_path": [line_numbers], ...}
+                timing TEXT NOT NULL,  -- JSON: observation.timing
+                predicates TEXT NOT NULL,  -- JSON: observation.predicates
+                features TEXT NOT NULL,  -- JSON: observation.features
+                data_status INTEGER NOT NULL,  -- observation.data_status
                 status_reason TEXT,  -- observation.status_reason
-                choices_size INTEGER,  -- choices_size(observation.metadata.choice_nodes)
+                choices_size INTEGER NOT NULL,  -- choices_size(observation.metadata.choice_nodes)
+                how_generated TEXT NOT NULL,  -- observation.how_generated
                 FOREIGN KEY (node_id) REFERENCES core_node(id)
             );
 
@@ -179,14 +180,15 @@ class RuntimeExperiment(Experiment):
             features = observation["features"]
             status_reason = observation["status_reason"]
             choices_size = observation["choices_size"]
+            how_generated = observation["how_generated"]
 
             db.execute(
                 """
                 INSERT INTO runtime_testcase (
                     node_id, testcase_number, coverage, timing, predicates, features,
-                    data_status, status_reason, choices_size
+                    data_status, status_reason, choices_size, how_generated
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     node_id,
@@ -198,6 +200,7 @@ class RuntimeExperiment(Experiment):
                     data_status,
                     status_reason,
                     choices_size,
+                    how_generated,
                 ),
             )
 

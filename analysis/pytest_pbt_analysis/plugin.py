@@ -34,6 +34,7 @@ def callback(observation: Observation):
             "predicates": metadata.predicates,
             "data_status": metadata.data_status,
         },
+        "how_generated": observation.how_generated,
         "status_reason": observation.status_reason,
         "choices_size": choices_size([node.value for node in metadata.choice_nodes]),
     }
