@@ -30,7 +30,11 @@ PYTEST_COLLECTION_TIMEOUT = 5 * 60  # 5 minutes
 
 
 def install_repository(
-    repo_name: str, docker_image: str = "pbt-analysis:latest", debug: bool = False
+    repo_name: str,
+    docker_image: str = "pbt-analysis:latest",
+    *,
+    debug: bool = False,
+    commit_hash: str | None = None,
 ) -> dict:
     """Process a single repository: install and collect tests using Docker."""
     container = None
@@ -61,6 +65,24 @@ def install_repository(
             timeout=300,
             check=True,
         )
+
+        if commit_hash is not None:
+            subprocess.run(
+                ["git", "fetch", "--depth", "1", "origin", commit_hash],
+                cwd=str(repo_dir),
+                capture_output=True,
+                text=True,
+                timeout=300,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "checkout", commit_hash],
+                cwd=str(repo_dir),
+                capture_output=True,
+                text=True,
+                timeout=300,
+                check=True,
+            )
 
         # Create app directory and copy installation infrastructure
         app_dir.mkdir(exist_ok=True)
