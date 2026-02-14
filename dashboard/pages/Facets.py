@@ -175,7 +175,7 @@ def main():
             },
         )
         fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     # Pattern and Domain analysis
     st.subheader("Patterns")

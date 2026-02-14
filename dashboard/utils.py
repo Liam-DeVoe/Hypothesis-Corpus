@@ -2,6 +2,7 @@
 Shared utilities for dashboard visualizations.
 """
 
+import sys
 from datetime import datetime
 
 import streamlit as st
@@ -10,7 +11,12 @@ from analysis.database import get_database as _get_database
 
 
 def get_database():
-    return _get_database(st.session_state["db_path"])
+    db_path = "analysis/data.db"
+    if "--db-path" in sys.argv:
+        idx = sys.argv.index("--db-path")
+        if idx + 1 < len(sys.argv):
+            db_path = sys.argv[idx + 1]
+    return _get_database(db_path)
 
 
 def render_sidebar():

@@ -210,35 +210,35 @@ def main():
 
     fig = total_execution_time_histogram(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No execution time data available.")
 
     fig = median_testcase_time_histogram(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No per-test-case timing data available.")
 
     fig = generation_time_pct_histogram(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No generation timing data available.")
 
     fig = runtime_vs_generation_heatmap(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     fig = normalized_execution_time_curve(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No normalized execution time data available.")
 
     fig = execution_time_cv_histogram(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No execution time consistency data available.")
 

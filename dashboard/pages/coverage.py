@@ -70,12 +70,12 @@ def main():
             yaxis_title="Test count",
             bin_size=5,
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     # Global line execution frequency
     fig = execution_frequency_histogram()
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No line execution frequency data available.")
 
@@ -174,7 +174,7 @@ def main():
             showlegend=True,
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     # Line execution frequency histograms
     st.subheader("Line execution frequency distribution")
@@ -238,7 +238,7 @@ def main():
             showlegend=True,
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No line execution frequency data available for this repository.")
 

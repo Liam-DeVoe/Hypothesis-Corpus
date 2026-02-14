@@ -21,7 +21,7 @@ st.set_page_config(
 db = get_database()
 
 
-def max_examples_histogram():
+def max_examples_histogram(db):
     settings_data = pd.read_sql_query(
         """
         SELECT json_extract(settings, '$.max_examples') as max_examples
@@ -42,7 +42,7 @@ def max_examples_histogram():
     )
 
 
-def deadline_histogram():
+def deadline_histogram(db):
     counts = pd.read_sql_query(
         """
         SELECT
@@ -81,7 +81,7 @@ def deadline_histogram():
     return fig, null_count, total
 
 
-def stateful_step_count_histogram():
+def stateful_step_count_histogram(db):
     settings_data = pd.read_sql_query(
         """
         SELECT json_extract(settings, '$.stateful_step_count') as stateful_step_count
@@ -102,7 +102,7 @@ def stateful_step_count_histogram():
     )
 
 
-def derandomize_bar_chart():
+def derandomize_bar_chart(db):
     settings_data = pd.read_sql_query(
         """
         SELECT
@@ -142,7 +142,7 @@ def derandomize_bar_chart():
     return fig
 
 
-def backend_bar_chart():
+def backend_bar_chart(db):
     settings_data = pd.read_sql_query(
         """
         SELECT
@@ -181,7 +181,7 @@ def backend_bar_chart():
     return fig
 
 
-def database_bar_chart():
+def database_bar_chart(db):
     settings_data = pd.read_sql_query(
         """
         SELECT
@@ -231,7 +231,7 @@ def database_bar_chart():
     return fig
 
 
-def suppress_health_check_bar_chart():
+def suppress_health_check_bar_chart(db):
     HEALTH_CHECK_NAMES = {
         1: "data_too_large",
         2: "filter_too_much",
@@ -314,18 +314,20 @@ def main():
 
     st.header("Settings")
 
-    fig = max_examples_histogram()
+    db = get_database()
+
+    fig = max_examples_histogram(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No max_examples data available.")
 
-    result = deadline_histogram()
+    result = deadline_histogram(db)
     if result and result[0]:
         fig, null_count, total = result
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
         with col2:
             if total > 0:
                 st.markdown("**deadline = None**")
@@ -333,36 +335,36 @@ def main():
     else:
         st.info("No deadline data available.")
 
-    fig = stateful_step_count_histogram()
+    fig = stateful_step_count_histogram(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No stateful_step_count data available.")
 
-    fig = derandomize_bar_chart()
+    fig = derandomize_bar_chart(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No derandomize data available.")
 
-    fig = backend_bar_chart()
+    fig = backend_bar_chart(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No backend data available.")
 
-    fig = database_bar_chart()
+    fig = database_bar_chart(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No database data available.")
 
-    result = suppress_health_check_bar_chart()
+    result = suppress_health_check_bar_chart(db)
     if result and result[0]:
         fig, empty_count, total = result
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
         with col2:
             if total > 0:
                 st.markdown("**suppress_health_check = []**")

@@ -167,19 +167,19 @@ def main():
     # Histograms
     fig = hypothesis_test_count_histogram(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     fig = unique_test_count_histogram(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     fig = hypothesis_percentage_histogram(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     fig = repos_by_node_count(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     # Repository browser
     st.divider()

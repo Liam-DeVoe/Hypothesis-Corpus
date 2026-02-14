@@ -245,13 +245,13 @@ def main():
 
     fig = overrun_pct_histogram(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No overrun data available.")
 
     fig = filtered_pct_histogram(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No filtering data available.")
 
@@ -260,7 +260,7 @@ def main():
 
     fig = median_feature_count_histogram(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No tests with event()/note() features found.")
 
@@ -269,23 +269,23 @@ def main():
 
     fig = min_choices_size_histogram(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     fig = median_choices_size_histogram(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     fig = max_choices_size_histogram(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     fig = choices_size_vs_runtime_heatmap(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     fig = choices_size_distribution_heatmap(db)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 
 if __name__ == "__main__":

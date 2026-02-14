@@ -98,7 +98,7 @@ def display_clusters(db: Database, facet_type: str):
         },
     )
     fig.update_layout(height=400)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     # Top clusters
     st.subheader("Top Clusters by Size")
@@ -112,7 +112,7 @@ def display_clusters(db: Database, facet_type: str):
         hover_data=["cluster_description"],
     )
     fig.update_layout(height=600, yaxis={"categoryorder": "total ascending"})
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     # Detailed cluster view
     st.subheader("Cluster Details")

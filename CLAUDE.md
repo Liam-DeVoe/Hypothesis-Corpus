@@ -33,6 +33,7 @@ just collect
 # Step 2: Install repos and collect test node IDs (runs in Docker)
 just install --limit 10
 just install --limit 10 --debug  # Show container logs
+just install --repo owner/repo --overwrite  # Re-install a single repo
 
 # Step 3: Run experiments on valid repos
 just experiment --workers 4
@@ -104,7 +105,9 @@ Tasks run after experiments on the host machine:
 - Declare `follows = ["experiment_name"]` for dependencies
 - Implement: `get_schema_sql()`, `run(db)`, `store_to_database()`, `delete_data()`
 
-Built-in: `cluster` (sentence-transformers embeddings + k-means, Claude for cluster naming). Follows `facets`.
+Built-in tasks:
+- `aggregate_metrics`: Follows `runtime`. Precomputes per-node metrics for fast dashboard queries.
+- `cluster`: Follows `facets`. Sentence-transformers embeddings + k-means, Claude for cluster naming.
 
 ### Canonical Parametrization
 Tests with parametrize (`test_foo[0]`, `test_foo[1]`) are grouped by base name (`test_foo`). The first node in each group is marked canonical. The `facets` experiment uses `only_canonical_nodes = True` to avoid analyzing the same test logic multiple times.
@@ -122,6 +125,7 @@ SQLite at `analysis/data.db`. Singleton pattern via `get_database(path)`.
 - `facets`: `facets_repository`, `facets_nodes`
 
 **Task tables:**
+- `aggregate_metrics`: `node_aggregate_metrics`
 - `cluster`: `facets_cluster`, `facets_cluster_assignment`
 
 **API:**

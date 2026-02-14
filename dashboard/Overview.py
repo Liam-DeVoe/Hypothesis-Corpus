@@ -10,11 +10,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dashboard.utils import get_database, render_sidebar
 
-st.session_state.db_path = "analysis/data.db"  # default
-if "--db-path" in sys.argv:
-    idx = sys.argv.index("--db-path")
-    if idx + 1 < len(sys.argv):
-        st.session_state.db_path = sys.argv[idx + 1]
 
 # Page configuration
 st.set_page_config(
