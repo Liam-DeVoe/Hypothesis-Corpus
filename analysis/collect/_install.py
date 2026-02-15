@@ -151,7 +151,8 @@ class CollectionPlugin:
     def __init__(self):
         self.nodeids = []
         self.other_nodeids = []
-        self.source_codes = {}
+        self.nodes_source_code = {}
+        self.nodes_is_stateful = {}
 
     def pytest_collection_finish(self, session):
         # defer import to avoid pytest warning about being unable to rewrite an
@@ -188,7 +189,10 @@ class CollectionPlugin:
                     flush=True,
                 )
                 source = None
-            self.source_codes[item.nodeid] = source
+            self.nodes_source_code[item.nodeid] = source
+            self.nodes_is_stateful[item.nodeid] = hasattr(
+                item.obj, "_hypothesis_state_machine_class"
+            )
 
 
 # If this triggers, it will do so in the middle of pytest collection, which will be
@@ -220,7 +224,8 @@ output = {
     "requirements": "\n".join(packages),
     "node_ids": plugin.nodeids,
     "other_node_ids": plugin.other_nodeids,
-    "source_codes": plugin.source_codes,
+    "nodes_source_code": plugin.nodes_source_code,
+    "nodes_is_stateful": plugin.nodes_is_stateful,
     "commit_hash": commit_hash,
     "collection_returncode": collection_returncode,
     "timed_out": timed_out,

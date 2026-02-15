@@ -42,8 +42,11 @@ def run_task(
     logger.info("Executing task...")
     results = task_class.run(db)
 
-    # Store results
-    logger.info("Storing results...")
+    # Drop tables, recreate schema, and store results
+    logger.info("Clearing old data and storing results...")
+    task_class.delete_data(db)
+    db._conn.executescript(task_class.get_schema_sql())
+    db._conn.commit()
     task_class.store_to_database(db, results)
 
     logger.info(f"Task '{task_name}' completed successfully")

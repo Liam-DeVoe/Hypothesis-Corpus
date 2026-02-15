@@ -1,6 +1,8 @@
+import json
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -8,7 +10,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dashboard.shared import histogram_with_kde
-from dashboard.utils import get_database, render_sidebar
+from dashboard.utils import colorbar_ticks, get_database, render_sidebar
 
 st.set_page_config(
     page_title="Timing",
@@ -32,20 +34,20 @@ def total_execution_time_histogram(db):
 
     return histogram_with_kde(
         data=execution_times["execution_time"].tolist(),
-        title="Tests by total execution time",
-        xaxis_title="Execution time (seconds)",
+        title="Tests by runtime",
+        xaxis_title="Runtime (seconds)",
         yaxis_title="Test count",
         bin_size=0.01,
     )
 
 
 def median_testcase_time_histogram(db):
-    """Median per-test-case execution time, aggregated per test."""
+    """Median per-test-case execution time, aggregated by test."""
     data = pd.read_sql_query(
         """
-        SELECT median_exec_time
+        SELECT median_execution_time
         FROM node_aggregate_metrics
-        WHERE median_exec_time IS NOT NULL
+        WHERE median_execution_time IS NOT NULL
         """,
         db._conn,
     )
@@ -53,7 +55,7 @@ def median_testcase_time_histogram(db):
         return None
 
     return histogram_with_kde(
-        data=data["median_exec_time"].tolist(),
+        data=data["median_execution_time"].tolist(),
         title="Median per-test-case execution time by test",
         xaxis_title="Median test case execution time (seconds)",
         yaxis_title="Test count",
@@ -61,13 +63,13 @@ def median_testcase_time_histogram(db):
     )
 
 
-def generation_time_pct_histogram(db):
-    """% of time spent in generation vs execution, per test."""
+def generation_time_percent_histogram(db):
+    """% generation time by test."""
     data = pd.read_sql_query(
         """
-        SELECT median_generation_pct
+        SELECT generation_percent
         FROM node_aggregate_metrics
-        WHERE median_generation_pct IS NOT NULL
+        WHERE generation_percent IS NOT NULL
         """,
         db._conn,
     )
@@ -75,43 +77,53 @@ def generation_time_pct_histogram(db):
         return None
 
     return histogram_with_kde(
-        data=data["median_generation_pct"].tolist(),
-        title="% of time spent in generation (median per test)",
-        xaxis_title="% time in generation",
+        data=data["generation_percent"].tolist(),
+        title="% generation time by test",
+        xaxis_title="% generation time",
         yaxis_title="Test count",
         bin_size=1,
     )
 
 
 def runtime_vs_generation_heatmap(db):
-    """2D heatmap: total runtime (x) vs % generation time (y)."""
+    """2D heatmap: runtime (x, log) vs % generation time (y)."""
     data = pd.read_sql_query(
         """
-        SELECT rs.execution_time, nam.median_generation_pct
+        SELECT rs.execution_time, nam.generation_percent
         FROM runtime_summary rs
         JOIN node_aggregate_metrics nam ON rs.node_id = nam.node_id
         WHERE rs.status IN ('passed', 'failed')
             AND rs.execution_time IS NOT NULL
-            AND nam.median_generation_pct IS NOT NULL
+            AND nam.generation_percent IS NOT NULL
         """,
         db._conn,
     )
     if data.empty:
         return None
 
+    x = data["execution_time"].clip(lower=1e-6)
+    y = data["generation_percent"]
+
+    xbins = np.logspace(np.log10(x.min()), np.log10(x.max()), 51)
+    ybins = np.linspace(0, 100, 51)
+
+    counts, xedges, yedges = np.histogram2d(x, y, bins=[xbins, ybins])
+    z = np.log1p(counts.T)
+
     fig = go.Figure(
-        go.Histogram2d(
-            x=data["execution_time"],
-            y=data["median_generation_pct"],
+        go.Heatmap(
+            x=xedges,
+            y=yedges,
+            z=z,
             colorscale="Blues",
-            nbinsx=50,
-            nbinsy=50,
+            colorbar=colorbar_ticks(counts),
         )
     )
     fig.update_layout(
-        title="Total runtime vs % generation time",
-        xaxis_title="Total execution time (seconds)",
-        yaxis_title="% time in generation",
+        title="Runtime vs % generation time",
+        xaxis_title="Runtime (seconds)",
+        xaxis_type="log",
+        yaxis_title="% generation time",
         yaxis_range=[0, 100],
         height=500,
     )
@@ -125,13 +137,12 @@ def normalized_execution_time_curve(db):
         WITH test_stats AS (
             SELECT
                 node_id,
-                COUNT(*) as tc_count,
                 MAX(testcase_number) as max_tc,
                 AVG(json_extract(timing, '$."execute:test"')) as mean_time
             FROM runtime_testcase
             WHERE json_extract(timing, '$."execute:test"') IS NOT NULL
             GROUP BY node_id
-            HAVING tc_count >= 50 AND mean_time > 0
+            HAVING mean_time > 0
         ),
         binned AS (
             SELECT
@@ -142,7 +153,7 @@ def normalized_execution_time_curve(db):
             WHERE json_extract(tc.timing, '$."execute:test"') IS NOT NULL
         )
         SELECT
-            bin * 1.0 / 100 as pct_through,
+            bin * 1.0 / 100 as percent_through,
             AVG(normalized_time) as mean_normalized_time,
             COUNT(*) as n
         FROM binned
@@ -157,7 +168,7 @@ def normalized_execution_time_curve(db):
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
-            x=data["pct_through"],
+            x=data["percent_through"],
             y=data["mean_normalized_time"],
             mode="lines",
             name="Mean",
@@ -174,13 +185,63 @@ def normalized_execution_time_curve(db):
     return fig
 
 
+def generation_percent_over_run_curve(db):
+    """Average generation % shape across all tests, normalized to 0-1 on x-axis.
+
+    Reads precomputed per-node generation curves from node_aggregate_metrics
+    and averages across nodes (equal weight per node).
+    """
+    data = pd.read_sql_query(
+        """
+        SELECT generation_curve
+        FROM node_aggregate_metrics
+        WHERE generation_curve IS NOT NULL
+        """,
+        db._conn,
+    )
+    if data.empty:
+        return None
+
+    # Average per-node curves: each node contributes equally per bin
+    bin_values: dict[int, list[float]] = {}
+    for curve_json in data["generation_curve"]:
+        curve = json.loads(curve_json)
+        for bin_str, gen_pct in curve.items():
+            bin_values.setdefault(int(bin_str), []).append(gen_pct)
+
+    bins = sorted(bin_values.keys())
+    agg = pd.DataFrame({
+        "percent_through": [b / 100.0 for b in bins],
+        "gen_percent": [sum(bin_values[b]) / len(bin_values[b]) for b in bins],
+    })
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=agg["percent_through"],
+            y=agg["gen_percent"],
+            mode="lines",
+            name="Mean",
+            line={"width": 2},
+        )
+    )
+    fig.update_layout(
+        title="Generation % over the run",
+        xaxis_title="% through the run",
+        yaxis_title="% generation time",
+        yaxis_range=[0, None],
+        height=400,
+    )
+    return fig
+
+
 def execution_time_cv_histogram(db):
     """Coefficient of variation (stddev/mean) of per-test-case execution time."""
     data = pd.read_sql_query(
         """
-        SELECT exec_time_cv
+        SELECT execution_time_cv
         FROM node_aggregate_metrics
-        WHERE exec_time_cv IS NOT NULL
+        WHERE execution_time_cv IS NOT NULL
         """,
         db._conn,
     )
@@ -188,7 +249,7 @@ def execution_time_cv_histogram(db):
         return None
 
     return histogram_with_kde(
-        data=data["exec_time_cv"].tolist(),
+        data=data["execution_time_cv"].tolist(),
         title="Execution time consistency (coefficient of variation)",
         xaxis_title="CV (stddev / mean) of per-test-case execution time",
         yaxis_title="Test count",
@@ -220,7 +281,7 @@ def main():
     else:
         st.info("No per-test-case timing data available.")
 
-    fig = generation_time_pct_histogram(db)
+    fig = generation_time_percent_histogram(db)
     if fig:
         st.plotly_chart(fig, width="stretch")
     else:
@@ -235,6 +296,12 @@ def main():
         st.plotly_chart(fig, width="stretch")
     else:
         st.info("No normalized execution time data available.")
+
+    fig = generation_percent_over_run_curve(db)
+    if fig:
+        st.plotly_chart(fig, width="stretch")
+    else:
+        st.info("No generation % over run data available.")
 
     fig = execution_time_cv_histogram(db)
     if fig:

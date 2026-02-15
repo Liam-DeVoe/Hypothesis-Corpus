@@ -114,6 +114,7 @@ class Database:
                 node_id TEXT NOT NULL,
                 canonical_parametrization BOOLEAN,
                 source_code TEXT,
+                is_stateful BOOLEAN,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (repo_id) REFERENCES core_repository(id),
                 UNIQUE(repo_id, node_id)

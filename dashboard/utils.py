@@ -5,6 +5,7 @@ Shared utilities for dashboard visualizations.
 import sys
 from datetime import datetime
 
+import numpy as np
 import streamlit as st
 
 from analysis.database import get_database as _get_database
@@ -29,6 +30,30 @@ def render_sidebar():
         # Last update time
         st.markdown("---")
         st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+
+def colorbar_ticks(counts):
+    """Compute colorbar tickvals/ticktext for log1p-scaled heatmap counts."""
+    max_count = int(counts.max())
+    ticks = [0]
+    v = 10
+    while v <= max_count:
+        ticks.append(v)
+        v *= 10
+    ticks.append(max_count)
+
+    def _fmt(n):
+        if n >= 1_000_000:
+            return f"{n / 1_000_000:.1f}".rstrip("0").rstrip(".") + "M"
+        if n >= 1_000:
+            return f"{n / 1_000:.1f}".rstrip("0").rstrip(".") + "k"
+        return str(n)
+
+    return {
+        "title": "Count",
+        "tickvals": np.log1p(ticks).tolist(),
+        "ticktext": [_fmt(t) for t in ticks],
+    }
 
 
 def common_prefix(strings: list[str]) -> str:

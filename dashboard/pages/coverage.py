@@ -65,7 +65,7 @@ def main():
     if not lines_covered.empty:
         fig = histogram_with_kde(
             data=lines_covered["total_lines_covered"].tolist(),
-            title="Max lines covered per test",
+            title="Max lines covered by test",
             xaxis_title="Total lines covered",
             yaxis_title="Test count",
             bin_size=5,

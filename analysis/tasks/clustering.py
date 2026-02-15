@@ -38,6 +38,7 @@ Be specific and accurate. Focus on what truly unifies these items."""
 
 class ClusterTask(Task):
     name = "cluster"
+    tables = ["facets_cluster", "facets_cluster_assignment"]
     follows = ["facets"]
 
     # either "auto" or an int
@@ -351,13 +352,3 @@ class ClusterTask(Task):
             f"{len(data['domain_clusters'])} domain clusters"
         )
 
-    @staticmethod
-    def delete_data(db: Any):
-        """Delete all clustering data."""
-        logger.info("Deleting clustering data...")
-
-        db.execute("DELETE FROM facets_cluster_assignment")
-        db.execute("DELETE FROM facets_cluster")
-        db.commit()
-
-        logger.info("Clustering data deleted")

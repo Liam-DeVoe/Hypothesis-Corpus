@@ -1,6 +1,8 @@
+import json
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -8,7 +10,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dashboard.shared import histogram_with_kde
-from dashboard.utils import get_database, render_sidebar
+from dashboard.utils import colorbar_ticks, get_database, render_sidebar
 
 st.set_page_config(
     page_title="Test Cases",
@@ -23,11 +25,11 @@ st.set_page_config(
 # =============================================================================
 
 
-def overrun_pct_histogram(db):
-    """% of overrun (data_status=0) test cases per test."""
+def overrun_percent_histogram(db):
+    """% of overrun (data_status=0) test cases by test."""
     data = pd.read_sql_query(
         """
-        SELECT pct_overrun
+        SELECT percent_overrun
         FROM node_aggregate_metrics
         """,
         db._conn,
@@ -36,19 +38,19 @@ def overrun_pct_histogram(db):
         return None
 
     return histogram_with_kde(
-        data=data["pct_overrun"].tolist(),
-        title="% overrun test cases per test",
-        xaxis_title="% of test cases that overran",
+        data=data["percent_overrun"].tolist(),
+        title="% overrun test cases by test",
+        xaxis_title="% of overrun test cases",
         yaxis_title="Test count",
         bin_size=1,
     )
 
 
-def filtered_pct_histogram(db):
-    """% of filtered (data_status=1) test cases per test."""
+def invalid_percent_histogram(db):
+    """% of invalid (data_status=1) test cases by test."""
     data = pd.read_sql_query(
         """
-        SELECT pct_filtered
+        SELECT percent_invalid
         FROM node_aggregate_metrics
         """,
         db._conn,
@@ -57,9 +59,9 @@ def filtered_pct_histogram(db):
         return None
 
     return histogram_with_kde(
-        data=data["pct_filtered"].tolist(),
-        title="% filtered test cases per test",
-        xaxis_title="% of test cases filtered (assume/filter)",
+        data=data["percent_invalid"].tolist(),
+        title="% invalid test cases by test",
+        xaxis_title="% of invalid test cases",
         yaxis_title="Test count",
         bin_size=1,
     )
@@ -158,48 +160,108 @@ def max_choices_size_histogram(db):
     )
 
 
-def choices_size_vs_runtime_heatmap(db):
+
+def choices_size_vs_runtime_heatmap(db, *, log_x=False, log_y=False):
     """2D heatmap: choices_size (x) vs per-test-case execution time (y)."""
     data = pd.read_sql_query(
         """
-        SELECT choices_size, json_extract(timing, '$."execute:test"') as exec_time
+        SELECT choices_size, json_extract(timing, '$."execute:test"') as execution_time
         FROM runtime_testcase
         WHERE json_extract(timing, '$."execute:test"') IS NOT NULL
-        ORDER BY RANDOM()
-        LIMIT 50000
         """,
         db._conn,
     )
     if data.empty:
         return None
 
+    x = data["choices_size"].clip(lower=1) if log_x else data["choices_size"]
+    y = data["execution_time"].clip(lower=1e-4) if log_y else data["execution_time"]
+
+    xbins = np.logspace(np.log10(x.min()), np.log10(x.max()), 51) if log_x else 50
+    ybins = np.logspace(np.log10(y.min()), np.log10(y.max()), 51) if log_y else 50
+
+    counts, xedges, yedges = np.histogram2d(x, y, bins=[xbins, ybins])
+    # log scale to avoid dominant cell washing out all others
+    z = np.log1p(counts.T)
+
     fig = go.Figure(
-        go.Histogram2d(
-            x=data["choices_size"],
-            y=data["exec_time"],
+        go.Heatmap(
+            x=xedges,
+            y=yedges,
+            z=z,
             colorscale="Blues",
-            nbinsx=50,
-            nbinsy=50,
+            colorbar=colorbar_ticks(counts),
         )
     )
     fig.update_layout(
         title="choices_size vs test case execution time",
         xaxis_title="choices_size",
         yaxis_title="Execution time (seconds)",
+        xaxis_type="log" if log_x else None,
+        yaxis_type="log" if log_y else None,
+        height=500,
+    )
+    return fig
+
+
+def choices_size_vs_generation_time_heatmap(db, *, log_x=False, log_y=False):
+    """2D heatmap: choices_size (x) vs per-test-case generation time (y)."""
+    data = pd.read_sql_query(
+        """
+        SELECT choices_size, timing
+        FROM runtime_testcase
+        """,
+        db._conn,
+    )
+    if data.empty:
+        return None
+
+    gen_times = []
+    for timing_json in data["timing"]:
+        timing = json.loads(timing_json)
+        gen_times.append(sum(v for k, v in timing.items() if k.startswith("generate:")))
+    data["gen_time"] = gen_times
+
+    data = data[data["gen_time"] > 0]
+    if data.empty:
+        return None
+
+    x = data["choices_size"].clip(lower=1) if log_x else data["choices_size"]
+    y = data["gen_time"].clip(lower=1e-6) if log_y else data["gen_time"]
+
+    xbins = np.logspace(np.log10(x.min()), np.log10(x.max()), 51) if log_x else 50
+    ybins = np.logspace(np.log10(y.min()), np.log10(y.max()), 51) if log_y else 50
+
+    counts, xedges, yedges = np.histogram2d(x, y, bins=[xbins, ybins])
+    z = np.log1p(counts.T)
+
+    fig = go.Figure(
+        go.Heatmap(
+            x=xedges,
+            y=yedges,
+            z=z,
+            colorscale="Blues",
+            colorbar=colorbar_ticks(counts),
+        )
+    )
+    fig.update_layout(
+        title="choices_size vs generation time",
+        xaxis_title="choices_size",
+        yaxis_title="Generation time (seconds)",
+        xaxis_type="log" if log_x else None,
+        yaxis_type="log" if log_y else None,
         height=500,
     )
     return fig
 
 
 def choices_size_distribution_heatmap(db):
-    """2D heatmap: median choices_size per test (x) vs individual choices_size (y)."""
+    """2D heatmap: median choices_size by test (x) vs individual choices_size (y)."""
     # Get per-node median and individual values in one query with sampling
     data = pd.read_sql_query(
         """
         SELECT tc.node_id, tc.choices_size
         FROM runtime_testcase tc
-        ORDER BY RANDOM()
-        LIMIT 50000
         """,
         db._conn,
     )
@@ -210,13 +272,18 @@ def choices_size_distribution_heatmap(db):
     medians = data.groupby("node_id")["choices_size"].transform("median")
     data["median_cs"] = medians
 
+    counts, xedges, yedges = np.histogram2d(
+        data["median_cs"], data["choices_size"], bins=50
+    )
+    z = np.log1p(counts.T)
+
     fig = go.Figure(
-        go.Histogram2d(
-            x=data["median_cs"],
-            y=data["choices_size"],
+        go.Heatmap(
+            x=xedges,
+            y=yedges,
+            z=z,
             colorscale="Blues",
-            nbinsx=50,
-            nbinsy=50,
+            colorbar=colorbar_ticks(counts),
         )
     )
     fig.update_layout(
@@ -243,13 +310,13 @@ def main():
     # --- Data status ---
     st.subheader("Data Status")
 
-    fig = overrun_pct_histogram(db)
+    fig = overrun_percent_histogram(db)
     if fig:
         st.plotly_chart(fig, width="stretch")
     else:
         st.info("No overrun data available.")
 
-    fig = filtered_pct_histogram(db)
+    fig = invalid_percent_histogram(db)
     if fig:
         st.plotly_chart(fig, width="stretch")
     else:
@@ -279,7 +346,37 @@ def main():
     if fig:
         st.plotly_chart(fig, width="stretch")
 
-    fig = choices_size_vs_runtime_heatmap(db)
+    col1, col2 = st.columns(2)
+    log_x = (
+        col1.radio(
+            "x-axis", ["Linear", "Log"], index=1, horizontal=True, key="cs_rt_log_x"
+        )
+        == "Log"
+    )
+    log_y = (
+        col2.radio(
+            "y-axis", ["Linear", "Log"], index=1, horizontal=True, key="cs_rt_log_y"
+        )
+        == "Log"
+    )
+    fig = choices_size_vs_runtime_heatmap(db, log_x=log_x, log_y=log_y)
+    if fig:
+        st.plotly_chart(fig, width="stretch")
+
+    col1, col2 = st.columns(2)
+    log_x2 = (
+        col1.radio(
+            "x-axis", ["Linear", "Log"], index=1, horizontal=True, key="cs_gen_log_x"
+        )
+        == "Log"
+    )
+    log_y2 = (
+        col2.radio(
+            "y-axis", ["Linear", "Log"], index=1, horizontal=True, key="cs_gen_log_y"
+        )
+        == "Log"
+    )
+    fig = choices_size_vs_generation_time_heatmap(db, log_x=log_x2, log_y=log_y2)
     if fig:
         st.plotly_chart(fig, width="stretch")
 

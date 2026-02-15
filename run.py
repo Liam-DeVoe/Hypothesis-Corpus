@@ -217,7 +217,11 @@ def experiment(
 
 
 def _populate_nodes_for_repo(
-    db, repo_id: int, node_ids: list[str], source_codes: dict[str, str | None]
+    db,
+    repo_id: int,
+    node_ids: list[str],
+    nodes_source_code: dict[str, str | None],
+    nodes_is_stateful: dict[str, bool],
 ):
     # replace any existing nodes for this repository
     db.execute("DELETE FROM core_node WHERE repo_id = ?", (repo_id,))
@@ -232,8 +236,14 @@ def _populate_nodes_for_repo(
         for i, node_id in enumerate(node_ids_in_group):
             is_canonical = i == 0
             db.execute(
-                "INSERT INTO core_node (repo_id, node_id, canonical_parametrization, source_code) VALUES (?, ?, ?, ?)",
-                (repo_id, node_id, is_canonical, source_codes.get(node_id)),
+                "INSERT INTO core_node (repo_id, node_id, canonical_parametrization, source_code, is_stateful) VALUES (?, ?, ?, ?, ?)",
+                (
+                    repo_id,
+                    node_id,
+                    is_canonical,
+                    nodes_source_code[node_id],
+                    nodes_is_stateful[node_id],
+                ),
             )
 
     db.commit()
@@ -334,7 +344,8 @@ def _install(*, db_path, limit, debug, overwrite, repo_name):
                 db,
                 repo_row["id"],
                 result["node_ids"],
-                result["source_codes"],
+                result["nodes_source_code"],
+                result["nodes_is_stateful"],
             )
 
         count = len(result["node_ids"])
@@ -360,7 +371,6 @@ def _install(*, db_path, limit, debug, overwrite, repo_name):
     console.print(f"Successful: [green]{successful}[/green]")
     console.print(f"Failed: [red]{failed}[/red]")
     console.print(f"Total: {len(repos)}")
-
 
 
 @cli.command()

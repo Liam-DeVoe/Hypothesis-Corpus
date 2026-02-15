@@ -4,12 +4,12 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Add parent directory to path so we can import analysis
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dashboard.utils import get_database, render_sidebar
-
 
 # Page configuration
 st.set_page_config(
@@ -35,8 +35,8 @@ st.markdown(
     /* Green progress bars in dataframes */
     [data-testid="stDataFrame"] [role="progressbar"] > div,
     [data-testid="stDataFrame"] [data-testid="stDataFrameGlideDataEditor"] [role="progressbar"] > div,
-    [data-testid="column-_runtime_pct"] [role="progressbar"] > div,
-    [data-testid="column-_facets_pct"] [role="progressbar"] > div,
+    [data-testid="column-_runtime_percent"] [role="progressbar"] > div,
+    [data-testid="column-_facets_percent"] [role="progressbar"] > div,
     .stDataFrame [role="progressbar"] > div {
         background-color: #4CAF50 !important;
         background: #4CAF50 !important;
@@ -44,6 +44,34 @@ st.markdown(
 </style>
 """,
     unsafe_allow_html=True,
+)
+
+# Allow cmd+click (Mac) / ctrl+click (Windows/Linux) on sidebar nav links
+# to open pages in a new tab. Streamlit's navigation intercepts clicks and
+# does client-side routing, which prevents the default browser behavior.
+# Uses event delegation on the parent document so it survives DOM re-renders,
+# with a guard flag on the parent window to prevent duplicate listeners.
+components.html(
+    """
+<script>
+(function() {
+    const win = window.parent;
+    const doc = win.document;
+    if (win._sidebarNewTabSetup) return;
+    win._sidebarNewTabSetup = true;
+    doc.addEventListener('click', function(e) {
+        if (!(e.metaKey || e.ctrlKey)) return;
+        const link = e.target.closest('a');
+        if (!link) return;
+        if (!link.closest('[data-testid="stSidebarNav"]')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        win.open(link.href, '_blank');
+    }, true);
+})();
+</script>
+""",
+    height=0,
 )
 
 
@@ -205,8 +233,8 @@ def render_repo_progress_table(
                 label = exp["label"]
                 done = r[exp["done_key"]]
                 total = r[exp["total_key"]]
-                pct = done / total * 100 if total else 0
-                row[f"_{label.lower()}_pct"] = pct
+                percent = done / total * 100 if total else 0
+                row[f"_{label.lower()}_percent"] = percent
                 row[label] = f"{done} / {total}"
             rows.append(row)
 
@@ -217,9 +245,9 @@ def render_repo_progress_table(
         column_config = {}
         for exp in experiments:
             label = exp["label"]
-            pct_col = f"_{label.lower()}_pct"
-            column_order.extend([pct_col, label])
-            column_config[pct_col] = st.column_config.ProgressColumn(
+            percent_col = f"_{label.lower()}_percent"
+            column_order.extend([percent_col, label])
+            column_config[percent_col] = st.column_config.ProgressColumn(
                 label=label,
                 min_value=0,
                 max_value=100,
@@ -251,12 +279,12 @@ def render_experiment_progress(progress: dict[str, Any]):
     # Runtime experiment
     rt_total = runtime["total_nodes"]
     rt_done = runtime["processed"] or 0
-    rt_pct = rt_done / rt_total if rt_total > 0 else 0
+    rt_percent = rt_done / rt_total if rt_total > 0 else 0
 
     col1, col2 = st.columns([4, 1])
     with col1:
         st.markdown("**Runtime** (all nodes)")
-        st.progress(rt_pct)
+        st.progress(rt_percent)
     with col2:
         st.markdown(f"**{rt_done:,}** / {rt_total:,}")
 
@@ -301,12 +329,12 @@ def render_experiment_progress(progress: dict[str, Any]):
     # Facets experiment
     fc_total = facets.get("total_canonical") or 0
     fc_done = facets.get("with_summary") or 0
-    fc_pct = fc_done / fc_total if fc_total > 0 else 0
+    fc_percent = fc_done / fc_total if fc_total > 0 else 0
 
     col1, col2 = st.columns([4, 1])
     with col1:
         st.markdown("**Facets** (canonical nodes only)")
-        st.progress(fc_pct)
+        st.progress(fc_percent)
     with col2:
         st.markdown(f"**{fc_done:,}** / {fc_total:,}")
 

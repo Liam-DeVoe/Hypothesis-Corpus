@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 class AggregateMetricsTask(Task):
     name = "aggregate_metrics"
+    tables = ["node_aggregate_metrics"]
     follows = ["runtime"]
 
     @staticmethod
@@ -21,15 +22,17 @@ class AggregateMetricsTask(Task):
         return """
             CREATE TABLE IF NOT EXISTS node_aggregate_metrics (
                 node_id INTEGER PRIMARY KEY,
-                median_exec_time REAL,
-                median_generation_pct REAL,
-                exec_time_cv REAL,
-                pct_overrun REAL,
-                pct_filtered REAL,
+                median_execution_time REAL,
+                median_generation_percent REAL,
+                generation_percent REAL,
+                execution_time_cv REAL,
+                percent_overrun REAL,
+                percent_invalid REAL,
                 median_feature_count REAL,
                 min_choices_size INTEGER,
                 median_choices_size REAL,
                 max_choices_size INTEGER,
+                generation_curve TEXT,
                 FOREIGN KEY (node_id) REFERENCES core_node(id)
             );
         """
@@ -42,19 +45,19 @@ class AggregateMetricsTask(Task):
             """
             SELECT
                 node_id,
-                SUM(CASE WHEN data_status = 0 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as pct_overrun,
-                SUM(CASE WHEN data_status = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as pct_filtered,
+                SUM(CASE WHEN data_status = 0 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as percent_overrun,
+                SUM(CASE WHEN data_status = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as percent_invalid,
                 MIN(choices_size) as min_choices_size,
                 MAX(choices_size) as max_choices_size,
-                AVG(exec_time) as mean_exec_time,
-                AVG(exec_time * exec_time) - AVG(exec_time) * AVG(exec_time) as exec_time_variance,
-                COUNT(exec_time) as exec_time_count
+                AVG(execution_time) as mean_execution_time,
+                AVG(execution_time * execution_time) - AVG(execution_time) * AVG(execution_time) as execution_time_variance,
+                COUNT(execution_time) as execution_time_count
             FROM (
                 SELECT
                     node_id,
                     data_status,
                     choices_size,
-                    json_extract(timing, '$."execute:test"') as exec_time
+                    json_extract(timing, '$."execute:test"') as execution_time
                 FROM runtime_testcase
             )
             GROUP BY node_id
@@ -64,22 +67,24 @@ class AggregateMetricsTask(Task):
         logger.info(f"  {len(sql_agg)} nodes from SQL aggregates")
 
         # Compute CV from variance
-        sql_agg["exec_time_cv"] = None
-        mask = (sql_agg["exec_time_count"] >= 10) & (sql_agg["mean_exec_time"] > 0)
-        sql_agg.loc[mask, "exec_time_cv"] = (
-            sql_agg.loc[mask, "exec_time_variance"].clip(lower=0) ** 0.5
-            / sql_agg.loc[mask, "mean_exec_time"]
+        sql_agg["execution_time_cv"] = None
+        mask = (sql_agg["execution_time_count"] >= 10) & (
+            sql_agg["mean_execution_time"] > 0
+        )
+        sql_agg.loc[mask, "execution_time_cv"] = (
+            sql_agg.loc[mask, "execution_time_variance"].clip(lower=0) ** 0.5
+            / sql_agg.loc[mask, "mean_execution_time"]
         )
 
-        # Query 2: Medians for choices_size and exec_time
+        # Query 2: Medians for choices_size and execution_time
         # These are numeric columns, so the transfer is manageable (~15M rows × 3 cols)
-        logger.info("Computing medians for choices_size and exec_time...")
+        logger.info("Computing medians for choices_size and execution_time...")
         medians_data = pd.read_sql_query(
             """
             SELECT
                 node_id,
                 choices_size,
-                json_extract(timing, '$."execute:test"') as exec_time
+                json_extract(timing, '$."execute:test"') as execution_time
             FROM runtime_testcase
             """,
             db._conn,
@@ -87,13 +92,14 @@ class AggregateMetricsTask(Task):
         logger.info(f"  loaded {len(medians_data)} rows")
 
         median_choices = medians_data.groupby("node_id")["choices_size"].median()
-        median_exec = medians_data.groupby("node_id")["exec_time"].median()
+        median_execution = medians_data.groupby("node_id")["execution_time"].median()
 
-        # Query 3: Median generation % (needs full timing JSON — one-time cost)
-        logger.info("Computing median generation %...")
+        # Query 3: Median generation % and generation curve
+        # (needs full timing JSON — one-time cost)
+        logger.info("Computing median generation % and generation curves...")
         timing_data = pd.read_sql_query(
             """
-            SELECT node_id, timing
+            SELECT node_id, testcase_number, timing
             FROM runtime_testcase
             """,
             db._conn,
@@ -103,19 +109,51 @@ class AggregateMetricsTask(Task):
         gen_rows = []
         for _, row in timing_data.iterrows():
             timing = json.loads(row["timing"])
-            exec_time = sum(v for k, v in timing.items() if k.startswith("execute:"))
+            execution_time = sum(
+                v for k, v in timing.items() if k.startswith("execute:")
+            )
             gen_time = sum(v for k, v in timing.items() if k.startswith("generate:"))
-            total = exec_time + gen_time
+            total = execution_time + gen_time
             if total > 0:
                 gen_rows.append(
-                    {"node_id": row["node_id"], "gen_pct": gen_time / total * 100}
+                    {
+                        "node_id": row["node_id"],
+                        "testcase_number": row["testcase_number"],
+                        "gen_percent": gen_time / total * 100,
+                        "gen_time": gen_time,
+                        "total_time": total,
+                    }
                 )
 
+        generation_curves = pd.Series(dtype=object)
         if gen_rows:
             gen_df = pd.DataFrame(gen_rows)
-            median_gen_pct = gen_df.groupby("node_id")["gen_pct"].median()
+            median_gen_percent = gen_df.groupby("node_id")["gen_percent"].median()
+            gen_sums = gen_df.groupby("node_id").agg(
+                total_gen=("gen_time", "sum"), total_time=("total_time", "sum")
+            )
+            gen_percent_overall = gen_sums["total_gen"] / gen_sums["total_time"] * 100
+
+            # Per-node generation curves: bin testcases by % through run
+            max_tc = gen_df.groupby("node_id")["testcase_number"].max()
+            gen_df = gen_df.merge(max_tc.rename("max_tc"), on="node_id")
+            gen_df = gen_df[gen_df["max_tc"] > 0]
+            gen_df["bin"] = (
+                (gen_df["testcase_number"] / gen_df["max_tc"] * 100)
+                .round()
+                .clip(upper=100)
+                .astype(int)
+            )
+            node_bin_avg = gen_df.groupby(["node_id", "bin"])["gen_percent"].mean()
+            generation_curves = node_bin_avg.groupby(level="node_id").apply(
+                lambda g: json.dumps(
+                    {int(b): round(v, 4) for b, v in g.droplevel(0).items()}
+                )
+            )
+            logger.info(f"  computed generation curves for {len(generation_curves)} nodes")
         else:
-            median_gen_pct = pd.Series(dtype=float)
+            median_gen_percent = pd.Series(dtype=float)
+            gen_percent_overall = pd.Series(dtype=float)
 
         # Query 4: Median feature count (only rows with features)
         logger.info("Computing median feature count...")
@@ -138,8 +176,10 @@ class AggregateMetricsTask(Task):
         # Merge everything into sql_agg
         sql_agg = sql_agg.set_index("node_id")
         sql_agg["median_choices_size"] = median_choices
-        sql_agg["median_exec_time"] = median_exec
-        sql_agg["median_generation_pct"] = median_gen_pct
+        sql_agg["median_execution_time"] = median_execution
+        sql_agg["median_generation_percent"] = median_gen_percent
+        sql_agg["generation_percent"] = gen_percent_overall
+        sql_agg["generation_curve"] = generation_curves
         sql_agg["median_feature_count"] = median_features
 
         # Build result rows
@@ -148,15 +188,17 @@ class AggregateMetricsTask(Task):
             result_rows.append(
                 {
                     "node_id": int(node_id),
-                    "median_exec_time": row.get("median_exec_time"),
-                    "median_generation_pct": row.get("median_generation_pct"),
-                    "exec_time_cv": row.get("exec_time_cv"),
-                    "pct_overrun": row["pct_overrun"],
-                    "pct_filtered": row["pct_filtered"],
+                    "median_execution_time": row.get("median_execution_time"),
+                    "median_generation_percent": row.get("median_generation_percent"),
+                    "generation_percent": row.get("generation_percent"),
+                    "execution_time_cv": row.get("execution_time_cv"),
+                    "percent_overrun": row["percent_overrun"],
+                    "percent_invalid": row["percent_invalid"],
                     "median_feature_count": row.get("median_feature_count"),
                     "min_choices_size": int(row["min_choices_size"]),
                     "median_choices_size": row.get("median_choices_size"),
                     "max_choices_size": int(row["max_choices_size"]),
+                    "generation_curve": row.get("generation_curve"),
                 }
             )
 
@@ -168,31 +210,31 @@ class AggregateMetricsTask(Task):
         db.executemany(
             """
             INSERT OR REPLACE INTO node_aggregate_metrics (
-                node_id, median_exec_time, median_generation_pct, exec_time_cv,
-                pct_overrun, pct_filtered, median_feature_count,
-                min_choices_size, median_choices_size, max_choices_size
+                node_id, median_execution_time, median_generation_percent,
+                generation_percent, execution_time_cv,
+                percent_overrun, percent_invalid, median_feature_count,
+                min_choices_size, median_choices_size, max_choices_size,
+                generation_curve
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
                     row["node_id"],
-                    row["median_exec_time"],
-                    row["median_generation_pct"],
-                    row["exec_time_cv"],
-                    row["pct_overrun"],
-                    row["pct_filtered"],
+                    row["median_execution_time"],
+                    row["median_generation_percent"],
+                    row["generation_percent"],
+                    row["execution_time_cv"],
+                    row["percent_overrun"],
+                    row["percent_invalid"],
                     row["median_feature_count"],
                     row["min_choices_size"],
                     row["median_choices_size"],
                     row["max_choices_size"],
+                    row["generation_curve"],
                 )
                 for row in data["rows"]
             ],
         )
         db.commit()
 
-    @staticmethod
-    def delete_data(db: Any):
-        db.execute("DELETE FROM node_aggregate_metrics")
-        db.commit()
