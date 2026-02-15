@@ -39,8 +39,8 @@ def overrun_percent_histogram(db):
 
     return histogram_with_kde(
         data=data["percent_overrun"].tolist(),
-        title="% overrun test cases by test",
-        xaxis_title="% of overrun test cases",
+        title="% overrun test cases",
+        xaxis_title="% overrun test cases",
         yaxis_title="Test count",
         bin_size=1,
     )
@@ -60,8 +60,8 @@ def invalid_percent_histogram(db):
 
     return histogram_with_kde(
         data=data["percent_invalid"].tolist(),
-        title="% invalid test cases by test",
-        xaxis_title="% of invalid test cases",
+        title="% invalid test cases",
+        xaxis_title="% invalid test cases",
         yaxis_title="Test count",
         bin_size=1,
     )
@@ -87,7 +87,7 @@ def median_feature_count_histogram(db):
 
     return histogram_with_kde(
         data=data["median_feature_count"].tolist(),
-        title="Median event()/note() count per test case (tests with features only)",
+        title="Median feature count per test case (tests with features only)",
         xaxis_title="Median feature count per test case",
         yaxis_title="Test count",
         bin_size=1,
@@ -194,7 +194,7 @@ def choices_size_vs_runtime_heatmap(db, *, log_x=False, log_y=False):
         )
     )
     fig.update_layout(
-        title="choices_size vs test case execution time",
+        title="choices_size vs execution time",
         xaxis_title="choices_size",
         yaxis_title="Execution time (seconds)",
         xaxis_type="log" if log_x else None,
@@ -287,9 +287,9 @@ def choices_size_distribution_heatmap(db):
         )
     )
     fig.update_layout(
-        title="Median choices_size vs individual test case choices_size",
-        xaxis_title="Median choices_size of test",
-        yaxis_title="Individual test case choices_size",
+        title="Median test choices_size vs test case choices_size",
+        xaxis_title="Median test choices_size",
+        yaxis_title="Test case choices_size",
         height=500,
     )
     return fig
