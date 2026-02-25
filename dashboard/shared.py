@@ -62,6 +62,7 @@ def histogram_with_kde(
                 mode="lines",
                 name="KDE",
                 line={"color": "rgba(255, 127, 14, 0.8)", "width": 1.5},
+                visible="legendonly",
             )
         )
 
