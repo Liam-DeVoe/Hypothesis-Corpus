@@ -428,13 +428,18 @@ def clear(db_path: str, task_name: str):
             sys.exit(1)
 
         console.print(f"Clearing data for task: [yellow]{task_name}[/yellow]")
-        Task.tasks[task_name].delete_data(db)
+        task_class = Task.tasks[task_name]
+        task_class.delete_data(db)
+        db._conn.executescript(task_class.get_schema_sql())
+        db._conn.commit()
         console.print("[green]Data cleared successfully[/green]")
     else:
         console.print("[yellow]Clearing data for all tasks...[/yellow]")
         for name, task_class in Task.tasks.items():
             console.print(f"  Clearing {name}...")
             task_class.delete_data(db)
+            db._conn.executescript(task_class.get_schema_sql())
+            db._conn.commit()
         console.print("[green]All task data cleared[/green]")
 
 
