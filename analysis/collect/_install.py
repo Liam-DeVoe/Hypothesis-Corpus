@@ -19,6 +19,7 @@ with open("/app/_install_config.json") as f:
 PRE_INSTALL = config["pre_install"]
 POST_INSTALL = config["post_install"]
 PYTEST_COLLECTION_TIMEOUT = config["pytest_collection_timeout"]
+FROZEN_REINSTALL_REQUIREMENTS = config["frozen_reinstall_requirements"]  # stored frozen requirements, or None
 
 
 def pip_install(args):
@@ -90,29 +91,40 @@ def try_install_repo():
             continue
         pip_install(["-r", str(p)])
 
-
 for package in PRE_INSTALL:
     pip_install([package])
 
-try_install_repo()
+# support reinstalling a repository with a frozen set of requirements, instead of
+# re-discovering requirements, which might result in different resolution when rerun than
+# earlier.
+if FROZEN_REINSTALL_REQUIREMENTS is not None:
+    req_path = Path("/app/requirements.txt")
+    req_path.write_text(FROZEN_REINSTALL_REQUIREMENTS)
+    pip_install(["--no-deps", "-r", str(req_path)])
+    pip_install(["--no-deps", str(Path("/app/repo"))])
+    for package in POST_INSTALL:
+        pip_install([package])
+    packages = FROZEN_REINSTALL_REQUIREMENTS.strip().split("\n")
+else:
+    try_install_repo()
 
-for package in POST_INSTALL:
-    pip_install([package])
+    for package in POST_INSTALL:
+        pip_install([package])
 
-result = subprocess.run(
-    ["uv", "pip", "freeze"],
-    capture_output=True,
-    text=True,
-)
+    result = subprocess.run(
+        ["uv", "pip", "freeze"],
+        capture_output=True,
+        text=True,
+    )
 
-# remove the top level package, which was installed from a local path.
-# We should only be triggering the @ file: check here, but I've left the -e check
-# just in case.
-packages = [
-    line
-    for line in result.stdout.strip().split("\n")
-    if not (line.startswith("-e") or " @ file:" in line)
-]
+    # remove the top level package, which was installed from a local path.
+    # We should only be triggering the @ file: check here, but I've left the -e
+    # check just in case.
+    packages = [
+        line
+        for line in result.stdout.strip().split("\n")
+        if not (line.startswith("-e") or " @ file:" in line)
+    ]
 
 # Configure git to trust /app/repo directory (fixes dubious ownership error)
 subprocess.run(

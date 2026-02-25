@@ -36,6 +36,7 @@ def install_repository(
     *,
     debug: bool = False,
     commit_hash: str | None = None,
+    frozen_reinstall_requirements: str | None = None,
 ) -> dict:
     """Process a single repository: install and collect tests using Docker."""
     container = None
@@ -101,6 +102,7 @@ def install_repository(
             "pre_install": PRE_INSTALL,
             "post_install": POST_INSTALL,
             "pytest_collection_timeout": PYTEST_COLLECTION_TIMEOUT,
+            "frozen_reinstall_requirements": frozen_reinstall_requirements,
         }
         config_path = app_dir / "_install_config.json"
         config_path.write_text(json.dumps(config))
