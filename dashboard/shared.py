@@ -47,13 +47,14 @@ def histogram_with_kde(
     )
 
     # Add KDE overlay (only if we have enough unique values)
-    unique_values = len(set(data))
+    kde_data = [x for x in data if np.isfinite(x)]
+    unique_values = len(set(kde_data))
     if unique_values > 1:
-        kde = stats.gaussian_kde(data)
-        x_range = np.linspace(min(data), max(data), 200)
+        kde = stats.gaussian_kde(kde_data)
+        x_range = np.linspace(min(kde_data), max(kde_data), 200)
         kde_values = kde(x_range)
         # Scale KDE to match histogram counts
-        kde_scaled = kde_values * len(data) * bin_size
+        kde_scaled = kde_values * len(kde_data) * bin_size
 
         fig.add_trace(
             go.Scatter(

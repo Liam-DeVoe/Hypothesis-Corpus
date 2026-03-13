@@ -9,7 +9,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dashboard.shared import execution_frequency_histogram, histogram_with_kde
-from dashboard.utils import common_prefix, get_database, render_sidebar
+from dashboard.utils import common_prefix, get_database, plotly_chart, render_sidebar
 
 st.set_page_config(
     page_title="Coverage",
@@ -70,12 +70,12 @@ def main():
             yaxis_title="Test count",
             bin_size=5,
         )
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
 
     # Global line execution frequency
     fig = execution_frequency_histogram()
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No line execution frequency data available.")
 
@@ -174,7 +174,7 @@ def main():
             showlegend=True,
         )
 
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
 
     # Line execution frequency histograms
     st.subheader("Line execution frequency distribution")
@@ -238,7 +238,7 @@ def main():
             showlegend=True,
         )
 
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No line execution frequency data available for this repository.")
 

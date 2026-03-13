@@ -10,7 +10,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dashboard.shared import histogram_with_kde
-from dashboard.utils import get_database, render_sidebar
+from dashboard.utils import get_database, plotly_chart, render_sidebar
 
 st.set_page_config(
     page_title="Settings",
@@ -318,7 +318,7 @@ def main():
 
     fig = max_examples_histogram(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No max_examples data available.")
 
@@ -327,7 +327,7 @@ def main():
         fig, null_count, total = result
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.plotly_chart(fig, width="stretch")
+            plotly_chart(fig, width="stretch")
         with col2:
             if total > 0:
                 st.markdown("**deadline = None**")
@@ -337,25 +337,25 @@ def main():
 
     fig = stateful_step_count_histogram(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No stateful_step_count data available.")
 
     fig = derandomize_bar_chart(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No derandomize data available.")
 
     fig = backend_bar_chart(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No backend data available.")
 
     fig = database_bar_chart(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No database data available.")
 
@@ -364,7 +364,7 @@ def main():
         fig, empty_count, total = result
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.plotly_chart(fig, width="stretch")
+            plotly_chart(fig, width="stretch")
         with col2:
             if total > 0:
                 st.markdown("**suppress_health_check = []**")

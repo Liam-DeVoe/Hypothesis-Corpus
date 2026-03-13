@@ -10,7 +10,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dashboard.shared import histogram_with_kde
-from dashboard.utils import colorbar_ticks, get_database, render_sidebar
+from dashboard.utils import colorbar_ticks, get_database, plotly_chart, render_sidebar
 
 st.set_page_config(
     page_title="Test Cases",
@@ -312,13 +312,13 @@ def main():
 
     fig = overrun_percent_histogram(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No overrun data available.")
 
     fig = invalid_percent_histogram(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No filtering data available.")
 
@@ -327,7 +327,7 @@ def main():
 
     fig = median_feature_count_histogram(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No tests with event()/note() features found.")
 
@@ -336,15 +336,15 @@ def main():
 
     fig = min_choices_size_histogram(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
 
     fig = median_choices_size_histogram(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
 
     fig = max_choices_size_histogram(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
 
     col1, col2 = st.columns(2)
     log_x = (
@@ -361,7 +361,7 @@ def main():
     )
     fig = choices_size_vs_runtime_heatmap(db, log_x=log_x, log_y=log_y)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
 
     col1, col2 = st.columns(2)
     log_x2 = (
@@ -378,11 +378,11 @@ def main():
     )
     fig = choices_size_vs_generation_time_heatmap(db, log_x=log_x2, log_y=log_y2)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
 
     fig = choices_size_distribution_heatmap(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
 
 
 if __name__ == "__main__":

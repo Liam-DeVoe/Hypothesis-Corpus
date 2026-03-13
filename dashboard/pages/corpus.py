@@ -9,7 +9,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dashboard.shared import histogram_with_kde
-from dashboard.utils import get_database, render_sidebar
+from dashboard.utils import get_database, plotly_chart, render_sidebar
 
 st.set_page_config(
     page_title="Corpus",
@@ -167,19 +167,19 @@ def main():
     # Histograms
     fig = hypothesis_test_count_histogram(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
 
     fig = unique_test_count_histogram(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
 
     fig = hypothesis_percentage_histogram(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
 
     fig = repos_by_node_count(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
 
     # Repository browser
     st.divider()

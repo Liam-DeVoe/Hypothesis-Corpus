@@ -56,6 +56,15 @@ def colorbar_ticks(counts):
     }
 
 
+PLOTLY_CONFIG = {"toImageButtonOptions": {"format": "svg"}}
+
+
+def plotly_chart(fig, **kwargs):
+    """Wrapper around st.plotly_chart with default SVG download config."""
+    config = {**PLOTLY_CONFIG, **kwargs.pop("config", {})}
+    st.plotly_chart(fig, config=config, **kwargs)
+
+
 def common_prefix(strings: list[str]) -> str:
     if not strings:
         return ""

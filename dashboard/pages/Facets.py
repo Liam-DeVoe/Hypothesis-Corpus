@@ -9,7 +9,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from analysis.experiments.utils import filepath_from_node
-from dashboard.utils import get_database, render_sidebar
+from dashboard.utils import get_database, plotly_chart, render_sidebar
 
 # Page configuration
 st.set_page_config(
@@ -175,7 +175,7 @@ def main():
             },
         )
         fig.update_layout(height=400)
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
 
     # Pattern and Domain analysis
     st.subheader("Patterns")

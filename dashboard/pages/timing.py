@@ -10,7 +10,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dashboard.shared import histogram_with_kde
-from dashboard.utils import colorbar_ticks, get_database, render_sidebar
+from dashboard.utils import colorbar_ticks, get_database, plotly_chart, render_sidebar
 
 st.set_page_config(
     page_title="Timing",
@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 
-def total_execution_time_histogram(db):
+def total_execution_time_histogram(db, x_type="linear"):
     execution_times = pd.read_sql_query(
         """
         SELECT execution_time
@@ -38,10 +38,11 @@ def total_execution_time_histogram(db):
         xaxis_title="Runtime (seconds)",
         yaxis_title="Test count",
         bin_size=0.01,
+        x_type=x_type,
     )
 
 
-def median_testcase_time_histogram(db):
+def median_testcase_time_histogram(db, x_type="linear"):
     """Median per-test-case execution time, aggregated by test."""
     data = pd.read_sql_query(
         """
@@ -60,6 +61,7 @@ def median_testcase_time_histogram(db):
         xaxis_title="Median test case execution time (seconds)",
         yaxis_title="Test count",
         bin_size=0.001,
+        x_type=x_type,
     )
 
 
@@ -177,9 +179,9 @@ def normalized_execution_time_curve(db):
     )
     fig.add_hline(y=1.0, line_dash="dash", line_color="gray", opacity=0.5)
     fig.update_layout(
-        title="Execution time shape over the run (normalized)",
-        xaxis_title="% through the run",
-        yaxis_title="Relative execution time (1.0 = test mean)",
+        title="Normalized execution time shape",
+        xaxis_title="% of test run progress",
+        yaxis_title="Multiple of mean test execution time",
         height=400,
     )
     return fig
@@ -211,7 +213,7 @@ def generation_percent_over_run_curve(db):
 
     bins = sorted(bin_values.keys())
     agg = pd.DataFrame({
-        "percent_through": [b / 100.0 for b in bins],
+        "percent_through": bins,
         "gen_percent": [sum(bin_values[b]) / len(bin_values[b]) for b in bins],
     })
 
@@ -226,8 +228,8 @@ def generation_percent_over_run_curve(db):
         )
     )
     fig.update_layout(
-        title="Generation % over the run",
-        xaxis_title="% through the run",
+        title="% generation time through the test",
+        xaxis_title="% of test run progress",
         yaxis_title="% generation time",
         yaxis_range=[0, None],
         height=400,
@@ -250,8 +252,8 @@ def execution_time_cv_histogram(db):
 
     return histogram_with_kde(
         data=data["execution_time_cv"].tolist(),
-        title="Execution time consistency (coefficient of variation)",
-        xaxis_title="CV (stddev / mean) of per-test-case execution time",
+        title="Execution time coefficient of variation",
+        xaxis_title="Coefficient of variation of test-case execution time",
         yaxis_title="Test count",
         bin_size=0.05,
     )
@@ -269,43 +271,45 @@ def main():
 
     db = get_database()
 
-    fig = total_execution_time_histogram(db)
+    log_x_runtime = st.checkbox("Log x-axis", key="runtime_log_x")
+    fig = total_execution_time_histogram(db, x_type="log" if log_x_runtime else "linear")
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No execution time data available.")
 
-    fig = median_testcase_time_histogram(db)
+    log_x_median = st.checkbox("Log x-axis", key="median_tc_log_x")
+    fig = median_testcase_time_histogram(db, x_type="log" if log_x_median else "linear")
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No per-test-case timing data available.")
 
     fig = generation_time_percent_histogram(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No generation timing data available.")
 
     fig = runtime_vs_generation_heatmap(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
 
     fig = normalized_execution_time_curve(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No normalized execution time data available.")
 
     fig = generation_percent_over_run_curve(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No generation % over run data available.")
 
     fig = execution_time_cv_histogram(db)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        plotly_chart(fig, width="stretch")
     else:
         st.info("No execution time consistency data available.")
 
