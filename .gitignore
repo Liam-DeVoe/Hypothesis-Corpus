@@ -9,3 +9,4 @@ sandbox.py
 build
 *.egg-info
 todo.txt
+sankey/sankey.html

@@ -18,3 +18,6 @@ dashboard *args:
 
 mark_invalid *args:
     python3.13 run.py mark_invalid {{args}}
+
+sankey *args:
+    python3.13 sankey/sankey.py {{args}}
