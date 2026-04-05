@@ -107,7 +107,7 @@ def build_sankey(counts):
     n_test_file_filter = add_node(
         f"Test file filter<br>{into_test_file_filter:,}", BLUE
     )
-    n_minhash = add_node(f"MinHash dedup<br>{into_minhash:,}", BLUE)
+    n_minhash = add_node(f"Repository deduplication<br>{into_minhash:,}", BLUE)
     n_install = add_node(f"Test collection<br>{into_install:,}", BLUE)
     n_final = add_node(f"Final corpus<br>{valid:,}", GREEN)
 
@@ -201,29 +201,6 @@ def main():
     fig = build_sankey(counts)
     fig.write_html(args.output)
     print(f"Saved to {args.output}")
-
-    total = counts["total"]
-    invalid_repo = counts["invalid_repo"]
-    minhash_error = counts["minhash_error"]
-    minhash_duplicate = counts["minhash_duplicate"]
-    into_minhash = total - invalid_repo
-    into_install = into_minhash - minhash_duplicate - minhash_error
-
-    print(f"\nPipeline summary:")
-    print(f"  GitHub code search:    unknown")
-    print(f"  Size filter:           unknown removed")
-    print(f"  Fork filter:           unknown removed")
-    print(f"  Test file filter:      {total:,} in → {invalid_repo:,} removed")
-    print(
-        f"  MinHash dedup:         {into_minhash:,} in → {minhash_duplicate:,} duplicates, {minhash_error:,} errors"
-    )
-    print(
-        f"  Test collection:       {into_install:,} in → {counts['no_hypothesis_tests']:,} no tests, {counts['install_error']:,} errors, {counts['timed_out']:,} timeouts"
-    )
-    print(
-        f"  Final corpus:          {counts['valid']:,} ({counts['repo_404']:,} later deleted)"
-    )
-
 
 if __name__ == "__main__":
     main()
