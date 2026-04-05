@@ -69,15 +69,11 @@ def build_sankey(counts):
     into_test_file_filter = total
     into_minhash = into_test_file_filter - invalid_repo
     into_install = into_minhash - minhash_duplicate - minhash_error
+    into_collection = into_install - install_error
     into_final = valid + repo_404
 
     nodes = []
     node_colors = []
-
-    def add_node(label, color):
-        nodes.append(label)
-        node_colors.append(color)
-        return len(nodes) - 1
 
     links_source = []
     links_target = []
@@ -100,42 +96,80 @@ def build_sankey(counts):
     LINK_BLUE = "rgba(99, 110, 250, 0.4)"
     LINK_GRAY = "rgba(170, 170, 170, 0.4)"
 
-    # -- Pipeline step nodes --
-    n_github = add_node("GitHub code search<br>(unknown total)", BLUE)
-    n_size_filter = add_node("Size filter<br>(unknown count)", GRAY)
-    n_fork_filter = add_node("Fork filter<br>(unknown count)", GRAY)
-    n_test_file_filter = add_node(
-        f"Test file filter<br>{into_test_file_filter:,}", BLUE
-    )
-    n_minhash = add_node(f"Repository deduplication<br>{into_minhash:,}", BLUE)
-    n_install = add_node(f"Test collection<br>{into_install:,}", BLUE)
-    n_final = add_node(f"Final corpus<br>{valid:,}", GREEN)
+    # Node positions: x goes left-to-right, y goes top-to-bottom (0=top, 1=bottom).
+    # Pipeline steps run along the top, rejections branch downward.
+    node_x = []
+    node_y = []
 
-    # -- Rejection nodes --
-    n_too_large = add_node("Too large (>1gb)<br>(unknown)", GRAY)
-    n_low_star_fork = add_node("Low-star fork<br>(unknown)", GRAY)
-    n_no_test_files = add_node(
-        f"No test files or<br>vendored site-packages<br>{invalid_repo:,}", RED
+    def add_node(label, color, x, y):
+        nodes.append(label)
+        node_colors.append(color)
+        node_x.append(x)
+        node_y.append(y)
+        return len(nodes) - 1
+
+    # X columns for pipeline steps
+    X_GITHUB = 0.001
+    X_SIZE = 0.13
+    X_FORK = 0.25
+    X_TESTFILE = 0.37
+    X_MINHASH = 0.50
+    X_INSTALL = 0.62
+    X_COLLECTION = 0.74
+    X_FINAL = 0.87
+
+    # Rejections are offset slightly right of their source step
+    X_OFF = 0.07
+
+    # Y positions
+    Y_PIPELINE = 0.001       # all pipeline steps at same level
+    Y_REJ = 0.55             # all rejections start at same level
+    Y_REJ_STACK = 0.15       # vertical spacing between stacked rejections
+
+    # -- Pipeline step nodes (all at Y_PIPELINE) --
+    n_github = add_node("GitHub search<br>(unknown count)", BLUE, X_GITHUB, Y_PIPELINE)
+    n_size_filter = add_node("Filter large repositories<br>(unknown count)", GRAY, X_SIZE, Y_PIPELINE)
+    n_fork_filter = add_node("Filter unpopular forks<br>(unknown count)", GRAY, X_FORK, Y_PIPELINE)
+    n_test_file_filter = add_node(
+        f"Filter extremely<br>unlikely repositories<br>{into_test_file_filter:,}", BLUE, X_TESTFILE, Y_PIPELINE
     )
-    n_minhash_dup = add_node(f"Duplicate<br>{minhash_duplicate:,}", RED)
-    n_minhash_err = add_node(f"MinHash error<br>{minhash_error:,}", RED)
-    n_no_hypothesis = add_node(f"No Hypothesis tests<br>{no_hypothesis_tests:,}", RED)
-    n_install_error = add_node(f"Install error<br>{install_error:,}", RED)
-    n_timed_out = add_node(f"Collection timed out<br>{timed_out:,}", RED)
-    n_repo_404 = add_node(f"Repo later deleted<br>from GitHub<br>{repo_404:,}", ORANGE)
+    n_minhash = add_node(f"Filter duplicate<br>repositories<br>{into_minhash:,}", BLUE, X_MINHASH, Y_PIPELINE)
+    n_install = add_node(f"Install dependencies<br>{into_install:,}", BLUE, X_INSTALL, Y_PIPELINE)
+    n_collection = add_node(f"pytest --collect-only<br>{into_collection:,}", BLUE, X_COLLECTION, Y_PIPELINE)
+    n_final = add_node(f"Final dataset<br>{valid:,}", GREEN, X_FINAL, Y_PIPELINE)
+
+    # -- Rejection nodes (all starting at Y_REJ, stacked vertically when sharing an x) --
+    # Size filter: 1 rejection
+    n_too_large = add_node(">1gb in size<br>(unknown count)", GRAY, X_SIZE + X_OFF, Y_REJ)
+    # Fork filter: 1 rejection
+    n_low_star_fork = add_node("Fork with <5 stars<br>(unknown count)", GRAY, X_FORK + X_OFF, Y_REJ)
+    # Test file filter: 1 rejection
+    n_no_test_files = add_node(
+        f"No test files, or<br>has vendored<br>site-packages<br>{invalid_repo:,}", RED, X_TESTFILE + X_OFF, Y_REJ
+    )
+    # MinHash: 2 rejections, stacked
+    n_minhash_dup = add_node(f"Duplicate<br>{minhash_duplicate:,}", RED, X_MINHASH + X_OFF, Y_REJ)
+    n_minhash_err = add_node(f"Error during<br>MinHash computation<br>{minhash_error:,}", RED, X_MINHASH + X_OFF, Y_REJ + Y_REJ_STACK)
+    # Install: 1 rejection
+    n_install_error = add_node(f"Error during<br>installation<br>{install_error:,}", RED, X_INSTALL + X_OFF, Y_REJ)
+    # Test collection: 2 rejections, stacked
+    n_no_hypothesis = add_node(f"No Hypothesis tests<br>{no_hypothesis_tests:,}", RED, X_COLLECTION + X_OFF, Y_REJ)
+    n_timed_out = add_node(f"Collection timed out<br>{timed_out:,}", RED, X_COLLECTION + X_OFF, Y_REJ + Y_REJ_STACK)
+    # Final corpus: 1 rejection
+    n_repo_404 = add_node(f"Repository later deleted<br>{repo_404:,}", ORANGE, X_FINAL + X_OFF, Y_PIPELINE + 0.15)
 
     # -- Links --
 
-    # GitHub search → size filter (all repos), plus unknown rejection
+    # GitHub search → size filter
     add_link(n_github, n_size_filter, total, LINK_BLUE)
-    add_link(n_github, n_too_large, 1, LINK_GRAY)
 
-    # Size filter → fork filter, plus unknown rejection
+    # Size filter → fork filter, plus rejection
     add_link(n_size_filter, n_fork_filter, total, LINK_BLUE)
-    add_link(n_size_filter, n_low_star_fork, 1, LINK_GRAY)
+    add_link(n_size_filter, n_too_large, 1, LINK_GRAY)
 
-    # Fork filter → test file filter
+    # Fork filter → test file filter, plus rejection
     add_link(n_fork_filter, n_test_file_filter, into_test_file_filter, LINK_BLUE)
+    add_link(n_fork_filter, n_low_star_fork, 1, LINK_GRAY)
 
     # Test file filter → minhash + rejection
     add_link(n_test_file_filter, n_no_test_files, invalid_repo, LINK_RED)
@@ -146,11 +180,14 @@ def build_sankey(counts):
     add_link(n_minhash, n_minhash_err, minhash_error, LINK_RED)
     add_link(n_minhash, n_install, into_install, LINK_BLUE)
 
-    # Test collection → final + rejections
-    add_link(n_install, n_no_hypothesis, no_hypothesis_tests, LINK_RED)
+    # Install → collection + rejection
     add_link(n_install, n_install_error, install_error, LINK_RED)
-    add_link(n_install, n_timed_out, timed_out, LINK_RED)
-    add_link(n_install, n_final, into_final, LINK_BLUE)
+    add_link(n_install, n_collection, into_collection, LINK_BLUE)
+
+    # Collection → final + rejections
+    add_link(n_collection, n_no_hypothesis, no_hypothesis_tests, LINK_RED)
+    add_link(n_collection, n_timed_out, timed_out, LINK_RED)
+    add_link(n_collection, n_final, into_final, LINK_BLUE)
 
     # Final corpus → repo 404
     add_link(n_final, n_repo_404, repo_404, LINK_GRAY)
@@ -164,6 +201,8 @@ def build_sankey(counts):
                     "line": {"color": "white", "width": 2},
                     "label": nodes,
                     "color": node_colors,
+                    "x": node_x,
+                    "y": node_y,
                 },
                 link={
                     "source": links_source,
@@ -176,9 +215,8 @@ def build_sankey(counts):
     )
 
     fig.update_layout(
-        title_text="Repository Filtering Pipeline",
         font_size=12,
-        width=1200,
+        width=1600,
         height=700,
     )
 
