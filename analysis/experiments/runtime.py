@@ -35,7 +35,7 @@ class RuntimeExperiment(Experiment):
                 line_execution_counts TEXT,  -- JSON mapping: {"file_path": {"line_num": execution_count, ...}, ...}
                 total_lines_covered INTEGER,  -- Sum of unique lines across all files
                 settings TEXT,  -- JSON mapping of Hypothesis settings
-                executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (node_id) REFERENCES core_node(id)
             );
 
