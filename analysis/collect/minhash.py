@@ -124,7 +124,7 @@ def _valid_repo(clone_path: Path) -> bool:
     reasonable_paths = _reasonable_paths(clone_path)
 
     if not (
-        any(p.name == "pytest.init" for p in reasonable_paths)
+        any(p.name == "pytest.ini" for p in reasonable_paths)
         or any(p.name == "conftest.py" for p in reasonable_paths)
         or any(
             p.name.startswith("test_") and p.suffix == ".py" for p in reasonable_paths
