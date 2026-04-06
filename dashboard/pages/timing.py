@@ -212,10 +212,12 @@ def generation_percent_over_run_curve(db):
             bin_values.setdefault(int(bin_str), []).append(gen_pct)
 
     bins = sorted(bin_values.keys())
-    agg = pd.DataFrame({
-        "percent_through": bins,
-        "gen_percent": [sum(bin_values[b]) / len(bin_values[b]) for b in bins],
-    })
+    agg = pd.DataFrame(
+        {
+            "percent_through": bins,
+            "gen_percent": [sum(bin_values[b]) / len(bin_values[b]) for b in bins],
+        }
+    )
 
     fig = go.Figure()
     fig.add_trace(
@@ -272,7 +274,9 @@ def main():
     db = get_database()
 
     log_x_runtime = st.checkbox("Log x-axis", key="runtime_log_x")
-    fig = total_execution_time_histogram(db, x_type="log" if log_x_runtime else "linear")
+    fig = total_execution_time_histogram(
+        db, x_type="log" if log_x_runtime else "linear"
+    )
     if fig:
         plotly_chart(fig, width="stretch")
     else:

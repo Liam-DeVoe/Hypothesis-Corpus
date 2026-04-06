@@ -45,11 +45,11 @@ class LoggingConnection(Connection):
 _database_cache = {}
 
 
-def get_database(db_path: str) -> "Database":
+def get_database(db_dir: str = "data") -> "Database":
     """Get database instance from cache, creating if needed."""
-    resolved_path = str(Path(db_path).resolve())
+    resolved_path = str(Path(db_dir).resolve())
     if resolved_path not in _database_cache:
-        _database_cache[resolved_path] = Database(db_path=db_path)
+        _database_cache[resolved_path] = Database(db_dir=db_dir)
     return _database_cache[resolved_path]
 
 
@@ -60,11 +60,42 @@ class Database:
     Consumer code should use db.execute() methods rather than creating their own connections.
     """
 
-    def __init__(self, *, db_path: str):
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+    main_db = "data.db"
+    companion_dbs = {
+        "test_cases": "data_test_cases.db",
+        "minhashes": "data_minhashes.db",
+    }
 
-        # Create single persistent connection
+    def __init__(self, *, db_dir: str):
+        self.db_dir = Path(db_dir)
+        self.db_dir.mkdir(parents=True, exist_ok=True)
+        self.db_path = self.db_dir / self.main_db
+
+        self._companion_paths = {
+            name: self.db_dir / filename
+            for name, filename in self.companion_dbs.items()
+        }
+
+        # Initialize core companion schema via direct connection.
+        # SQLite doesn't support CREATE INDEX with schema prefixes, so
+        # companion schemas must be initialized via direct connections
+        # before ATTACHing.
+        self._init_companion_db(
+            self._companion_paths["minhashes"],
+            """
+            -- MinHash data for deduplication (populated by collection)
+            CREATE TABLE IF NOT EXISTS core_minhashes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repo_id INTEGER NOT NULL,
+                minhash_data BLOB NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (repo_id) REFERENCES core_repository(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_minhashes_repo ON core_minhashes(repo_id);
+            """,
+        )
+
+        # Create main connection and attach companions
         self._conn = sqlite3.connect(
             self.db_path,
             timeout=30.0,
@@ -72,10 +103,19 @@ class Database:
             factory=LoggingConnection if debug else Connection,
         )
         self._conn.row_factory = sqlite3.Row
+        for name, path in self._companion_paths.items():
+            self._conn.execute(f"ATTACH DATABASE ? AS {name}", (str(path),))
 
         self._init_core_schema()
         self._init_experiment_schemas()
         self._init_task_schemas()
+
+    @staticmethod
+    def _init_companion_db(db_path: Path, schema_sql: str):
+        conn = sqlite3.connect(db_path)
+        conn.executescript(schema_sql)
+        conn.commit()
+        conn.close()
 
     def _init_core_schema(self):
         self._conn.executescript(
@@ -98,15 +138,6 @@ class Database:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
-            -- MinHash data for deduplication (populated by collection)
-            CREATE TABLE IF NOT EXISTS core_minhashes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                repo_id INTEGER NOT NULL,
-                minhash_data BLOB NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (repo_id) REFERENCES core_repository(id)
-            );
-
             -- Node information (populated by install)
             CREATE TABLE IF NOT EXISTS core_node (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,7 +152,6 @@ class Database:
             );
 
             -- Create indexes for better query performance
-            CREATE INDEX IF NOT EXISTS idx_minhashes_repo ON core_minhashes(repo_id);
             CREATE INDEX IF NOT EXISTS idx_nodes_repo ON core_node(repo_id);
             CREATE INDEX IF NOT EXISTS idx_nodes_canonical ON core_node(canonical_parametrization);
             CREATE INDEX IF NOT EXISTS idx_repository_status ON core_repository(status);
@@ -135,8 +165,13 @@ class Database:
 
         for experiment_name, experiment_class in Experiment.experiments.items():
             logger.debug(f"Initializing schema for experiment: {experiment_name}")
-            schema_sql = experiment_class.get_schema_sql()
-            self._conn.executescript(schema_sql)
+            schemas = experiment_class.get_schema_sql()
+            for db_name, sql in schemas.items():
+                if db_name == "main":
+                    self._conn.executescript(sql)
+                else:
+                    assert db_name in self.companion_dbs
+                    self._init_companion_db(self._companion_paths[db_name], sql)
         self._conn.commit()
 
     def _init_task_schemas(self):

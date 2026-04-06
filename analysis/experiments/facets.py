@@ -80,32 +80,34 @@ class FacetsExperiment(Experiment):
     only_canonical_nodes = True
 
     @staticmethod
-    def get_schema_sql() -> str:
-        return """
-            CREATE TABLE IF NOT EXISTS facets_repository (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                repo_id INTEGER NOT NULL,
-                type TEXT NOT NULL,
-                facet TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (repo_id) REFERENCES core_repository(id)
-            );
+    def get_schema_sql() -> dict[str, str]:
+        return {
+            "main": """
+                CREATE TABLE IF NOT EXISTS facets_repository (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    repo_id INTEGER NOT NULL,
+                    type TEXT NOT NULL,
+                    facet TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (repo_id) REFERENCES core_repository(id)
+                );
 
-            CREATE TABLE IF NOT EXISTS facets_nodes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                node_id INTEGER NOT NULL,
-                type TEXT NOT NULL,
-                facet TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (node_id) REFERENCES core_node(id)
-            );
+                CREATE TABLE IF NOT EXISTS facets_nodes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    node_id INTEGER NOT NULL,
+                    type TEXT NOT NULL,
+                    facet TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (node_id) REFERENCES core_node(id)
+                );
 
-            CREATE INDEX IF NOT EXISTS idx_facets_repository_repo ON facets_repository(repo_id);
-            CREATE INDEX IF NOT EXISTS idx_facets_repository_type ON facets_repository(type);
+                CREATE INDEX IF NOT EXISTS idx_facets_repository_repo ON facets_repository(repo_id);
+                CREATE INDEX IF NOT EXISTS idx_facets_repository_type ON facets_repository(type);
 
-            CREATE INDEX IF NOT EXISTS idx_facets_nodes_node ON facets_nodes(node_id);
-            CREATE INDEX IF NOT EXISTS idx_facets_nodes_type ON facets_nodes(type);
-        """
+                CREATE INDEX IF NOT EXISTS idx_facets_nodes_node ON facets_nodes(node_id);
+                CREATE INDEX IF NOT EXISTS idx_facets_nodes_type ON facets_nodes(type);
+            """
+        }
 
     @staticmethod
     def _run_claude(prompt: str) -> str:

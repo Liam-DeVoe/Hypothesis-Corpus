@@ -12,12 +12,12 @@ from analysis.database import get_database as _get_database
 
 
 def get_database():
-    db_path = "analysis/data.db"
-    if "--db-path" in sys.argv:
-        idx = sys.argv.index("--db-path")
+    db_dir = "data"
+    if "--db-dir" in sys.argv:
+        idx = sys.argv.index("--db-dir")
         if idx + 1 < len(sys.argv):
-            db_path = sys.argv[idx + 1]
-    return _get_database(db_path)
+            db_dir = sys.argv[idx + 1]
+    return _get_database(db_dir)
 
 
 def render_sidebar():

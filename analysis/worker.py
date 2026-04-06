@@ -35,7 +35,7 @@ class Worker(Process):
         task_queue: Queue,
         result_queue: Queue,
         container_id_queue: Queue,
-        db_path: str,
+        db_dir: str,
         docker_image: str,
         experiments: list[str],
         debug: bool,
@@ -46,7 +46,7 @@ class Worker(Process):
         self.task_queue = task_queue
         self.result_queue = result_queue
         self.container_id_queue = container_id_queue
-        self.db_path = db_path
+        self.db_dir = db_dir
         self.docker_image = docker_image
         self.experiments = experiments
         self.debug = debug
@@ -57,7 +57,7 @@ class Worker(Process):
         logger.info(f"[w{self.worker_id}] Worker started")
 
         # Initialize components in the worker process
-        db = Database(db_path=self.db_path)
+        db = Database(db_dir=self.db_dir)
         test_runner = TestRunner(
             self.docker_image,
             worker_id=self.worker_id,
@@ -351,13 +351,13 @@ class WorkerPool:
         self,
         *,
         num_workers: int,
-        db_path: str,
+        db_dir: str,
         docker_image: str,
         experiments: list[str],
         debug: bool,
     ):
         self.num_workers = num_workers
-        self.db_path = db_path
+        self.db_dir = db_dir
         self.docker_image = docker_image
         self.experiments = experiments
         self.debug = debug
@@ -377,7 +377,7 @@ class WorkerPool:
                 self.task_queue,
                 self.result_queue,
                 self.container_id_queue,
-                self.db_path,
+                self.db_dir,
                 self.docker_image,
                 self.experiments,
                 self.debug,

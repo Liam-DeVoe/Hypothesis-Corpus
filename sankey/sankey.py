@@ -2,7 +2,7 @@
 Generate a Sankey diagram showing the repository filtering pipeline.
 
 Usage:
-    python sankey/sankey.py [--db-path analysis/data.db]
+    python sankey/sankey.py [--db-dir data]
 
 Pipeline stages match the top-level bullets in DATASET_README.md:
     1. GitHub code search
@@ -15,12 +15,13 @@ Pipeline stages match the top-level bullets in DATASET_README.md:
 
 import argparse
 import sqlite3
+from pathlib import Path
 
 import plotly.graph_objects as go
 
 
-def get_counts(db_path):
-    conn = sqlite3.connect(db_path)
+def get_counts(db_dir):
+    conn = sqlite3.connect(Path(db_dir) / "data.db")
     c = conn.cursor()
 
     counts = {}
@@ -122,41 +123,91 @@ def build_sankey(counts):
     X_OFF = 0.07
 
     # Y positions
-    Y_PIPELINE = 0.001       # all pipeline steps at same level
-    Y_REJ = 0.55             # all rejections start at same level
-    Y_REJ_STACK = 0.15       # vertical spacing between stacked rejections
+    Y_PIPELINE = 0.001  # all pipeline steps at same level
+    Y_REJ = 0.55  # all rejections start at same level
+    Y_REJ_STACK = 0.15  # vertical spacing between stacked rejections
 
     # -- Pipeline step nodes (all at Y_PIPELINE) --
     n_github = add_node("GitHub search<br>(unknown count)", BLUE, X_GITHUB, Y_PIPELINE)
-    n_size_filter = add_node("Filter large repositories<br>(unknown count)", GRAY, X_SIZE, Y_PIPELINE)
-    n_fork_filter = add_node("Filter unpopular forks<br>(unknown count)", GRAY, X_FORK, Y_PIPELINE)
-    n_test_file_filter = add_node(
-        f"Filter extremely<br>unlikely repositories<br>{into_test_file_filter:,}", BLUE, X_TESTFILE, Y_PIPELINE
+    n_size_filter = add_node(
+        "Filter large repositories<br>(unknown count)", GRAY, X_SIZE, Y_PIPELINE
     )
-    n_minhash = add_node(f"Filter duplicate<br>repositories<br>{into_minhash:,}", BLUE, X_MINHASH, Y_PIPELINE)
-    n_install = add_node(f"Install dependencies<br>{into_install:,}", BLUE, X_INSTALL, Y_PIPELINE)
-    n_collection = add_node(f"pytest --collect-only<br>{into_collection:,}", BLUE, X_COLLECTION, Y_PIPELINE)
+    n_fork_filter = add_node(
+        "Filter unpopular forks<br>(unknown count)", GRAY, X_FORK, Y_PIPELINE
+    )
+    n_test_file_filter = add_node(
+        f"Filter extremely<br>unlikely repositories<br>{into_test_file_filter:,}",
+        BLUE,
+        X_TESTFILE,
+        Y_PIPELINE,
+    )
+    n_minhash = add_node(
+        f"Filter duplicate<br>repositories<br>{into_minhash:,}",
+        BLUE,
+        X_MINHASH,
+        Y_PIPELINE,
+    )
+    n_install = add_node(
+        f"Install dependencies<br>{into_install:,}", BLUE, X_INSTALL, Y_PIPELINE
+    )
+    n_collection = add_node(
+        f"pytest --collect-only<br>{into_collection:,}", BLUE, X_COLLECTION, Y_PIPELINE
+    )
     n_final = add_node(f"Final dataset<br>{valid:,}", GREEN, X_FINAL, Y_PIPELINE)
 
     # -- Rejection nodes (all starting at Y_REJ, stacked vertically when sharing an x) --
     # Size filter: 1 rejection
-    n_too_large = add_node(">1gb in size<br>(unknown count)", GRAY, X_SIZE + X_OFF, Y_REJ)
+    n_too_large = add_node(
+        ">1gb in size<br>(unknown count)", GRAY, X_SIZE + X_OFF, Y_REJ
+    )
     # Fork filter: 1 rejection
-    n_low_star_fork = add_node("Fork with <5 stars<br>(unknown count)", GRAY, X_FORK + X_OFF, Y_REJ)
+    n_low_star_fork = add_node(
+        "Fork with <5 stars<br>(unknown count)", GRAY, X_FORK + X_OFF, Y_REJ
+    )
     # Test file filter: 1 rejection
     n_no_test_files = add_node(
-        f"No test files, or<br>has vendored<br>site-packages<br>{invalid_repo:,}", RED, X_TESTFILE + X_OFF, Y_REJ
+        f"No test files, or<br>has vendored<br>site-packages<br>{invalid_repo:,}",
+        RED,
+        X_TESTFILE + X_OFF,
+        Y_REJ,
     )
     # MinHash: 2 rejections, stacked
-    n_minhash_dup = add_node(f"Duplicate<br>{minhash_duplicate:,}", RED, X_MINHASH + X_OFF, Y_REJ)
-    n_minhash_err = add_node(f"Error during<br>MinHash computation<br>{minhash_error:,}", RED, X_MINHASH + X_OFF, Y_REJ + Y_REJ_STACK)
+    n_minhash_dup = add_node(
+        f"Duplicate<br>{minhash_duplicate:,}", RED, X_MINHASH + X_OFF, Y_REJ
+    )
+    n_minhash_err = add_node(
+        f"Error during<br>MinHash computation<br>{minhash_error:,}",
+        RED,
+        X_MINHASH + X_OFF,
+        Y_REJ + Y_REJ_STACK,
+    )
     # Install: 1 rejection
-    n_install_error = add_node(f"Error during<br>installation<br>{install_error:,}", RED, X_INSTALL + X_OFF, Y_REJ)
+    n_install_error = add_node(
+        f"Error during<br>installation<br>{install_error:,}",
+        RED,
+        X_INSTALL + X_OFF,
+        Y_REJ,
+    )
     # Test collection: 2 rejections, stacked
-    n_no_hypothesis = add_node(f"No Hypothesis tests<br>{no_hypothesis_tests:,}", RED, X_COLLECTION + X_OFF, Y_REJ)
-    n_timed_out = add_node(f"Collection timed out<br>{timed_out:,}", RED, X_COLLECTION + X_OFF, Y_REJ + Y_REJ_STACK)
+    n_no_hypothesis = add_node(
+        f"No Hypothesis tests<br>{no_hypothesis_tests:,}",
+        RED,
+        X_COLLECTION + X_OFF,
+        Y_REJ,
+    )
+    n_timed_out = add_node(
+        f"Collection timed out<br>{timed_out:,}",
+        RED,
+        X_COLLECTION + X_OFF,
+        Y_REJ + Y_REJ_STACK,
+    )
     # Final corpus: 1 rejection
-    n_repo_404 = add_node(f"Repository later deleted<br>{repo_404:,}", ORANGE, X_FINAL + X_OFF, Y_PIPELINE + 0.15)
+    n_repo_404 = add_node(
+        f"Repository later deleted<br>{repo_404:,}",
+        ORANGE,
+        X_FINAL + X_OFF,
+        Y_PIPELINE + 0.15,
+    )
 
     # -- Links --
 
@@ -227,18 +278,17 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate repository filtering Sankey diagram"
     )
-    parser.add_argument(
-        "--db-path", default="analysis/data.db", help="Path to database file"
-    )
+    parser.add_argument("--db-dir", default="data", help="Path to database directory")
     parser.add_argument(
         "--output", default="sankey/output.html", help="Output HTML file path"
     )
     args = parser.parse_args()
 
-    counts = get_counts(args.db_path)
+    counts = get_counts(args.db_dir)
     fig = build_sankey(counts)
     fig.write_html(args.output)
     print(f"Saved to {args.output}")
+
 
 if __name__ == "__main__":
     main()

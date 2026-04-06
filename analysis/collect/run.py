@@ -44,8 +44,8 @@ def process_minhashes(db: Database):
             db.commit()
 
 
-def run_collection(db_path: str):
-    db = Database(db_path=db_path)
+def run_collection(db_dir: str):
+    db = Database(db_dir=db_dir)
     collect_repos(db)
     filter_github_stats(db)
     process_minhashes(db)

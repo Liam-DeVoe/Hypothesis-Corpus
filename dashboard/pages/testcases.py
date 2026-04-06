@@ -160,7 +160,6 @@ def max_choices_size_histogram(db):
     )
 
 
-
 def choices_size_vs_runtime_heatmap(db, *, log_x=False, log_y=False):
     """2D heatmap: choices_size (x) vs per-test-case execution time (y)."""
     data = pd.read_sql_query(

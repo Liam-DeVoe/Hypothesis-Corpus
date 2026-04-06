@@ -150,7 +150,9 @@ class AggregateMetricsTask(Task):
                     {int(b): round(v, 4) for b, v in g.droplevel(0).items()}
                 )
             )
-            logger.info(f"  computed generation curves for {len(generation_curves)} nodes")
+            logger.info(
+                f"  computed generation curves for {len(generation_curves)} nodes"
+            )
         else:
             median_gen_percent = pd.Series(dtype=float)
             gen_percent_overall = pd.Series(dtype=float)
@@ -237,4 +239,3 @@ class AggregateMetricsTask(Task):
             ],
         )
         db.commit()
-

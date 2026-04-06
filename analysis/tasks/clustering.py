@@ -351,4 +351,3 @@ class ClusterTask(Task):
             f"Stored {len(data['pattern_clusters'])} pattern clusters and "
             f"{len(data['domain_clusters'])} domain clusters"
         )
-

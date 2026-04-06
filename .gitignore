@@ -1,6 +1,7 @@
 *.pyc
-data.db
-test.db
+data/data.db
+data/data_minhashes.db
+data/data_test_cases.db
 .cursor
 secrets.json
 .claude

@@ -19,7 +19,9 @@ with open("/app/_install_config.json") as f:
 PRE_INSTALL = config["pre_install"]
 POST_INSTALL = config["post_install"]
 PYTEST_COLLECTION_TIMEOUT = config["pytest_collection_timeout"]
-FROZEN_REINSTALL_REQUIREMENTS = config["frozen_reinstall_requirements"]  # stored frozen requirements, or None
+FROZEN_REINSTALL_REQUIREMENTS = config[
+    "frozen_reinstall_requirements"
+]  # stored frozen requirements, or None
 
 
 def pip_install(args):
@@ -90,6 +92,7 @@ def try_install_repo():
             # likely to be wordlists or etc.
             continue
         pip_install(["-r", str(p)])
+
 
 for package in PRE_INSTALL:
     pip_install([package])

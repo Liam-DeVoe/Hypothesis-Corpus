@@ -22,8 +22,13 @@ class Experiment(ABC):
 
     @staticmethod
     @abstractmethod
-    def get_schema_sql() -> str:
-        """Return SQL to create database tables for this experiment."""
+    def get_schema_sql() -> dict[str, str]:
+        """Return SQL to create database tables for this experiment.
+
+        Returns a dict mapping database names to SQL strings.
+        Use "main" for the main database, or a companion db name
+        (e.g. "test_cases") for companion databases.
+        """
 
     @staticmethod
     @abstractmethod

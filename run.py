@@ -40,12 +40,12 @@ def cli():
 
 
 @cli.command()
-@click.option("--db-path", help="Path to database file", default="analysis/data.db")
-def collect(db_path: str):
+@click.option("--db-dir", help="Path to database file", default="data")
+def collect(db_dir: str):
     """Collect repositories from GitHub and store in database."""
     from analysis.collect.run import run_collection
 
-    run_collection(db_path)
+    run_collection(db_dir)
 
 
 # ==============================================================================
@@ -54,7 +54,7 @@ def collect(db_path: str):
 
 
 @cli.command()
-@click.option("--db-path", help="Path to database file", default="analysis/data.db")
+@click.option("--db-dir", help="Path to database file", default="data")
 @click.option("--workers", "-w", type=int, default=4, help="Number of worker processes")
 @click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
 @click.option(
@@ -73,7 +73,7 @@ def collect(db_path: str):
     "--overwrite", is_flag=True, help="Re-run experiments even if already completed"
 )
 def experiment(
-    db_path: str,
+    db_dir: str,
     workers: int,
     limit: int,
     repo_name: str,
@@ -98,7 +98,7 @@ def experiment(
     console.print(f"[bold]Experiments:[/bold] [green]{', '.join(experiments)}[/green]")
     console.print()
 
-    db = Database(db_path=db_path)
+    db = Database(db_dir=db_dir)
 
     repos = db.fetchall(
         """
@@ -173,7 +173,7 @@ def experiment(
         # if there are less work items than workers, only launch as many workers
         # as work items
         num_workers=min(workers, len(work_items)),
-        db_path=db_path,
+        db_dir=db_dir,
         docker_image=docker_image,
         experiments=experiments,
         debug=debug,
@@ -249,11 +249,11 @@ def _populate_nodes_for_repo(
     db.commit()
 
 
-def _install(*, db_path, limit, debug, overwrite, repo_name):
+def _install(*, db_dir, limit, debug, overwrite, repo_name):
     from analysis.collect.install_repos import install_repository
     from analysis.database import Database
 
-    db = Database(db_path=db_path)
+    db = Database(db_dir=db_dir)
 
     repos = db.fetchall("SELECT full_name, status FROM core_repository")
     if not overwrite:
@@ -298,7 +298,7 @@ def _install(*, db_path, limit, debug, overwrite, repo_name):
                     console.print(f"  - {failed_repo}")
                 console.print(
                     f"\n[yellow]To reset these repos, run:[/yellow]\n"
-                    f"  sqlite3 {db_path or 'analysis/data.db'} \"UPDATE core_repository SET status = NULL, status_reason = NULL "
+                    f"  sqlite3 {db_dir or 'data'} \"UPDATE core_repository SET status = NULL, status_reason = NULL "
                     f"WHERE full_name IN ({', '.join(repr(r) for r in consecutive_failed_repos)});\""
                 )
                 break
@@ -374,16 +374,16 @@ def _install(*, db_path, limit, debug, overwrite, repo_name):
 
 
 @cli.command()
-@click.option("--db-path", help="Path to database file", default="analysis/data.db")
+@click.option("--db-dir", help="Path to database file", default="data")
 @click.option("--limit", "-l", type=int, help="Limit number of repositories to process")
 @click.option("--debug", is_flag=True, help="Enable debug mode with container logs")
 @click.option(
     "--overwrite", is_flag=True, help="Re-run installation even if already completed"
 )
 @click.option("--repo", "repo_name", help="Process just this repository")
-def install(db_path: str, limit: int, debug: bool, overwrite: bool, repo_name: str):
+def install(db_dir: str, limit: int, debug: bool, overwrite: bool, repo_name: str):
     _install(
-        db_path=db_path,
+        db_dir=db_dir,
         limit=limit,
         debug=debug,
         overwrite=overwrite,
@@ -403,24 +403,24 @@ def task():
 
 @task.command()
 @click.argument("task_name")
-@click.option("--db-path", help="Path to database", default="analysis/data.db")
-def run(task_name: str, db_path: str):
+@click.option("--db-dir", help="Path to database", default="data")
+def run(task_name: str, db_dir: str):
     from analysis.database import Database
     from analysis.tasks import run_task
 
-    db = Database(db_path=db_path)
+    db = Database(db_dir=db_dir)
     run_task(task_name, db=db)
 
 
 @task.command()
-@click.option("--db-path", help="Path to database", default="analysis/data.db")
+@click.option("--db-dir", help="Path to database", default="data")
 @click.option("--task-name", help="Specific task to clear (default: all)")
-def clear(db_path: str, task_name: str):
+def clear(db_dir: str, task_name: str):
     """Clear task data from the database."""
     from analysis.database import Database
     from analysis.tasks import Task
 
-    db = Database(db_path=db_path)
+    db = Database(db_dir=db_dir)
 
     if task_name:
         if task_name not in Task.tasks:
@@ -451,12 +451,12 @@ def clear(db_path: str, task_name: str):
 @cli.command()
 @click.argument("repo_name")
 @click.argument("reason", type=click.Choice(["autogenerated_tests"]))
-@click.option("--db-path", default="analysis/data.db")
-def mark_invalid(repo_name: str, reason: str, db_path: str):
+@click.option("--db-dir", default="data")
+def mark_invalid(repo_name: str, reason: str, db_dir: str):
     """Mark a repository as invalid with the given reason."""
     from analysis.database import Database
 
-    db = Database(db_path=db_path)
+    db = Database(db_dir=db_dir)
     repo = db.fetchone(
         "SELECT id, full_name, status FROM core_repository WHERE full_name = ?",
         (repo_name,),
@@ -483,13 +483,13 @@ def mark_invalid(repo_name: str, reason: str, db_path: str):
 
 
 @cli.command()
-@click.option("--db-path", help="Path to database file", default="analysis/data.db")
+@click.option("--db-dir", help="Path to database file", default="data")
 @click.option("--port", default=8501, help="Port to run dashboard on")
-def dashboard(db_path: str, port: int):
+def dashboard(db_dir: str, port: int):
     """Start the Streamlit dashboard."""
 
     console.print(f"[bold]Starting dashboard on port {port}...[/bold]")
-    console.print(f"Database: [green]{db_path}[/green]")
+    console.print(f"Database: [green]{db_dir}[/green]")
     console.print(f"URL: [blue]http://localhost:{port}[/blue]")
     console.print()
 
@@ -504,8 +504,8 @@ def dashboard(db_path: str, port: int):
         "--server.headless",
         "true",
         "--",
-        "--db-path",
-        db_path,
+        "--db-dir",
+        db_dir,
     ]
 
     try:
