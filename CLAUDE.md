@@ -124,7 +124,7 @@ SQLite at `analysis/data.db`. Singleton pattern via `get_database(path)`.
 - `core_minhashes`: MinHash for deduplication
 
 **Experiment tables** defined by `get_schema_sql()`:
-- `runtime`: `runtime_summary`, `runtime_testcase`
+- `runtime`: `runtime_summary`, `runtime_test_case`
 - `facets`: `facets_repository`, `facets_nodes`
 
 **Task tables:**

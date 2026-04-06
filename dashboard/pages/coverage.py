@@ -117,14 +117,14 @@ def main():
         """
         SELECT
             t.node_id,
-            tc.testcase_number,
+            tc.test_case_number,
             tc.coverage,
             r.full_name as repository
-        FROM runtime_testcase tc
+        FROM runtime_test_case tc
         JOIN core_node t ON tc.node_id = t.id
         JOIN core_repository r ON t.repo_id = r.id
         WHERE r.full_name = ?
-        ORDER BY t.id, tc.testcase_number
+        ORDER BY t.id, tc.test_case_number
         """,
         db._conn,
         params=[selected_repo],
@@ -144,7 +144,7 @@ def main():
             return group
 
         cumulative_df = testcase_data.groupby("node_id", group_keys=False)[
-            ["node_id", "testcase_number", "coverage_parsed"]
+            ["node_id", "test_case_number", "coverage_parsed"]
         ].apply(calc_cumulative, include_groups=False)
 
         fig = go.Figure()
@@ -157,7 +157,7 @@ def main():
 
             fig.add_trace(
                 go.Scatter(
-                    x=test_data["testcase_number"],
+                    x=test_data["test_case_number"],
                     y=test_data["cumulative_lines"],
                     mode="lines",
                     name=test_name,

@@ -1,4 +1,4 @@
-"""Pre-compute per-node aggregate metrics from runtime_testcase for fast
+"""Pre-compute per-node aggregate metrics from runtime_test_case for fast
 dashboard queries."""
 
 import json
@@ -58,7 +58,7 @@ class AggregateMetricsTask(Task):
                     data_status,
                     choices_size,
                     json_extract(timing, '$."execute:test"') as execution_time
-                FROM runtime_testcase
+                FROM runtime_test_case
             )
             GROUP BY node_id
             """,
@@ -85,7 +85,7 @@ class AggregateMetricsTask(Task):
                 node_id,
                 choices_size,
                 json_extract(timing, '$."execute:test"') as execution_time
-            FROM runtime_testcase
+            FROM runtime_test_case
             """,
             db._conn,
         )
@@ -99,8 +99,8 @@ class AggregateMetricsTask(Task):
         logger.info("Computing median generation % and generation curves...")
         timing_data = pd.read_sql_query(
             """
-            SELECT node_id, testcase_number, timing
-            FROM runtime_testcase
+            SELECT node_id, test_case_number, timing
+            FROM runtime_test_case
             """,
             db._conn,
         )
@@ -118,7 +118,7 @@ class AggregateMetricsTask(Task):
                 gen_rows.append(
                     {
                         "node_id": row["node_id"],
-                        "testcase_number": row["testcase_number"],
+                        "test_case_number": row["test_case_number"],
                         "gen_percent": gen_time / total * 100,
                         "gen_time": gen_time,
                         "total_time": total,
@@ -135,11 +135,11 @@ class AggregateMetricsTask(Task):
             gen_percent_overall = gen_sums["total_gen"] / gen_sums["total_time"] * 100
 
             # Per-node generation curves: bin testcases by % through run
-            max_tc = gen_df.groupby("node_id")["testcase_number"].max()
+            max_tc = gen_df.groupby("node_id")["test_case_number"].max()
             gen_df = gen_df.merge(max_tc.rename("max_tc"), on="node_id")
             gen_df = gen_df[gen_df["max_tc"] > 0]
             gen_df["bin"] = (
-                (gen_df["testcase_number"] / gen_df["max_tc"] * 100)
+                (gen_df["test_case_number"] / gen_df["max_tc"] * 100)
                 .round()
                 .clip(upper=100)
                 .astype(int)
@@ -161,7 +161,7 @@ class AggregateMetricsTask(Task):
             """
             SELECT node_id,
                 (SELECT COUNT(*) FROM json_each(rt.features)) as feature_count
-            FROM runtime_testcase rt
+            FROM runtime_test_case rt
             WHERE features != '{}'
             """,
             db._conn,

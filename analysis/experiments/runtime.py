@@ -17,7 +17,7 @@ except ImportError:
 
 class RuntimeExperiment(Experiment):
     name = "runtime"
-    node_tables = ["runtime_summary", "runtime_testcase"]
+    node_tables = ["runtime_summary", "runtime_test_case"]
 
     max_examples = 500
 
@@ -39,10 +39,10 @@ class RuntimeExperiment(Experiment):
                 FOREIGN KEY (node_id) REFERENCES core_node(id)
             );
 
-            CREATE TABLE IF NOT EXISTS runtime_testcase (
+            CREATE TABLE IF NOT EXISTS runtime_test_case (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 node_id INTEGER NOT NULL,
-                testcase_number INTEGER NOT NULL,  -- Order of test case execution
+                test_case_number INTEGER NOT NULL,  -- Order of test case execution
                 coverage TEXT NOT NULL,  -- JSON mapping: {"file_path": [line_numbers], ...}
                 timing TEXT NOT NULL,  -- JSON: observation.timing
                 predicates TEXT NOT NULL,  -- JSON: observation.predicates
@@ -55,7 +55,7 @@ class RuntimeExperiment(Experiment):
             );
 
             CREATE INDEX IF NOT EXISTS idx_runtime_summary ON runtime_summary(node_id);
-            CREATE INDEX IF NOT EXISTS idx_runtime_testcase ON runtime_testcase(node_id, testcase_number);
+            CREATE INDEX IF NOT EXISTS idx_runtime_test_case ON runtime_test_case(node_id, test_case_number);
         """
 
     @staticmethod
@@ -184,8 +184,8 @@ class RuntimeExperiment(Experiment):
 
             db.execute(
                 """
-                INSERT INTO runtime_testcase (
-                    node_id, testcase_number, coverage, timing, predicates, features,
+                INSERT INTO runtime_test_case (
+                    node_id, test_case_number, coverage, timing, predicates, features,
                     data_status, status_reason, choices_size, how_generated
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

@@ -139,18 +139,18 @@ def normalized_execution_time_curve(db):
         WITH test_stats AS (
             SELECT
                 node_id,
-                MAX(testcase_number) as max_tc,
+                MAX(test_case_number) as max_tc,
                 AVG(json_extract(timing, '$."execute:test"')) as mean_time
-            FROM runtime_testcase
+            FROM runtime_test_case
             WHERE json_extract(timing, '$."execute:test"') IS NOT NULL
             GROUP BY node_id
             HAVING mean_time > 0
         ),
         binned AS (
             SELECT
-                MIN(100, CAST(ROUND(CAST(tc.testcase_number AS FLOAT) / ts.max_tc * 100) AS INTEGER)) as bin,
+                MIN(100, CAST(ROUND(CAST(tc.test_case_number AS FLOAT) / ts.max_tc * 100) AS INTEGER)) as bin,
                 json_extract(tc.timing, '$."execute:test"') / ts.mean_time as normalized_time
-            FROM runtime_testcase tc
+            FROM runtime_test_case tc
             JOIN test_stats ts ON tc.node_id = ts.node_id
             WHERE json_extract(tc.timing, '$."execute:test"') IS NOT NULL
         )

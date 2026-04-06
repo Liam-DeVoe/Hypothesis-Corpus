@@ -166,7 +166,7 @@ def choices_size_vs_runtime_heatmap(db, *, log_x=False, log_y=False):
     data = pd.read_sql_query(
         """
         SELECT choices_size, json_extract(timing, '$."execute:test"') as execution_time
-        FROM runtime_testcase
+        FROM runtime_test_case
         WHERE json_extract(timing, '$."execute:test"') IS NOT NULL
         """,
         db._conn,
@@ -209,7 +209,7 @@ def choices_size_vs_generation_time_heatmap(db, *, log_x=False, log_y=False):
     data = pd.read_sql_query(
         """
         SELECT choices_size, timing
-        FROM runtime_testcase
+        FROM runtime_test_case
         """,
         db._conn,
     )
@@ -261,7 +261,7 @@ def choices_size_distribution_heatmap(db):
     data = pd.read_sql_query(
         """
         SELECT tc.node_id, tc.choices_size
-        FROM runtime_testcase tc
+        FROM runtime_test_case tc
         """,
         db._conn,
     )
