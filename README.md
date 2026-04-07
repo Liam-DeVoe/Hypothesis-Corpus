@@ -2,7 +2,7 @@
 
 [Hypothesis Corpus 2026](https://huggingface.co/datasets/HypothesisWorks/Hypothesis-Corpus-2026)
 
-Source code and reproduction materials for the Hypothesis Corpus datasets..
+Source code and reproduction materials for the Hypothesis Corpus datasets.
 
 I intend to run iterations of this dataset for years to come. This repository is a living document and will evolve as I improve the dataset methodology over the years.
 
