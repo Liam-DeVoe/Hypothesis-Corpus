@@ -1,5 +1,5 @@
 """
-Unified CLI for PBT corpus analysis system.
+Unified CLI for the Hypothesis Corpus system.
 """
 
 import json
@@ -63,7 +63,7 @@ def collect(db_dir: str):
     help="Run experiment on specific repository (e.g., owner/repo)",
 )
 @click.option(
-    "--docker-image", default="pbt-analysis:latest", help="Docker image to use"
+    "--docker-image", default="hypothesis-corpus:latest", help="Docker image to use"
 )
 @click.option(
     "--experiments", "-e", multiple=True, help="Experiments to run (default: all)"

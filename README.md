@@ -1,4 +1,4 @@
-# Property-Based Testing Corpus Analysis Prototype
+# Hypothesis Corpus
 
 A prototype experimental setup for analyzing property-based testing patterns across a corpus of ~30k tests.
 
@@ -43,7 +43,7 @@ This system analyzes property-based tests from GitHub repositories to understand
 Run the analysis:
 
 ```bash
-docker build -f analysis/Dockerfile -t pbt-analysis --no-cache . && python run_analysis.py --dataset data/dataset.json --workers 6
+docker build -f analysis/Dockerfile -t hypothesis-corpus --no-cache . && python run_analysis.py --dataset data/dataset.json --workers 6
 ```
 
 View dashboard:

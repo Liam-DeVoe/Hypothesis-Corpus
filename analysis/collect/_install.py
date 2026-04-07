@@ -153,7 +153,7 @@ import pytest
 
 
 class CollectionPlugin:
-    # see pytest_configure in pytest_pbt_analysis/plugin.py
+    # see pytest_configure in pytest_hypothesis_corpus/plugin.py
     def pytest_configure(self, config):
         cov_plugin = config.pluginmanager.get_plugin("_cov")
         if cov_plugin is None:

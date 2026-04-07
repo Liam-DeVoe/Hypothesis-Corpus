@@ -13,7 +13,7 @@ from dashboard.utils import get_database, render_sidebar
 
 # Page configuration
 st.set_page_config(
-    page_title="PBT Corpus Analysis Dashboard",
+    page_title="Hypothesis Corpus Dashboard",
     page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded",

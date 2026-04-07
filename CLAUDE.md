@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Property-Based Testing (PBT) Corpus Analysis system that analyzes Hypothesis test patterns across GitHub repositories. It uses Docker containers for isolated test execution and provides real-time visualization of analysis results.
+This is the Hypothesis Corpus system, which analyzes Hypothesis test patterns across GitHub repositories. It uses Docker containers for isolated test execution and provides real-time visualization of analysis results.
 
 ## Setup
 
@@ -81,7 +81,7 @@ sqlite3 data/data.db "SELECT full_name, status FROM core_repository LIMIT 5;"
 - Container installs repo dependencies, then runs experiment via `runner.py`
 - Network access required for pip installs
 - Experiment modules copied into container: `runner.py`, `experiment.py`, `utils.py`, `{experiment_name}.py`
-- A shared uv cache volume (`pbt-analysis-uv-cache`, 8GB limit) speeds up pip installs across containers
+- A shared uv cache volume (`hypothesis-corpus-uv-cache`, 8GB limit) speeds up pip installs across containers
 - `CLAUDE_CODE_OAUTH_TOKEN` env var passed through for the facets experiment
 
 ### Experiment System
@@ -184,5 +184,5 @@ pd.read_sql_query("SELECT ...", db._conn)  # For pandas
 - **analysis/collect/install_repos.py**: Orchestrates repo installation
 - **analysis/collect/_install.py**: Runs inside Docker to install deps and collect nodes
 - **analysis/database.py**: SQLite wrapper with singleton pattern
-- **pytest_pbt_analysis/plugin.py**: Custom pytest plugin for observation collection (runs inside Docker)
+- **pytest_hypothesis_corpus/plugin.py**: Custom pytest plugin for observation collection (runs inside Docker)
 - **sankey/sankey.py**: Sankey diagram generator for visualization

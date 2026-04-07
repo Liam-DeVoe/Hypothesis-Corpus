@@ -32,7 +32,7 @@ PYTEST_COLLECTION_TIMEOUT = 5 * 60  # 5 minutes
 
 def install_repository(
     repo_name: str,
-    docker_image: str = "pbt-analysis:latest",
+    docker_image: str = "hypothesis-corpus:latest",
     *,
     debug: bool = False,
     commit_hash: str | None = None,

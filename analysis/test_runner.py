@@ -23,7 +23,7 @@ class TestRunner:
 
     def __init__(
         self,
-        docker_image: str = "pbt-analysis:latest",
+        docker_image: str = "hypothesis-corpus:latest",
         worker_id: int | None = None,
         container_id_queue=None,
     ):
@@ -159,10 +159,10 @@ class TestRunner:
         assert experiment_file.exists()
         shutil.copy(experiment_file, app_dir / f"{experiment_name}.py")
 
-        import analysis.pytest_pbt_analysis as pbt_package
+        import analysis.pytest_hypothesis_corpus as pbt_package
 
         pbt_source_dir = Path(pbt_package.__file__).parent
-        pbt_dest_dir = app_dir / "pytest_pbt_analysis"
+        pbt_dest_dir = app_dir / "pytest_hypothesis_corpus"
         shutil.copytree(pbt_source_dir, pbt_dest_dir)
 
         # Write configuration for the container
@@ -316,7 +316,7 @@ class TestRunner:
         work_dir = None
         try:
             work_dir = Path(
-                tempfile.mkdtemp(prefix=f"pbt_analysis_{repo_name.replace('/', '_')}_")
+                tempfile.mkdtemp(prefix=f"hypothesis_corpus_{repo_name.replace('/', '_')}_")
             )
             repo_dir = work_dir / "repo"
             app_dir = work_dir / "app"

@@ -1,5 +1,5 @@
 image:
-    docker build -f analysis/Dockerfile -t pbt-analysis .
+    docker build -f analysis/Dockerfile -t hypothesis-corpus .
 
 install *args:
     python3.13 run.py install {{args}}

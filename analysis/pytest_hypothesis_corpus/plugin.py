@@ -66,7 +66,7 @@ def pytest_configure(config):
 
 
 def pytest_addoption(parser):
-    group = parser.getgroup("pbt-analysis", "PBT analysis control options")
+    group = parser.getgroup("hypothesis-corpus", "Hypothesis Corpus control options")
     group.addoption(
         "--experiment-nodeid",
         action="store",

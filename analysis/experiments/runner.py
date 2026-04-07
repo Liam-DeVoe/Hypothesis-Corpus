@@ -35,7 +35,7 @@ def main():
         # install library and dependencies
         print("installing dependencies...", flush=True)
 
-        pbt_analysis_dir = Path("/app/pytest_pbt_analysis")
+        pbt_analysis_dir = Path("/app/pytest_hypothesis_corpus")
         assert pbt_analysis_dir.exists()
 
         pip_install(["--no-dependencies", "-r", str(requirements_file)])
