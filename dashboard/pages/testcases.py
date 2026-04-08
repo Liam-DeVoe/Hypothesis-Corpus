@@ -10,7 +10,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dashboard.shared import histogram_with_kde
-from dashboard.utils import colorbar_ticks, get_database, plotly_chart, render_sidebar
+from dashboard.utils import colorbar_ticks, get_database, logbins, plotly_chart, render_sidebar
 
 st.set_page_config(
     page_title="Test Cases",
@@ -176,8 +176,8 @@ def choices_size_vs_runtime_heatmap(db, *, log_x=False, log_y=False):
     x = data["choices_size"].clip(lower=1) if log_x else data["choices_size"]
     y = data["execution_time"].clip(lower=1e-4) if log_y else data["execution_time"]
 
-    xbins = np.logspace(np.log10(x.min()), np.log10(x.max()), 51) if log_x else 50
-    ybins = np.logspace(np.log10(y.min()), np.log10(y.max()), 51) if log_y else 50
+    xbins = logbins(x.min(), x.max()) if log_x else 50
+    ybins = logbins(y.min(), y.max()) if log_y else 50
 
     counts, xedges, yedges = np.histogram2d(x, y, bins=[xbins, ybins])
     # log scale to avoid dominant cell washing out all others
@@ -228,8 +228,8 @@ def choices_size_vs_generation_time_heatmap(db, *, log_x=False, log_y=False):
     x = data["choices_size"].clip(lower=1) if log_x else data["choices_size"]
     y = data["gen_time"].clip(lower=1e-6) if log_y else data["gen_time"]
 
-    xbins = np.logspace(np.log10(x.min()), np.log10(x.max()), 51) if log_x else 50
-    ybins = np.logspace(np.log10(y.min()), np.log10(y.max()), 51) if log_y else 50
+    xbins = logbins(x.min(), x.max()) if log_x else 50
+    ybins = logbins(y.min(), y.max()) if log_y else 50
 
     counts, xedges, yedges = np.histogram2d(x, y, bins=[xbins, ybins])
     z = np.log1p(counts.T)

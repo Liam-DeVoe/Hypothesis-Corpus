@@ -269,6 +269,8 @@ def build_sankey(counts):
         font_size=12,
         width=1600,
         height=700,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
     )
 
     return fig
@@ -286,7 +288,54 @@ def main():
 
     counts = get_counts(args.db_dir)
     fig = build_sankey(counts)
-    fig.write_html(args.output)
+
+    html = fig.to_html(include_plotlyjs=True)
+
+    export_button = """
+<div style="text-align: center; margin: 30px 0;">
+<button onclick="exportSVG()" style="padding: 12px 32px; font-size: 18px; cursor: pointer;">
+Export as SVG
+</button>
+</div>
+<script>
+function exportSVG() {
+    var gd = document.querySelector('.plotly-graph-div');
+    Plotly.toImage(gd, {format: 'svg', width: 1600, height: 700}).then(function(url) {
+        var svgText = decodeURIComponent(url.substring(url.indexOf(',') + 1));
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(svgText, 'image/svg+xml');
+        var svg = doc.documentElement;
+        // temporarily add to DOM to measure bounding boxes
+        svg.style.position = 'absolute';
+        svg.style.left = '-9999px';
+        document.body.appendChild(svg);
+        // remove background rect so it doesn't affect the bbox
+        var bgRect = svg.querySelector('rect.bg');
+        if (bgRect) bgRect.remove();
+        var bbox = svg.getBBox();
+        var pad = 5;
+        svg.setAttribute('viewBox',
+            (bbox.x - pad) + ' ' + (bbox.y - pad) + ' ' +
+            (bbox.width + 2 * pad) + ' ' + (bbox.height + 2 * pad));
+        svg.setAttribute('width', bbox.width + 2 * pad);
+        svg.setAttribute('height', bbox.height + 2 * pad);
+        document.body.removeChild(svg);
+        svg.removeAttribute('style');
+        var croppedText = new XMLSerializer().serializeToString(svg);
+        var blob = new Blob([croppedText], {type: 'image/svg+xml'});
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'sankey.svg';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    });
+}
+</script>
+"""
+
+    html = html + export_button
+
+    Path(args.output).write_text(html)
     print(f"Saved to {args.output}")
 
 

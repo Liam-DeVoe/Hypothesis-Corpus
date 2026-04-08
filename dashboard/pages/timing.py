@@ -10,7 +10,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dashboard.shared import histogram_with_kde
-from dashboard.utils import colorbar_ticks, get_database, plotly_chart, render_sidebar
+from dashboard.utils import colorbar_ticks, get_database, logbins, plotly_chart, render_sidebar
 
 st.set_page_config(
     page_title="Timing",
@@ -106,7 +106,7 @@ def runtime_vs_generation_heatmap(db):
     x = data["execution_time"].clip(lower=1e-6)
     y = data["generation_percent"]
 
-    xbins = np.logspace(np.log10(x.min()), np.log10(x.max()), 51)
+    xbins = logbins(x.min(), x.max())
     ybins = np.linspace(0, 100, 51)
 
     counts, xedges, yedges = np.histogram2d(x, y, bins=[xbins, ybins])
