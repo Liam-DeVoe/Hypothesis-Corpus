@@ -34,7 +34,7 @@ class RuntimeExperiment(Experiment):
                     count_test_cases INTEGER,
                     coverage TEXT,  -- JSON mapping: {"file_path": [line_numbers], ...}
                     line_execution_counts TEXT,  -- JSON mapping: {"file_path": {"line_num": execution_count, ...}, ...}
-                    total_lines_covered INTEGER,  -- Sum of unique lines across all files
+                    unique_lines_covered INTEGER,  -- Sum of unique lines across all files
                     settings TEXT,  -- JSON mapping of Hypothesis settings
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (node_id) REFERENCES core_node(id)
@@ -144,7 +144,7 @@ class RuntimeExperiment(Experiment):
             INSERT INTO runtime_summary (
                 node_id, status, execution_time, error_message,
                 count_test_cases, coverage, line_execution_counts,
-                total_lines_covered, settings
+                unique_lines_covered, settings
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,

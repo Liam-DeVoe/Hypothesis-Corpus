@@ -110,7 +110,7 @@ def repos_by_node_count(db):
             r.full_name as repository,
             COUNT(DISTINCT t.id) as total_nodes,
             COUNT(DISTINCT rs.node_id) as nodes_with_coverage,
-            SUM(rs.total_lines_covered) as total_lines_covered
+            SUM(rs.unique_lines_covered) as unique_lines_covered
         FROM core_repository r
         LEFT JOIN core_node t ON r.id = t.repo_id
         LEFT JOIN runtime_summary rs ON t.id = rs.node_id
@@ -133,7 +133,7 @@ def repos_by_node_count(db):
             "total_nodes": "Total Nodes",
             "repository": "Repository",
         },
-        hover_data=["nodes_with_coverage", "total_lines_covered"],
+        hover_data=["nodes_with_coverage", "unique_lines_covered"],
     )
     fig.update_layout(height=600, xaxis_tickangle=-45)
     return fig

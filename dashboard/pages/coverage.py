@@ -31,8 +31,8 @@ def main():
         """
         SELECT
             COUNT(DISTINCT rs.node_id) as nodes_with_coverage,
-            SUM(rs.total_lines_covered) as total_lines_covered,
-            AVG(rs.total_lines_covered) as avg_lines_per_node
+            SUM(rs.unique_lines_covered) as unique_lines_covered,
+            AVG(rs.unique_lines_covered) as avg_lines_per_node
         FROM runtime_summary rs
         WHERE rs.coverage IS NOT NULL
         """,
@@ -53,22 +53,22 @@ def main():
                 f"{avg_lines:.0f}" if avg_lines else "0",
             )
 
-    # Max lines covered histogram
     lines_covered = pd.read_sql_query(
         """
-        SELECT total_lines_covered
+        SELECT unique_lines_covered
         FROM runtime_summary
-        WHERE total_lines_covered IS NOT NULL AND status IN ('passed', 'failed')
+        WHERE unique_lines_covered IS NOT NULL AND status IN ('passed', 'failed')
         """,
         db._conn,
     )
     if not lines_covered.empty:
         fig = histogram_with_kde(
-            data=lines_covered["total_lines_covered"].tolist(),
-            title="Max lines covered by test",
-            xaxis_title="Total lines covered",
+            data=lines_covered["unique_lines_covered"].tolist(),
+            title="Unique lines covered by test",
+            xaxis_title="Unique lines covered",
             yaxis_title="Test count",
             bin_size=5,
+            x_type="log",
         )
         plotly_chart(fig, width="stretch")
 
@@ -248,7 +248,7 @@ def main():
         """
         SELECT
             t.node_id,
-            rs.total_lines_covered,
+            rs.unique_lines_covered,
             rs.status,
             rs.execution_time
         FROM core_node t
@@ -256,7 +256,7 @@ def main():
         LEFT JOIN runtime_summary rs ON t.id = rs.node_id
         WHERE r.full_name = ?
         AND rs.coverage IS NOT NULL
-        ORDER BY rs.total_lines_covered DESC
+        ORDER BY rs.unique_lines_covered DESC
         """,
         db._conn,
         params=[selected_repo],
@@ -269,7 +269,7 @@ def main():
             hide_index=True,
             column_config={
                 "node_id": st.column_config.TextColumn("Test", width="large"),
-                "total_lines_covered": st.column_config.NumberColumn(
+                "unique_lines_covered": st.column_config.NumberColumn(
                     "Lines Covered", width="small"
                 ),
                 "status": st.column_config.TextColumn("Status", width="small"),
