@@ -273,7 +273,7 @@ def main():
 
     db = get_database()
 
-    log_x_runtime = st.checkbox("Log x-axis", key="runtime_log_x")
+    log_x_runtime = st.checkbox("Log x-axis", key="runtime_log_x", value=True)
     fig = total_execution_time_histogram(
         db, x_type="log" if log_x_runtime else "linear"
     )
@@ -282,7 +282,7 @@ def main():
     else:
         st.info("No execution time data available.")
 
-    log_x_median = st.checkbox("Log x-axis", key="median_tc_log_x")
+    log_x_median = st.checkbox("Log x-axis", key="median_tc_log_x", value=True)
     fig = median_testcase_time_histogram(db, x_type="log" if log_x_median else "linear")
     if fig:
         plotly_chart(fig, width="stretch")
