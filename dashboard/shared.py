@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from scipy import stats
 
-from dashboard.utils import get_database
+from dashboard.utils import get_database, logbins
 
 
 def histogram_with_kde(
@@ -33,25 +33,45 @@ def histogram_with_kde(
     Returns:
         Plotly figure with histogram and KDE overlay
     """
-    # Create figure with histogram
     fig = go.Figure()
 
-    # Add histogram
-    fig.add_trace(
-        go.Histogram(
-            x=data,
-            name="Count",
-            xbins={"size": bin_size},
-            marker_color="steelblue",
+    if x_type == "log":
+        pos_data = np.array([x for x in data if np.isfinite(x) and x > 0])
+        if len(pos_data) > 0:
+            edges = logbins(pos_data.min(), pos_data.max())
+            counts, edges = np.histogram(pos_data, bins=edges)
+            # geometric mean of edges for bar centers
+            centers = np.sqrt(edges[:-1] * edges[1:])
+            widths = edges[1:] - edges[:-1]
+            fig.add_trace(
+                go.Bar(
+                    x=centers,
+                    y=counts,
+                    width=widths,
+                    name="Count",
+                    marker_color="steelblue",
+                )
+            )
+    else:
+        fig.add_trace(
+            go.Histogram(
+                x=data,
+                name="Count",
+                xbins={"size": bin_size},
+                marker_color="steelblue",
+            )
         )
-    )
 
     # Add KDE overlay (only if we have enough unique values)
-    kde_data = [x for x in data if np.isfinite(x)]
+    kde_data = (
+        np.array([x for x in data if np.isfinite(x) and x > 0])
+        if x_type == "log"
+        else np.array([x for x in data if np.isfinite(x)])
+    )
     unique_values = len(set(kde_data))
     if unique_values > 1:
         kde = stats.gaussian_kde(kde_data)
-        x_range = np.linspace(min(kde_data), max(kde_data), 200)
+        x_range = np.linspace(kde_data.min(), kde_data.max(), 200)
         kde_values = kde(x_range)
         # Scale KDE to match histogram counts
         kde_scaled = kde_values * len(kde_data) * bin_size
