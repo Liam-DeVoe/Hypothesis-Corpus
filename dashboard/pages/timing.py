@@ -103,11 +103,11 @@ def runtime_vs_generation_heatmap(db):
     if data.empty:
         return None
 
-    x = data["execution_time"].clip(lower=1e-6)
-    y = data["generation_percent"]
+    x = data["generation_percent"]
+    y = data["execution_time"].clip(lower=1e-6)
 
-    xbins = logbins(x.min(), x.max())
-    ybins = np.linspace(0, 100, 51)
+    xbins = np.linspace(0, 100, 51)
+    ybins = logbins(y.min(), y.max())
 
     counts, xedges, yedges = np.histogram2d(x, y, bins=[xbins, ybins])
     z = np.log1p(counts.T)
@@ -122,11 +122,11 @@ def runtime_vs_generation_heatmap(db):
         )
     )
     fig.update_layout(
-        title="Runtime vs % generation time",
-        xaxis_title="Runtime (seconds)",
-        xaxis_type="log",
-        yaxis_title="% generation time",
-        yaxis_range=[0, 100],
+        title="% generation time vs runtime",
+        xaxis_title="% generation time",
+        xaxis_range=[0, 100],
+        yaxis_title="Runtime (seconds)",
+        yaxis_type="log",
         height=500,
     )
     return fig
