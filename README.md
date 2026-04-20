@@ -1,6 +1,7 @@
-# Hypothesis Corpus
+## Hypothesis Corpus
 
-[Hypothesis Corpus 2026](https://huggingface.co/datasets/HypothesisWorks/Hypothesis-Corpus-2026)
+* [Huggingface release](https://huggingface.co/datasets/HypothesisWorks/Hypothesis-Corpus-2026)
+* [Blog post](https://hypothesis.works/articles/hypothesis-corpus/)
 
 Source code and reproduction materials for the Hypothesis Corpus datasets.
 
